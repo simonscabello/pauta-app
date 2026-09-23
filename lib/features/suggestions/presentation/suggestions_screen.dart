@@ -13,6 +13,7 @@ import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_primary_action.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../songs/presentation/song_resources.dart';
 import '../data/suggestion_repository.dart';
@@ -52,13 +53,20 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
         .where((t) => t.teamId == widget.teamId)
         .firstOrNull;
 
+    final sugerir = AppPrimaryAction(
+      label: 'Sugerir',
+      icon: Icons.add_rounded,
+      onPressed: () => showSuggestSongSheet(context, teamId: widget.teamId),
+    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Sugestões da equipe')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showSuggestSongSheet(context, teamId: widget.teamId),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Sugerir'),
+      appBar: AppBar(
+        title: const Text('Sugestões da equipe'),
+        actions: [
+          if (sugerir.headerAction(context) case final acao?) acao,
+        ],
       ),
+      floatingActionButton: sugerir.fab(context),
       body: SafeArea(
         top: false,
         child: AppContentWidth.reading(

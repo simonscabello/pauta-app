@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -15,6 +17,12 @@ import 'features/onboarding/presentation/tour_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // A árvore de acessibilidade ligada desde a abertura, na Web. O Flutter Web
+  // só monta a semântica depois que alguém aciona um botão escondido, em
+  // inglês ("Enable accessibility"): para o leitor de tela, a página inteira
+  // era esse botão. O identificador fica sem `dispose` de propósito — a
+  // árvore vale pela vida do app. No Android quem decide é o sistema.
+  if (kIsWeb) SemanticsBinding.instance.ensureSemantics();
   tzdata.initializeTimeZones();
   // Datas em portugues ("12 de agosto"). Sem isto o DateFormat com locale
   // pt_BR lanca excecao em tempo de execucao.

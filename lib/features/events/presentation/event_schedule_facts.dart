@@ -42,7 +42,15 @@ class ScheduleFacts {
   final String? songs;
 
   /// Tudo numa linha: "Manhã 08:30 · Noite 19:00 · Ensaio sáb 19:00".
-  String get summary => '$times · $rehearsal';
+  ///
+  /// **Na linha da lista, o ensaio só entra quando existe.** "Sem ensaio" em
+  /// quase toda linha da agenda era a mesma palavra repetida dez vezes, e
+  /// tirava o olho do que muda de uma escala para a outra. Na manchete e no
+  /// detalhe a ausência continua dita ([rehearsal]).
+  String get summary =>
+      rehearsal == _noRehearsal ? times : '$times · $rehearsal';
+
+  static const _noRehearsal = 'Sem ensaio';
 
   static ScheduleFacts of(Event event, String timezone) {
     final services = event.displayServices;
@@ -57,7 +65,7 @@ class ScheduleFacts {
 
     final rehearsalAt = event.rehearsalAt;
     final rehearsal = rehearsalAt == null
-        ? 'Sem ensaio'
+        ? _noRehearsal
         // Com o dia abreviado quando o ensaio é em outro dia: só a hora fazia
         // um ensaio de sábado parecer ser no dia do culto.
         : 'Ensaio ${formatRehearsalTime(

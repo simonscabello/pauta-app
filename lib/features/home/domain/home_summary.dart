@@ -1,5 +1,6 @@
 import '../../events/domain/event_datetime.dart';
 import '../../events/domain/event_models.dart';
+import '../../unavailability/domain/unavailability_models.dart';
 
 /// Quantas músicas a escala tem, ou `null` quando o app **não sabe**.
 ///
@@ -44,6 +45,13 @@ int daysUntilEvent(Event event, DateTime now) {
 /// onde já vivem os formatadores de horário. Aqui fica só a decisão de qual
 /// aviso nasce, que é o que vale a pena travar em teste.
 enum HomeNoticeKind {
+  /// (liderança) alguém escalado avisou que não pode naquele dia.
+  ///
+  /// **O primeiro da lista**: é o problema mais caro do domingo, e antes ele
+  /// só aparecia dentro da escala — na Web, que não recebe push, o líder
+  /// descobria no próprio domingo.
+  unavailableAssigned,
+
   /// (liderança) escalas em rascunho, que a equipe ainda não vê.
   pendingDrafts,
 
@@ -56,9 +64,17 @@ enum HomeNoticeKind {
 /// **Nada aqui é dado novo.** Todo aviso sai da mesma lista de escalas que a
 /// tela já mostrou acima — é a leitura dela, não uma segunda requisição.
 class HomeNotice {
-  const HomeNotice({required this.kind, this.event, this.count = 0});
+  const HomeNotice({
+    required this.kind,
+    this.event,
+    this.count = 0,
+    this.person,
+  });
 
   final HomeNoticeKind kind;
+
+  /// Quem avisou que não pode, no aviso de [HomeNoticeKind.unavailableAssigned].
+  final UnavailableMember? person;
 
   /// A escala de que o aviso fala, quando ele fala de uma.
   final Event? event;
@@ -75,7 +91,13 @@ class HomeNotice {
 
   /// Para onde o toque leva. Sempre uma rota que já existe.
   String get route => switch (kind) {
-        HomeNoticeKind.pendingDrafts => '/agenda',
+        // Direto na escalação, com a pessoa destacada e "Tirar de todas as
+        // funções" à mão — o caminho de oito passos virou um.
+        HomeNoticeKind.unavailableAssigned =>
+          '/agenda/${event!.id}/escalar?substituir=${person!.membershipId}',
+        // Já filtrada: o aviso fala dos rascunhos, e a agenda inteira os
+        // escondia entre as publicadas.
+        HomeNoticeKind.pendingDrafts => '/agenda?filtro=rascunhos',
         HomeNoticeKind.unstaffedSchedule => '/agenda/${event!.id}/escalar',
       };
 }
@@ -100,7 +122,17 @@ class HomeSummary {
     required this.myFollowing,
     required this.notices,
     required this.hasSchedules,
+    this.teamWeek = const [],
   });
+
+  /// (liderança) As escalas da equipe nos próximos sete dias, rascunhos
+  /// incluídos, na ordem da data — menos a da manchete ([myNext]).
+  ///
+  /// A Home do líder abria por "Você está livre por enquanto" enquanto havia
+  /// cinco rascunhos e uma quinta sem equipe. Para quem lidera, o estado do
+  /// ministério na semana é a pergunta de quem abre o app — e cada linha já
+  /// diz o que falta (a mesma linha da agenda).
+  final List<Event> teamWeek;
 
   /// A próxima escala em que a pessoa está escalada, dentro do horizonte que a
   /// agenda carregou. Nula quando ela não aparece em nenhuma.
@@ -115,7 +147,8 @@ class HomeSummary {
   /// lidera e toca no mesmo domingo.
   final int? myNextDaysAway;
 
-  /// As funções dela em [myNext]. Vazio quando não há [myNext].
+  /// O que ela faz em [myNext] — "Ministra" primeiro, depois as funções (ver
+  /// `Event.personalRolesFor`). Vazio quando não há [myNext].
   final List<String> myPositions;
 
   /// A escala seguinte a [myNext] -- **também sua**.
@@ -156,12 +189,24 @@ class HomeSummary {
     return HomeSummary(
       myNext: myNext,
       myNextDaysAway: myNext == null ? null : daysUntilEvent(myNext, now),
-      myPositions: myNext?.positionsForMembership(membershipId) ?? const [],
+      myPositions: myNext?.personalRolesFor(membershipId) ?? const [],
       // A segunda em que eu entro, e não a segunda da equipe: a manchete abriu
       // o fio de "quando eu toco", e "e depois?" continua o mesmo fio.
       myFollowing: minhas.length > 1 ? minhas[1] : null,
       hasSchedules: events.isNotEmpty,
       notices: _notices(events, canManage: canManage),
+      // Sem a escala da manchete: o mesmo compromisso em dois blocos vizinhos
+      // é a regra que a agenda também segue ("duas listas, nunca o mesmo
+      // compromisso nas duas").
+      teamWeek: canManage
+          ? [
+              for (final event in events)
+                if (event.id != myNext?.id &&
+                    daysUntilEvent(event, now) < 7 &&
+                    daysUntilEvent(event, now) >= 0)
+                  event,
+            ]
+          : const [],
     );
   }
 
@@ -172,6 +217,23 @@ class HomeSummary {
     final notices = <HomeNotice>[];
 
     if (canManage) {
+      // O conflito vem antes de tudo. A listagem só traz esse aviso para quem
+      // lidera (`warnings.unavailableAssigned`), e a primeira escala com ele é
+      // a mais urgente — a lista já vem em ordem de data.
+      final conflito = events
+          .where((e) => e.warnings.unavailableAssigned.isNotEmpty)
+          .firstOrNull;
+      if (conflito != null) {
+        notices.add(
+          HomeNotice(
+            kind: HomeNoticeKind.unavailableAssigned,
+            event: conflito,
+            person: conflito.warnings.unavailableAssigned.first,
+            count: conflito.warnings.unavailableAssigned.length,
+          ),
+        );
+      }
+
       // Rascunho não é visível para a equipe: só quem gerencia recebe a lista
       // com eles, e só para essa pessoa a contagem significa alguma coisa.
       final drafts = events.where((e) => e.isDraft).length;

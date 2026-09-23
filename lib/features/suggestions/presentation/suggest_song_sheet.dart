@@ -95,6 +95,11 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
   bool _sending = false;
   String? _error;
 
+  /// O erro da justificativa mora **no campo**, com a borda de erro. Ele
+  /// aparecia no pé da folha, abaixo dos links, longe de onde a pessoa tinha
+  /// de escrever — e sem dizer quanto faltava.
+  String? _reasonError;
+
   /// Mínimo espelhado do servidor: obrigatório sem mínimo vira ".". Validar
   /// aqui poupa a ida de rede só para receber o mesmo "não".
   static const _minReason = 10;
@@ -210,7 +215,8 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
     }
     if (reason.length < _minReason) {
       setState(() {
-        _error = 'Escreva um pouco mais sobre por que essa música valeria.';
+        _reasonError = 'Escreva pelo menos $_minReason letras sobre por que '
+            'essa música valeria.';
       });
       return;
     }
@@ -354,7 +360,14 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
         for (final candidate in _externalResults.take(6))
           _ResultRow(
             title: candidate.title,
-            subtitle: candidate.artist,
+            // Álbum e ano, como no cadastro: "Bondade de Deus — Isaias Saad"
+            // aparecia duas vezes igual, e só o disco diz qual versão é.
+            subtitle: [
+              candidate.artist,
+              if (candidate.album case final album? when album.isNotEmpty)
+                album,
+              if (candidate.year case final year? when year.isNotEmpty) year,
+            ].join(' · '),
             onTap: () => setState(() {
               _external = candidate;
               _spotifyController.text = candidate.spotifyUrl;
@@ -628,13 +641,20 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
           maxLines: 4,
           maxLength: 500,
           textCapitalization: TextCapitalization.sentences,
-          onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
+          onChanged: (texto) => setState(() {
+            // Some assim que deixa de valer: o erro não fica acusando o que
+            // já foi corrigido.
+            if (texto.trim().length >= _minReason) _reasonError = null;
+          }),
+          decoration: InputDecoration(
             hintText: 'A igreja já canta essa nos cultos de oração...',
             // Obrigatório: é o que o líder lê para decidir, e é o que faz uma
-            // recusa ser resposta a um argumento.
-            helperText: 'Obrigatório',
+            // recusa ser resposta a um argumento. O mínimo vai escrito: o
+            // contador dizia "3/500", que fala do teto e não do piso.
+            helperText: 'Obrigatório, com pelo menos $_minReason letras',
             helperMaxLines: 2,
+            errorText: _reasonError,
+            errorMaxLines: 2,
           ),
         ),
       ],

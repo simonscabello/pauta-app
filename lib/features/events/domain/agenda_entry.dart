@@ -134,9 +134,15 @@ enum AgendaFilter {
 
   /// Só as escalas em que a pessoa tem alguma responsabilidade — mais os
   /// eventos, que são de todo mundo.
-  mine;
+  mine,
+
+  /// (liderança) Só os rascunhos: o que a equipe ainda não vê. É para onde o
+  /// aviso "5 escalas em rascunho" da Home leva — antes ele abria a agenda
+  /// inteira, e os rascunhos tinham de ser caçados no mês.
+  drafts;
 
   bool get isMine => this == AgendaFilter.mine;
+  bool get isDrafts => this == AgendaFilter.drafts;
 }
 
 /// As entradas em que a pessoa tem **alguma responsabilidade**.
@@ -157,6 +163,13 @@ List<AgendaEntry> filterAgendaEntries(
   required String membershipId,
 }) {
   if (filter == AgendaFilter.all) return entries;
+  if (filter == AgendaFilter.drafts) {
+    // Evento da equipe não tem rascunho: ele existe assim que é criado.
+    return [
+      for (final entry in entries)
+        if (entry case ScheduleEntry(:final event) when event.isDraft) entry,
+    ];
+  }
   return [
     for (final entry in entries)
       if (switch (entry) {

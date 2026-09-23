@@ -75,7 +75,7 @@ void main() {
   });
 
   test('nenhuma resposta fica com realce aberto', () {
-    for (final entry in helpFaq) {
+    for (final entry in [...helpFaq, ...leaderHelpFaq]) {
       expect(
         '**'.allMatches(entry.answer).length.isEven,
         isTrue,

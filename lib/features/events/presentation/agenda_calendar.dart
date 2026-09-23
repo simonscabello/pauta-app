@@ -40,10 +40,21 @@ class AgendaCalendar extends StatelessWidget {
     required this.onMonthChanged,
     required this.onToday,
     this.legend = 'Com compromisso',
+    this.collapsed = false,
+    this.onToggleCollapsed,
   });
 
   final DateTime month;
-  final DateTime selectedDay;
+
+  /// Nulo quando nenhum dia está escolhido — trocar de mês não escolhe o dia
+  /// 1 por conta própria.
+  final DateTime? selectedDay;
+
+  /// Recolhido, o calendário mostra só a semana do dia escolhido (ou de hoje).
+  /// No celular o mês inteiro empurrava a lista para depois de uma tela e
+  /// meia; recolher devolve a lista à primeira dobra.
+  final bool collapsed;
+  final VoidCallback? onToggleCollapsed;
   final DateTime today;
 
   /// Dia (`AAAA-MM-DD`) -> quantos compromissos ele tem.
@@ -65,6 +76,19 @@ class AgendaCalendar extends StatelessWidget {
   /// lista do dia: três domingos de vigília não precisam de sete riscos de
   /// 4px para dizer "tem bastante coisa aqui".
   static const int maxMarks = AppMonthGrid.maxMarks;
+
+  /// O dia cuja semana aparece recolhida: o escolhido, senão hoje (quando é
+  /// este mês), senão o primeiro do mês.
+  DateTime get _weekAnchor {
+    final escolhido = selectedDay;
+    if (escolhido != null &&
+        escolhido.year == month.year &&
+        escolhido.month == month.month) {
+      return escolhido;
+    }
+    if (today.year == month.year && today.month == month.month) return today;
+    return DateTime(month.year, month.month);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +123,21 @@ class AgendaCalendar extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.chevron_right_rounded),
               ),
+              // No cabeçalho, e não na legenda: ao lado de "Com compromisso"
+              // e "Hoje" um terceiro botão espremia a legenda numa coluna de
+              // letras em tela estreita.
+              if (onToggleCollapsed != null)
+                IconButton(
+                  tooltip: collapsed
+                      ? 'Mostrar o mês inteiro'
+                      : 'Mostrar só a semana',
+                  onPressed: onToggleCollapsed,
+                  icon: Icon(
+                    collapsed
+                        ? Icons.unfold_more_rounded
+                        : Icons.unfold_less_rounded,
+                  ),
+                ),
             ],
           ),
           AppMonthGrid(
@@ -106,10 +145,12 @@ class AgendaCalendar extends StatelessWidget {
             today: today,
             keyPrefix: 'agenda-day-',
             onTap: onSelected,
+            onlyWeekOf: collapsed ? _weekAnchor : null,
             describe: (day) {
               final count = markedDays[dateKey(day)] ?? 0;
               return AppMonthDay(
-                selected: dateKey(day) == dateKey(selectedDay),
+                selected: selectedDay != null &&
+                    dateKey(day) == dateKey(selectedDay!),
                 marks: count,
                 detail: count == 0
                     ? null

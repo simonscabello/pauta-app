@@ -146,19 +146,16 @@ class MembersScreen extends ConsumerWidget {
                               // Ao lado do repertório e para todo mundo, pelo mesmo
                               // motivo dele: quem sugere é a equipe inteira, e quem
                               // sugeriu precisa ver o que aconteceu.
-                              TourTarget(
-                                id: TourTargetIds.teamSuggestions,
-                                child: AppGroupRow(
-                                  icon: Icons.lightbulb_outline_rounded,
-                                  title: 'Sugestões',
-                                  subtitle:
-                                      'Músicas que a equipe pediu, e por quê',
-                                  trailing: canManage
-                                      ? _SuggestionCountBadge(teamId: teamId)
-                                      : null,
-                                  onTap: () =>
-                                      context.push('/equipe/sugestoes'),
-                                ),
+                              AppGroupRow(
+                                icon: Icons.lightbulb_outline_rounded,
+                                title: 'Sugestões',
+                                subtitle:
+                                    'Músicas que a equipe pediu, e por quê',
+                                trailing: canManage
+                                    ? _SuggestionCountBadge(teamId: teamId)
+                                    : null,
+                                onTap: () =>
+                                    context.push('/equipe/sugestoes'),
                               ),
                             ],
                           ),
@@ -282,12 +279,20 @@ class _MembersTable extends StatelessWidget {
                         style: AppTypography.eyebrow(context),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.lg),
-                    SizedBox(
-                      width: 150,
-                      child:
-                          Text('Conta', style: AppTypography.eyebrow(context)),
-                    ),
+                    // A coluna Conta é de quem convida: "Sem conta" diz a
+                    // quem lidera quem ainda precisa do convite. Para o
+                    // integrante era um selo âmbar sobre os colegas, que ele
+                    // não tem como resolver.
+                    if (canManage) ...[
+                      const SizedBox(width: AppSpacing.lg),
+                      SizedBox(
+                        width: 150,
+                        child: Text(
+                          'Conta',
+                          style: AppTypography.eyebrow(context),
+                        ),
+                      ),
+                    ],
                     // Largura do menu, para o cabeçalho não desalinhar das
                     // linhas que o têm.
                     const SizedBox(width: 48),
@@ -396,31 +401,38 @@ class _MemberTableRow extends ConsumerWidget {
                       ],
                     ),
             ),
-            const SizedBox(width: AppSpacing.lg),
-            SizedBox(
-              width: 150,
-              child: member.hasAccount
-                  ? Row(
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 15,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Tem conta',
-                          style: theme.textTheme.bodySmall?.copyWith(
+            if (canManage) ...[
+              const SizedBox(width: AppSpacing.lg),
+              SizedBox(
+                width: 150,
+                child: member.hasAccount
+                    ? Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 15,
                             color: scheme.onSurfaceVariant,
                           ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Tem conta',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      )
+                    // Alinhada à esquerda: solta na coluna, a pílula se
+                    // esticava até a largura inteira dela.
+                    : const Align(
+                        alignment: Alignment.centerLeft,
+                        child: AppBadge(
+                          label: 'Sem conta',
+                          tone: AppTone.warning,
                         ),
-                      ],
-                    )
-                  : const AppBadge(
-                      label: 'Sem conta',
-                      tone: AppTone.warning,
-                    ),
-            ),
+                      ),
+              ),
+            ],
             SizedBox(
               width: 48,
               child: _MemberMenu(

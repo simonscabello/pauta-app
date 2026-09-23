@@ -5,6 +5,7 @@ import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../onboarding/presentation/tour_overlay.dart';
 import '../domain/help_faq.dart';
 
@@ -20,6 +21,11 @@ class HelpScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Quem lidera **alguma** equipe: a dúvida de como publicar não depende
+    // de qual equipe está ativa agora.
+    final lidera =
+        ref.watch(authControllerProvider).teams.any((t) => t.canManage);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Ajuda')),
       body: SafeArea(
@@ -52,6 +58,16 @@ class HelpScreen extends ConsumerWidget {
                   for (final entry in helpFaq) FaqTile(entry: entry),
                 ],
               ),
+              if (lidera) ...[
+                const SizedBox(height: AppSpacing.xxl),
+                AppGroup(
+                  title: 'Para quem lidera',
+                  dividerIndent: AppGroup.textIndent,
+                  children: [
+                    for (final entry in leaderHelpFaq) FaqTile(entry: entry),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

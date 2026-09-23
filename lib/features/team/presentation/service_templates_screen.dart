@@ -17,6 +17,7 @@ import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
+import '../../../shared/widgets/app_primary_action.dart';
 import '../../events/data/event_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/service_template.dart';
@@ -35,16 +36,22 @@ class ServiceTemplatesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final templates = ref.watch(serviceTemplatesProvider(teamId));
+    final adicionar = AppPrimaryAction(
+      label: 'Adicionar',
+      icon: Icons.add_rounded,
+      onPressed: () => _openEditor(context, ref),
+    );
 
     return Scaffold(
       // "Planejar próximas escalas" era um ícone sem rótulo nesta barra. Virou
       // uma linha com nome no fim da lista, onde a grade já foi lida.
-      appBar: AppBar(title: const Text('Cultos da igreja')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(context, ref),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Adicionar'),
+      appBar: AppBar(
+        title: const Text('Cultos da igreja'),
+        actions: [
+          if (adicionar.headerAction(context) case final acao?) acao,
+        ],
       ),
+      floatingActionButton: adicionar.fab(context),
       body: SafeArea(
         top: false,
         child: AppContentWidth.reading(

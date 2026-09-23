@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -316,9 +318,28 @@ class SongQuery {
       );
 }
 
-final songsProvider =
-    FutureProvider.autoDispose.family<List<Song>, SongQuery>((ref, query) async {
-  final songs = await ref.watch(songRepositoryProvider).list(
+/// O acervo que o servidor devolve para uma busca, **antes** de separar por
+/// aba.
+///
+/// As abas (Cânticos, Hinos, Novas) são filtro local. Quando cada aba pedia a
+/// própria lista, trocar de aba era uma volta de rede com spinner, e a busca
+/// não tinha como dizer que "grande" existia em Hinos enquanto a pessoa
+/// olhava Cânticos. Com o acervo numa chave só, as abas são recortes dele e
+/// as contagens ("Hinos (3)") saem de graça.
+///
+/// **Fica vivo por alguns minutos** depois de ninguém olhar: o seletor da
+/// escala abre e fecha a cada culto, e buscar o acervo inteiro a cada abertura
+/// era o spinner que se via ao escolher as músicas da noite.
+///
+/// Depois de gravar uma música, invalide **este** provider: as listas por aba
+/// dependem dele e se refazem juntas.
+final songCatalogProvider =
+    FutureProvider.autoDispose.family<List<Song>, SongQuery>((ref, query) {
+  final link = ref.keepAlive();
+  final timer = Timer(const Duration(minutes: 5), link.close);
+  ref.onDispose(timer.cancel);
+
+  return ref.watch(songRepositoryProvider).list(
         query.teamId,
         search: query.search,
         themes: query.themes,
@@ -326,6 +347,40 @@ final songsProvider =
         // padrão. Só o arquivo pede que elas venham.
         includeArchived: query.filter == SongFilter.arquivadas,
       );
+});
+
+/// A chave do acervo para esta consulta: a mesma busca e os mesmos temas,
+/// com a aba reduzida a "arquivo ou não".
+SongQuery _catalogKey(SongQuery query) => SongQuery(
+      teamId: query.teamId,
+      search: query.search,
+      themes: query.themes,
+      filter: query.filter == SongFilter.arquivadas
+          ? SongFilter.arquivadas
+          : SongFilter.canticos,
+    );
+
+/// Quantas músicas cada aba tem para esta busca. Nulo enquanto o acervo
+/// carrega.
+final songTabCountsProvider = Provider.autoDispose
+    .family<Map<SongFilter, int>?, SongQuery>((ref, query) {
+  final songs = ref.watch(songCatalogProvider(_catalogKey(query))).valueOrNull;
+  if (songs == null) return null;
+  return {
+    SongFilter.canticos: songs.where((s) => !s.isHymn).length,
+    SongFilter.hinos: songs.where((s) => s.isHymn).length,
+    SongFilter.novas: songs.where((s) => s.isNew).length,
+  };
+});
+
+/// "Hinos (3)" enquanto há busca: é assim que a aba avisa que o que se
+/// procura está nela.
+String songTabLabel(String label, int? count) =>
+    count == null ? label : '$label ($count)';
+
+final songsProvider =
+    FutureProvider.autoDispose.family<List<Song>, SongQuery>((ref, query) async {
+  final songs = await ref.watch(songCatalogProvider(_catalogKey(query)).future);
 
   // O filtro é local: a lista inteira já veio, e ir ao servidor de novo só
   // para esconder linhas gastaria uma volta de rede à toa.
@@ -388,3 +443,10 @@ final momentSuggestionsProvider = FutureProvider.autoDispose
       .watch(songRepositoryProvider)
       .momentSuggestions(query.eventId, query.moment),
 );
+
+/// Puxar para atualizar: o acervo vem de novo do servidor, e a aba que está
+/// na tela espera por ele.
+Future<void> refreshSongs(WidgetRef ref, SongQuery query) {
+  ref.invalidate(songCatalogProvider);
+  return ref.read(songsProvider(query).future);
+}

@@ -13,6 +13,7 @@ import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_primary_action.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../data/song_repository.dart';
@@ -102,6 +103,11 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
       themes: _themes,
     );
     final songs = ref.watch(songsProvider(query));
+    // Com busca, cada aba diz quantas músicas tem ("Hinos (3)"): o hino
+    // procurado em Cânticos parecia não existir.
+    final counts = _search.trim().isEmpty
+        ? null
+        : ref.watch(songTabCountsProvider(query));
     final canManage = ref
             .watch(authControllerProvider)
             .teams
@@ -110,19 +116,39 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
             ?.canManage ??
         false;
 
+    // Um botão por papel (ver o comentário do `floatingActionButton`), no
+    // lugar do formato: flutuante no celular, cabeçalho com a barra lateral.
+    final principal = widget.archived
+        ? null
+        : canManage
+            ? AppPrimaryAction(
+                label: 'Adicionar',
+                icon: Icons.add_rounded,
+                onPressed: () => context.push('/equipe/musicas/nova'),
+              )
+            : AppPrimaryAction(
+                label: 'Sugerir',
+                icon: Icons.lightbulb_outline_rounded,
+                onPressed: () =>
+                    showSuggestSongSheet(context, teamId: widget.teamId),
+              );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.archived ? 'Arquivadas' : 'Repertório'),
         actions: [
+          if (principal?.headerAction(context) case final acao?) acao,
           // Sugerir é da equipe inteira, e esta é a tela onde se pensa em
           // música. Para quem lidera fica no cabeçalho, porque o botão
           // flutuante já é "Adicionar" -- a ação principal dele.
           if (canManage && !widget.archived)
-            IconButton(
-              tooltip: 'Sugerir uma música',
-              icon: const Icon(Icons.lightbulb_outline_rounded),
+            // Com rótulo: a lâmpada sozinha não dizia "sugerir" a ninguém
+            // (WCAG 2.5.3), e é uma ação rara, que ninguém decora.
+            TextButton.icon(
               onPressed: () =>
                   showSuggestSongSheet(context, teamId: widget.teamId),
+              icon: const Icon(Icons.lightbulb_outline_rounded, size: 18),
+              label: const Text('Sugerir'),
             ),
           // O arquivo e os relatórios são do repertório, e de quem lidera.
           // Eram um ícone mudo (a caixa do arquivo) e duas telas que só se
@@ -151,20 +177,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
       // Um botão por papel, e não dois na mesma tela: para quem lidera a ação
       // principal do repertório é cadastrar; para quem canta é sugerir -- e o
       // integrante não tinha ação nenhuma aqui.
-      floatingActionButton: widget.archived
-          ? null
-          : canManage
-              ? FloatingActionButton.extended(
-                  onPressed: () => context.push('/equipe/musicas/nova'),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Adicionar'),
-                )
-              : FloatingActionButton.extended(
-                  onPressed: () =>
-                      showSuggestSongSheet(context, teamId: widget.teamId),
-                  icon: const Icon(Icons.lightbulb_outline_rounded),
-                  label: const Text('Sugerir'),
-                ),
+      floatingActionButton: principal?.fab(context),
       body: SafeArea(
         top: false,
         child: AppContentWidth.wide(
@@ -225,13 +238,28 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                           value: _filter,
                           onChanged: (value) =>
                               setState(() => _filter = value),
-                          options: const [
+                          options: [
                             AppChoice(
                               value: SongFilter.canticos,
-                              label: 'Cânticos',
+                              label: songTabLabel(
+                                'Cânticos',
+                                counts?[SongFilter.canticos],
+                              ),
                             ),
-                            AppChoice(value: SongFilter.hinos, label: 'Hinos'),
-                            AppChoice(value: SongFilter.novas, label: 'Novas'),
+                            AppChoice(
+                              value: SongFilter.hinos,
+                              label: songTabLabel(
+                                'Hinos',
+                                counts?[SongFilter.hinos],
+                              ),
+                            ),
+                            AppChoice(
+                              value: SongFilter.novas,
+                              label: songTabLabel(
+                                'Novas',
+                                counts?[SongFilter.novas],
+                              ),
+                            ),
                           ],
                         ),
                       )
@@ -270,7 +298,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                     message: error is ApiException
                         ? error.message
                         : 'Não foi possível carregar o repertório.',
-                    onRetry: () => ref.invalidate(songsProvider(query)),
+                    onRetry: () => ref.invalidate(songCatalogProvider),
                   ),
                   data: (list) => _SongList(
                     songs: list,
@@ -321,7 +349,7 @@ class _SongList extends ConsumerWidget {
       // o acervo inteiro e esconderia o que de fato tirou as linhas da tela.
       if (themes.isNotEmpty) {
         return RefreshableMessage(
-          onRefresh: () async => ref.refresh(songsProvider(query).future),
+          onRefresh: () => refreshSongs(ref, query),
           child: AppEmptyState(
             icon: Icons.sell_outlined,
             title: 'Nada com esses temas',
@@ -353,7 +381,7 @@ class _SongList extends ConsumerWidget {
 
 
       return RefreshableMessage(
-        onRefresh: () async => ref.refresh(songsProvider(query).future),
+        onRefresh: () => refreshSongs(ref, query),
         child: AppEmptyState(
           icon: hasSearch
               ? Icons.search_off_rounded
@@ -418,7 +446,7 @@ class _SongList extends ConsumerWidget {
     // preguiçosa. Aqui o `ListView.separated` continua construindo só o que
     // aparece.
     return RefreshIndicator(
-      onRefresh: () async => ref.refresh(songsProvider(query).future),
+      onRefresh: () => refreshSongs(ref, query),
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: AppSpacing.fabClearance),
@@ -434,6 +462,7 @@ class _SongList extends ConsumerWidget {
           song: songs[index],
           teamId: teamId,
           filter: filter,
+          canManage: canManage,
         ),
       ),
     );
@@ -456,11 +485,13 @@ class _SongRow extends StatelessWidget {
     required this.song,
     required this.teamId,
     required this.filter,
+    this.canManage = false,
   });
 
   final Song song;
   final String teamId;
   final SongFilter filter;
+  final bool canManage;
 
   @override
   Widget build(BuildContext context) {
@@ -530,7 +561,7 @@ class _SongRow extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.sm),
             _LinkDots(song: song),
-            _KeyBadge(song: song),
+            _KeyBadge(song: song, canManage: canManage),
           ],
         ),
       ),
@@ -538,20 +569,25 @@ class _SongRow extends StatelessWidget {
   }
 }
 
-/// Tom da equipe, à direita. Sem ele, o tom da gravação em âmbar com um lápis
-/// — não é a decisão de vocês, e a cor e o lápis dizem isso sem legenda.
+/// Tom da equipe, à direita, em violeta. Sem ele, o tom da gravação em cinza.
 ///
-/// Âmbar e não cinza: das 286 músicas importadas, a maioria chegou sem tom, e
-/// em cinza esse buraco lia-se como "está tudo certo". **A cor não pode ser o
-/// único sinal** (WCAG 1.4.1): o lápis diz "isto ainda é para preencher" sem
-/// depender dela, e o `Semantics` diz a frase inteira.
+/// **Já foi âmbar com lápis em toda música sem tom**, e o acervo inteiro
+/// ficou âmbar: "Sem tom definido" em 1.207 de 1.208 músicas. A cor de
+/// atenção deixou de significar alguma coisa, e o lápis sugeria ao integrante
+/// uma edição que ele não pode fazer. A cobrança do que falta preencher mora
+/// em Relatórios › Análise ("Sem tom definido"); aqui fica só a informação.
 ///
-/// No hino sem tom não há cobrança: o número é o que o identifica, e o âmbar
-/// em 581 hinos seria alarme permanente.
+/// Quem lidera ainda vê um lápis pequeno no tom da gravação — "este não é o
+/// de vocês, dá para decidir" —, em cinza, sem o peso de um alerta. **A cor não
+/// é o único sinal** (WCAG 1.4.1): violeta × cinza vem com o `Semantics`
+/// dizendo a frase inteira.
+///
+/// No hino sem tom não aparece nada: o número é o que o identifica.
 class _KeyBadge extends StatelessWidget {
-  const _KeyBadge({required this.song});
+  const _KeyBadge({required this.song, this.canManage = false});
 
   final Song song;
+  final bool canManage;
 
   @override
   Widget build(BuildContext context) {
@@ -569,16 +605,17 @@ class _KeyBadge extends StatelessWidget {
       );
     }
     if (song.isHymn) return const SizedBox.shrink();
+    // Sem o de vocês e sem o da gravação, não há o que mostrar ao integrante;
+    // a quem lidera, a lacuna aparece na Análise.
+    if (recording == null) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(left: AppSpacing.sm),
       child: AppBadge(
-        label: recording ?? 'Sem tom',
-        icon: Icons.edit_outlined,
-        tone: AppTone.warning,
-        semanticsLabel: recording != null
-            ? 'Sem tom definido. A gravação está em $recording.'
-            : 'Sem tom definido.',
+        label: recording,
+        icon: canManage ? Icons.edit_outlined : null,
+        tone: AppTone.neutral,
+        semanticsLabel: 'Tom da gravação: $recording. Sem tom da equipe.',
       ),
     );
   }
@@ -612,7 +649,7 @@ class _LinkDots extends StatelessWidget {
           for (final link in links)
             Padding(
               padding: const EdgeInsets.only(left: 2),
-              child: Icon(link.$1, size: 15, color: scheme.onSurfaceVariant),
+              child: Icon(link.$1, size: 16, color: scheme.onSurfaceVariant),
             ),
         ],
       ),

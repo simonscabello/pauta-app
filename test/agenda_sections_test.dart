@@ -239,10 +239,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Nada marcado para este dia.'), findsNothing);
     expect(find.text('Nenhum compromisso neste mês.'), findsNothing);
-    expect(
-      find.text('Não carregou tudo deste dia.'),
-      findsOneWidget,
-    );
+    // Trocar de mês não escolhe mais o dia 1 sozinho: sem compromisso
+    // conhecido no mês, nenhum dia fica escolhido — e nada é afirmado sobre
+    // um dia que ninguém pediu.
+    expect(find.text('Não carregou tudo deste dia.'), findsNothing);
     expect(find.textContaining('Sem conexão.'), findsOneWidget);
   });
 }

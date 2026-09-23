@@ -237,7 +237,9 @@ Future<void> _pumpEscala(
               ),
               const [
                 TeamSummary(
-                  membershipId: 'm0',
+                  // Fora da escala: o "(você)" da própria linha não entra
+                  // nestes testes, que são sobre a lista.
+                  membershipId: 'm-lider',
                   teamId: 't1',
                   name: 'Ministerio de Louvor',
                   role: 'OWNER',

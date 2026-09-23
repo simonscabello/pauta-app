@@ -23,7 +23,14 @@ class AppBottomActionBar extends StatelessWidget {
     required this.action,
     this.leading,
     this.sideBySideFrom = 460,
+    this.maxWidth,
   });
+
+  /// A largura do conteúdo da tela, quando ela não é a de leitura. O
+  /// formulário tem a coluna estreita dele (420, 520 no monitor), e a barra
+  /// com a largura de leitura deixava o "Salvar" mais largo que os campos
+  /// logo acima — duas colunas para uma tela só.
+  final double? maxWidth;
 
   final Widget action;
   final Widget? leading;
@@ -44,7 +51,7 @@ class AppBottomActionBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: AppContentWidth.reading(
+        child: _width(
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding,
@@ -80,4 +87,11 @@ class AppBottomActionBar extends StatelessWidget {
       ),
     );
   }
+
+  Widget _width({required Widget child}) => maxWidth == null
+      ? AppContentWidth.reading(child: child)
+      : AppContentWidth(
+          maxWidth: maxWidth! + 2 * AppSpacing.screenPadding,
+          child: child,
+        );
 }

@@ -19,6 +19,7 @@ import '../../../shared/widgets/app_facts_strip.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
@@ -228,7 +229,16 @@ class _PublishBar extends ConsumerStatefulWidget {
 class _PublishBarState extends ConsumerState<_PublishBar> {
   bool _publishing = false;
 
+  /// Ver [kArrivalTapShield]: o fim da criação desemboca aqui, e o "Salvar e
+  /// ver a escala" da tela anterior ficava exatamente sobre o "Publicar".
+  final DateTime _montadaEm = DateTime.now();
+
   Future<void> _publish() async {
+    if (DateTime.now().difference(_montadaEm) < kArrivalTapShield) return;
+    // A barra some ao publicar (a escala deixa de ser rascunho), e o toque em
+    // "Compartilhar" chega depois disso: a ação usa o contexto de quem mostra
+    // o aviso, que continua de pé.
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _publishing = true);
     try {
       await ref.read(eventRepositoryProvider).publish(widget.event.id);
@@ -248,6 +258,15 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
                   'as músicas você escolhe depois.'
               : 'Escala publicada para a equipe.',
           tone: AppTone.success,
+          // O passo seguinte natural: agora sim o ícone de compartilhar
+          // existe, e o texto pode ir para o grupo.
+          action: SnackBarAction(
+            label: 'Compartilhar',
+            onPressed: () => shareText(
+              messenger.context,
+              buildScheduleShareText(widget.event),
+            ),
+          ),
         );
       }
     } on ApiException catch (error) {
@@ -335,7 +354,7 @@ class _EventDetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
-    final youPositions = event.positionsForMembership(myMembershipId);
+    final youPositions = event.personalRolesFor(myMembershipId);
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -363,6 +382,19 @@ class _EventDetailBody extends StatelessWidget {
                 youPositions: youPositions,
               ),
               const SizedBox(height: AppSpacing.xl),
+              // **Conflito antes de tudo.** A faixa ficava abaixo das músicas,
+              // no meio da página, e mandava procurar "Editar" na equipe; agora
+              // é a primeira coisa depois do cabeçalho, com a ação na própria
+              // faixa.
+              if (event.warnings.unavailableAssigned.isNotEmpty) ...[
+                _UnavailableWarningBand(
+                  event: event,
+                  people: event.warnings.unavailableAssigned,
+                  canManage: canManage,
+                  myMembershipId: myMembershipId,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               _EventNotes(event: event),
               // **O repertório vem antes da equipe.** É o que traz o músico a
               // esta tela — a cifra, o tom, a ordem —, e atrás da manchete e
@@ -373,14 +405,11 @@ class _EventDetailBody extends StatelessWidget {
                 child: _SongsSection(event: event, canManage: canManage),
               ),
               const SizedBox(height: AppSpacing.xl),
-              if (event.warnings.unavailableAssigned.isNotEmpty) ...[
-                _UnavailableWarningBand(
-                  people: event.warnings.unavailableAssigned,
-                  canManage: canManage,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-              _TeamSection(event: event, canManage: canManage),
+              _TeamSection(
+                event: event,
+                canManage: canManage,
+                myMembershipId: myMembershipId,
+              ),
               const SizedBox(height: AppSpacing.xl),
               // Para a equipe inteira, e não dentro do menu de quem lidera:
               // "quem me tirou da escala?" é pergunta de quem foi tirado.
@@ -507,6 +536,9 @@ class _EventHeader extends StatelessWidget {
                 value: youPositions.join(' · '),
                 highlight: true,
                 wrapValue: true,
+                // "Ministra · Vocal · Violão" numa coluna de celular precisa
+                // de três linhas; com duas, a última função saía cortada.
+                maxLines: 3,
               ),
           ],
         ),
@@ -626,42 +658,84 @@ class YouAssignmentBanner extends StatelessWidget {
 /// de nomes a que se refere.
 class _UnavailableWarningBand extends StatelessWidget {
   const _UnavailableWarningBand({
+    required this.event,
     required this.people,
     required this.canManage,
+    required this.myMembershipId,
   });
 
+  final Event event;
   final List<UnavailableMember> people;
   final bool canManage;
+  final String? myMembershipId;
 
   @override
   Widget build(BuildContext context) {
+    final meu = people
+        .where((p) => p.membershipId == myMembershipId)
+        .firstOrNull;
+
+    // **Quem avisou lê em segunda pessoa, e em âmbar.** A Maria lia, em
+    // vermelho, "Maria avisou que não pode neste dia" — sobre ela mesma, com
+    // o tom de erro. O que ela precisa saber é que o recado chegou.
+    if (meu != null && !canManage) {
+      return AppNotice(
+        tone: AppTone.warning,
+        icon: Icons.event_busy_rounded,
+        title: 'Você avisou que não pode neste dia',
+        message: [
+          if (meu.reason?.isNotEmpty ?? false) 'Motivo: ${meu.reason}.',
+          'Quem lidera já foi avisado e vai achar alguém no seu lugar.',
+        ].join(' '),
+      );
+    }
+
     final names = joinNames(people.map((p) => p.displayName));
     final single = people.length == 1;
 
-    // Motivos só aparecem quando existem; ninguém é obrigado a justificar.
-    final reasons = people
-        .where((p) => p.reason?.isNotEmpty ?? false)
-        .map((p) => '${p.displayName}: ${p.reason}')
-        .join(' · ');
-
-    final message = [
-      if (reasons.isNotEmpty) reasons,
-      if (canManage)
-        single
-            ? 'Ainda está na escala. Ajuste em "Editar", na equipe escalada.'
-            : 'Ainda estão na escala. Ajuste em "Editar", na equipe escalada.',
-    ].join('\n');
+    // O que cada um faz, e o motivo quando existe: é o que o líder precisa
+    // para trocar sem esquecer o ministrante. Ninguém é obrigado a justificar.
+    final linhas = [
+      for (final p in people)
+        [
+          if (event.rolesPhraseFor(p.membershipId) case final funcoes?)
+            '${p.displayName} $funcoes',
+          if (p.reason?.isNotEmpty ?? false) '(${p.reason})',
+        ].join(' '),
+    ].where((linha) => linha.isNotEmpty);
 
     return AppNotice(
-      tone: AppTone.danger,
+      tone: canManage ? AppTone.danger : AppTone.warning,
       icon: Icons.event_busy_rounded,
       title: single
           ? '$names avisou que não pode neste dia'
           : '$names avisaram que não podem neste dia',
-      message: message.isEmpty ? 'Confira com a pessoa antes do culto.' : message,
+      message: [
+        ...linhas,
+        if (!canManage) 'Quem lidera já sabe.',
+      ].join('\n'),
+      action: canManage
+          ? Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final p in people)
+                  FilledButton.tonalIcon(
+                    style: AppButtonStyles.compact,
+                    onPressed: () => context.push(
+                      '/agenda/${event.id}/escalar?substituir=${p.membershipId}',
+                    ),
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                    label: Text('Substituir ${_firstName(p.displayName)}'),
+                  ),
+              ],
+            )
+          : null,
     );
   }
 }
+
+String _firstName(String name) => name.trim().split(RegExp(r'\s+')).first;
 
 /// Quem toca o quê nesta escala.
 ///
@@ -671,10 +745,15 @@ class _UnavailableWarningBand extends StatelessWidget {
 /// equipe** — ela agora é um botão, no lugar onde a falta é percebida, com a
 /// mesma forma do botão de montar o repertório logo abaixo.
 class _TeamSection extends StatelessWidget {
-  const _TeamSection({required this.event, required this.canManage});
+  const _TeamSection({
+    required this.event,
+    required this.canManage,
+    this.myMembershipId,
+  });
 
   final Event event;
   final bool canManage;
+  final String? myMembershipId;
 
   @override
   Widget build(BuildContext context) {
@@ -713,6 +792,8 @@ class _TeamSection extends StatelessWidget {
           _AssignedTeamCard(
             groups: event.assignments,
             minister: event.minister,
+            showRegistryBadge: canManage,
+            myMembershipId: myMembershipId,
             unavailable: {
               for (final person in event.unavailable)
                 person.membershipId: person.reason,
@@ -783,9 +864,21 @@ class _AssignedTeamCard extends StatefulWidget {
     required this.groups,
     this.minister,
     this.unavailable = const {},
+    this.showRegistryBadge = false,
+    this.myMembershipId,
   });
 
   final List<AssignmentGroup> groups;
+
+  /// Para destacar as linhas de quem está olhando: na lista de doze nomes, o
+  /// músico procura o próprio.
+  final String? myMembershipId;
+
+  /// "Fora do cadastro" é recado de gestão: diz a quem monta a escala que a
+  /// pessoa não tem aquela função na ficha. Para o integrante era um alerta
+  /// âmbar ao lado do próprio nome — "fui escalada errado?" — sobre algo que
+  /// ele não resolve.
+  final bool showRegistryBadge;
 
   /// Quem conduz a ministração do louvor.
   final EventMinister? minister;
@@ -842,6 +935,8 @@ class _AssignedTeamCardState extends State<_AssignedTeamCard> {
           group: group,
           visibleMembers: visiveis,
           unavailable: widget.unavailable,
+          showRegistryBadge: widget.showRegistryBadge,
+          myMembershipId: widget.myMembershipId,
         ),
       );
     }
@@ -857,7 +952,15 @@ class _AssignedTeamCardState extends State<_AssignedTeamCard> {
           // O ministrante fica fora da conta e sempre à vista: é uma linha só,
           // e é a primeira pergunta de quem abre a escala.
           if (widget.minister != null) ...[
-            _MinisterBanner(name: widget.minister!.displayName),
+            _MinisterBanner(
+              name: widget.minister!.displayName,
+              // Quem ministra e avisou que não pode é a ausência mais cara do
+              // domingo, e a linha dele era a única sem o selo.
+              isUnavailable:
+                  widget.unavailable.containsKey(widget.minister!.membershipId),
+              unavailableReason:
+                  widget.unavailable[widget.minister!.membershipId],
+            ),
             const SizedBox(height: AppSpacing.md),
             Divider(color: scheme.outlineVariant, height: 1),
             const SizedBox(height: AppSpacing.md),
@@ -923,9 +1026,15 @@ class _MoreMembersButton extends StatelessWidget {
 /// escala pensando "quem vai conduzir?". Sem faixa colorida — o peso vem do
 /// rotulo e do icone.
 class _MinisterBanner extends StatelessWidget {
-  const _MinisterBanner({required this.name});
+  const _MinisterBanner({
+    required this.name,
+    this.isUnavailable = false,
+    this.unavailableReason,
+  });
 
   final String name;
+  final bool isUnavailable;
+  final String? unavailableReason;
 
   @override
   Widget build(BuildContext context) {
@@ -963,6 +1072,7 @@ class _MinisterBanner extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        if (isUnavailable) UnavailableBadge(reason: unavailableReason),
       ],
     );
   }
@@ -973,9 +1083,12 @@ class _AssignmentGroupSection extends StatelessWidget {
     required this.group,
     required this.visibleMembers,
     required this.unavailable,
+    this.showRegistryBadge = false,
+    this.myMembershipId,
   });
 
   final AssignmentGroup group;
+  final String? myMembershipId;
 
   /// Quem desta função aparece agora. Pode ser um pedaço de [group.members]
   /// quando o cartão está recolhido — a contagem do cabeçalho continua sendo a
@@ -983,6 +1096,7 @@ class _AssignmentGroupSection extends StatelessWidget {
   final List<AssignmentMember> visibleMembers;
 
   final Map<String, String?> unavailable;
+  final bool showRegistryBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -1032,6 +1146,8 @@ class _AssignmentGroupSection extends StatelessWidget {
             unavailableReason: unavailable[visibleMembers[i].membershipId],
             isUnavailable:
                 unavailable.containsKey(visibleMembers[i].membershipId),
+            showRegistryBadge: showRegistryBadge,
+            isMe: visibleMembers[i].membershipId == myMembershipId,
             isLast: i == visibleMembers.length - 1,
           ),
       ],
@@ -1045,12 +1161,16 @@ class _AssignedMemberRow extends StatelessWidget {
     required this.unavailableReason,
     required this.isUnavailable,
     required this.isLast,
+    this.showRegistryBadge = false,
+    this.isMe = false,
   });
 
   final AssignmentMember member;
   final String? unavailableReason;
   final bool isUnavailable;
   final bool isLast;
+  final bool showRegistryBadge;
+  final bool isMe;
 
   @override
   Widget build(BuildContext context) {
@@ -1078,15 +1198,20 @@ class _AssignedMemberRow extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  member.displayName,
-                  style: theme.textTheme.bodyLarge,
+                  isMe ? '${member.displayName} (você)' : member.displayName,
+                  style: isMe
+                      ? theme.textTheme.bodyLarge?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w700,
+                        )
+                      : theme.textTheme.bodyLarge,
                 ),
               ),
               // A etiqueta ao lado do nome diz *quem*; a faixa acima diz que
               // há um problema. Uma sem a outra obriga a procurar.
               if (isUnavailable)
                 UnavailableBadge(reason: unavailableReason)
-              else if (!member.isRegisteredForPosition)
+              else if (showRegistryBadge && !member.isRegisteredForPosition)
                 AppBadge(
                   label: 'Fora do cadastro',
                   tone: AppTone.warning,
@@ -1183,7 +1308,7 @@ class _SongsSection extends StatelessWidget {
                     extra: event,
                   ),
                   icon: const Icon(Icons.queue_music_rounded, size: 18),
-                  label: const Text('Montar repertório'),
+                  label: const Text('Escolher músicas'),
                 ),
               // A porta que este vazio abre para quem não lidera. A escala
               // chega à equipe com as músicas em aberto, e é aí que a sugestão
@@ -1317,7 +1442,12 @@ class _ServiceSongsSection extends StatelessWidget {
           )
         else
           for (var i = 0; i < songs.length; i++)
-            _SongRow(teamId: teamId, song: songs[i], position: i + 1),
+            _SongRow(
+              teamId: teamId,
+              song: songs[i],
+              position: i + 1,
+              serviceSongs: songs,
+            ),
       ],
     );
   }
@@ -1344,11 +1474,15 @@ class _SongRow extends StatelessWidget {
     required this.teamId,
     required this.song,
     required this.position,
+    this.serviceSongs = const [],
   });
 
   final String teamId;
   final EventSong song;
   final int position;
+
+  /// As músicas do mesmo culto: a letra passa de uma para a outra.
+  final List<EventSong> serviceSongs;
 
   @override
   Widget build(BuildContext context) {
@@ -1372,6 +1506,7 @@ class _SongRow extends StatelessWidget {
           context: context,
           teamId: teamId,
           song: song,
+          serviceSongs: serviceSongs,
         ),
         leading: Text(
           '$position',

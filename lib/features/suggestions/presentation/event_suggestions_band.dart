@@ -113,7 +113,7 @@ class _EventSuggestionsBandState extends ConsumerState<EventSuggestionsBand> {
     );
     if (created == null || !mounted) return;
 
-    ref.invalidate(songsProvider);
+    ref.invalidate(songCatalogProvider);
     await _accept(s, songId: created.id);
     if (mounted) await _pickServiceAndAdd(created.id);
   }
@@ -327,17 +327,19 @@ class _SuggestionRow extends StatelessWidget {
             children: [
               // Botões do tamanho de uma ação de linha: o tonal herdava os
               // 52px do botão que salva um formulário.
+              // "Aceitar" ao lado de "Cadastrar" não dizia o que cada um faz:
+              // um responde a quem sugeriu, o outro põe a música no acervo.
               TextButton(
                 style: AppButtonStyles.compactText,
                 onPressed: onAccept,
-                child: const Text('Aceitar'),
+                child: const Text('Marcar como aceita'),
               ),
               if (!s.canGoToSetlist)
                 FilledButton.tonalIcon(
                   style: AppButtonStyles.compact,
                   onPressed: onRegister,
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Cadastrar'),
+                  label: const Text('Cadastrar no repertório'),
                 )
               else if (alreadyInSetlist)
                 Text(

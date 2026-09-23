@@ -15,10 +15,16 @@ class AppMonthDay {
     this.markTone = AppTone.primary,
     this.enabled = true,
     this.detail,
+    this.icon,
   });
 
   /// Fundo cheio da marca.
   final bool selected;
+
+  /// Um ícone no lugar dos traços. No seletor de "dias em que não posso" o dia
+  /// marcado leva um "×": fundo cheio contra fundo claro (dia de culto) era
+  /// diferença só de tom, e cor sozinha não é sinal (WCAG 1.4.1).
+  final IconData? icon;
 
   /// Quantas coisas o dia tem. Pinta o fundo claro e desenha um traço por
   /// coisa, até [AppMonthGrid.maxMarks].
@@ -61,7 +67,11 @@ class AppMonthGrid extends StatelessWidget {
     required this.onTap,
     this.keyPrefix = 'month-day-',
     this.showWeekdays = true,
+    this.onlyWeekOf,
   });
+
+  /// Mostra só a semana deste dia (calendário recolhido). Nulo: o mês todo.
+  final DateTime? onlyWeekOf;
 
   /// A linha "D S T Q Q S S". Sai quando quem chama empilha vários meses e
   /// já mostra a linha uma vez, presa no topo.
@@ -122,6 +132,10 @@ class AppMonthGrid extends StatelessWidget {
                   ],
                 ),
                 for (var row = 0; row < rows; row++)
+                  if (onlyWeekOf == null ||
+                      onlyWeekOf!.year != month.year ||
+                      onlyWeekOf!.month != month.month ||
+                      (leading + onlyWeekOf!.day - 1) ~/ 7 == row)
                   TableRow(
                     children: [
                       for (var col = 0; col < 7; col++)
@@ -220,12 +234,18 @@ class AppMonthGrid extends StatelessWidget {
                       const SizedBox(height: 3),
                       // O espaço é reservado mesmo vazio: sem isto a grade
                       // sacode meio pixel entre um mês com marcas e outro sem.
-                      SizedBox(
-                        height: 4,
-                        child: marked
-                            ? AppDayMarks(count: state.marks, color: foreground)
-                            : null,
-                      ),
+                      if (state.icon != null)
+                        Icon(state.icon, size: 12, color: foreground)
+                      else
+                        SizedBox(
+                          height: 4,
+                          child: marked
+                              ? AppDayMarks(
+                                  count: state.marks,
+                                  color: foreground,
+                                )
+                              : null,
+                        ),
                     ],
                   ),
                 ),

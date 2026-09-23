@@ -8,8 +8,10 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
+import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
@@ -17,6 +19,8 @@ import '../../../shared/widgets/greeting_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
+import '../../events/domain/event_models.dart';
+import '../../events/presentation/agenda_event_tile.dart';
 import '../../onboarding/application/tour_controller.dart';
 import '../../onboarding/data/onboarding_repository.dart';
 import '../../onboarding/domain/member_tour.dart';
@@ -145,6 +149,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // formato da tela, não sobre o espaço que a lista recebeu.
     final wide = AppBreakpoints.of(context).isWide;
 
+    // **Escala em outra equipe.** Quem serve em duas equipes abria na outra e
+    // lia "Nada marcado por enquanto" — e concluía que não tinha sido
+    // escalado. A próxima escala **sua** nas demais equipes vira um aviso com
+    // a troca a um toque. Só para quem está em mais de uma equipe, e com a
+    // mesma consulta que a agenda daquela equipe já faria.
+    final minhaAqui = events.valueOrNull?.data
+        .where(
+          (e) => e.positionsForMembership(team.membershipId).isNotEmpty,
+        )
+        .firstOrNull;
+    ({String teamId, String teamName, Event event})? outraEquipe;
+    for (final outra in auth.teams) {
+      if (outra.teamId == teamId) continue;
+      final proxima = ref
+          .watch(eventsProvider((outra.teamId, 'upcoming')))
+          .valueOrNull
+          ?.data
+          .where(
+            (e) => e.positionsForMembership(outra.membershipId).isNotEmpty,
+          )
+          .firstOrNull;
+      if (proxima == null) continue;
+      if (minhaAqui != null && !proxima.startsAt.isBefore(minhaAqui.startsAt)) {
+        continue;
+      }
+      if (outraEquipe == null ||
+          proxima.startsAt.isBefore(outraEquipe.event.startsAt)) {
+        outraEquipe = (
+          teamId: outra.teamId,
+          teamName: outra.name,
+          event: proxima,
+        );
+      }
+    }
+
     return Scaffold(
       // O mesmo botão da agenda, no mesmo lugar: é a mesma ação, e vê-la mudar
       // de forma ao trocar de aba é o que faz duas telas parecerem de dois
@@ -190,6 +229,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   AppSpacing.md,
                 ),
               ),
+              if (outraEquipe case final outra?)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    0,
+                    AppSpacing.screenPadding,
+                    AppSpacing.md,
+                  ),
+                  child: AppNotice(
+                    tone: AppTone.primary,
+                    icon: Icons.swap_horiz_rounded,
+                    title: minhaAqui == null
+                        ? 'Você tem escala em ${outra.teamName}'
+                        : 'Sua próxima escala é em ${outra.teamName}',
+                    message: formatEventWeekdayDate(
+                      outra.event.startsAt,
+                      outra.event.timezone.isEmpty
+                          ? 'America/Sao_Paulo'
+                          : outra.event.timezone,
+                    ),
+                    action: TextButton(
+                      onPressed: () => ref
+                          .read(activeTeamIdProvider.notifier)
+                          .select(outra.teamId),
+                      child: Text('Ver em ${outra.teamName}'),
+                    ),
+                  ),
+                ),
               Expanded(
                 child: events.when(
                   // Esqueleto no formato do que vem — a manchete, os dois
@@ -207,6 +274,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   data: (cached) => _HomeBody(
                     teamId: teamId,
+                    membershipId: team.membershipId,
                     canManage: team.canManage,
                     summary: HomeSummary.of(
                       cached.data,
@@ -265,6 +333,7 @@ String _greeting(String name) {
 class _HomeBody extends StatelessWidget {
   const _HomeBody({
     required this.teamId,
+    required this.membershipId,
     required this.canManage,
     required this.summary,
     required this.nextTeamEvent,
@@ -274,6 +343,7 @@ class _HomeBody extends StatelessWidget {
   });
 
   final String teamId;
+  final String membershipId;
   final bool canManage;
   final HomeSummary summary;
 
@@ -315,10 +385,20 @@ class _HomeBody extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final twoColumns = constraints.maxWidth >= 880;
+              // Com a barra lateral à vista, Repertório e Sugestões já estão
+              // nela: repeti-los na Home era a terceira porta para o mesmo
+              // lugar. No celular, onde não há barra lateral, ficam os quatro.
               final quickAccess = HomeQuickAccess(
                 teamId: teamId,
                 canManage: canManage,
+                withSideNav: AppBreakpoints.of(context).isWide,
               );
+              final week = canManage
+                  ? _TeamWeek(
+                      events: summary.teamWeek,
+                      membershipId: membershipId,
+                    )
+                  : null;
               final notices = summary.notices.isEmpty
                   ? null
                   : _HomeNotices(notices: summary.notices);
@@ -353,7 +433,19 @@ class _HomeBody extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: AppSpacing.lg),
-                          Expanded(flex: 2, child: quickAccess),
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (week != null) ...[
+                                  week,
+                                  const SizedBox(height: AppSpacing.xl),
+                                ],
+                                quickAccess,
+                              ],
+                            ),
+                          ),
                         ],
                       )
                     else ...[
@@ -361,6 +453,10 @@ class _HomeBody extends StatelessWidget {
                       if (notices != null) ...[
                         const SizedBox(height: AppSpacing.xl),
                         notices,
+                      ],
+                      if (week != null) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        week,
                       ],
                       const SizedBox(height: AppSpacing.xl),
                       quickAccess,
@@ -435,6 +531,20 @@ class _HomeNotices extends StatelessWidget {
         : event.timezone;
 
     return switch (notice.kind) {
+      HomeNoticeKind.unavailableAssigned => (
+          icon: Icons.event_busy_rounded,
+          title: notice.count > 1
+              ? '${notice.person!.displayName} e mais ${notice.count - 1} não '
+                  'podem ${formatEventShortDate(event!.startsAt, timezone)}'
+              : '${notice.person!.displayName} não pode '
+                  '${formatEventShortDate(event!.startsAt, timezone)}',
+          message: [
+            if (event.rolesPhraseFor(notice.person!.membershipId)
+                case final funcoes?)
+              '${_capitalize(funcoes)}.',
+            'Toque para substituir.',
+          ].join(' '),
+        ),
       HomeNoticeKind.pendingDrafts => (
           icon: Icons.edit_note_rounded,
           title: notice.count == 1
@@ -496,6 +606,43 @@ class _HomeSkeleton extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+String _capitalize(String text) =>
+    text.isEmpty ? text : '${text[0].toUpperCase()}${text.substring(1)}';
+
+/// (liderança) As escalas da equipe nos próximos sete dias.
+///
+/// A mesma linha da agenda, com o que falta dito nela ("Rascunho · falta
+/// equipe", "Maria não pode"). Não é a agenda em miniatura: é só a semana, que
+/// é o horizonte em que a falta vira problema.
+class _TeamWeek extends StatelessWidget {
+  const _TeamWeek({required this.events, required this.membershipId});
+
+  final List<Event> events;
+  final String membershipId;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGroup(
+      title: 'Esta semana na equipe',
+      dividerIndent: AppGroup.textIndent,
+      children: [
+        if (events.isEmpty)
+          const AppGroupRow(
+            title: 'Nenhuma escala nos próximos sete dias.',
+            showChevron: false,
+          )
+        else
+          for (final event in events)
+            CompactScheduleTile(
+              event: event,
+              canManage: true,
+              membershipId: membershipId,
+            ),
+      ],
     );
   }
 }

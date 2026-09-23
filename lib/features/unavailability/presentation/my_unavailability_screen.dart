@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../onboarding/domain/member_tour.dart';
-import '../../onboarding/presentation/tour_target.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -17,9 +15,13 @@ import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
+import '../../../shared/widgets/app_primary_action.dart';
+import '../../auth/application/auth_controller.dart';
+import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
 import '../../team/data/team_repository.dart';
 import '../data/unavailability_repository.dart';
+import '../domain/schedule_conflicts.dart';
 import '../domain/unavailability_models.dart';
 import 'multi_date_picker.dart';
 
@@ -42,6 +44,21 @@ class _MyUnavailabilityScreenState
     extends ConsumerState<MyUnavailabilityScreen> {
   bool _saving = false;
 
+  /// Os dias em que eu já estou escalado nesta equipe, a partir das próximas
+  /// escalas que a agenda e a Home já carregam (mesma chave de cache).
+  Map<DateTime, ScheduledDay> _scheduledDays() {
+    final events =
+        ref.read(eventsProvider((widget.teamId, 'upcoming'))).valueOrNull?.data;
+    if (events == null) return const {};
+    final membershipId = ref
+        .read(authControllerProvider)
+        .teams
+        .where((t) => t.teamId == widget.teamId)
+        .firstOrNull
+        ?.membershipId;
+    return scheduledDaysFor(events, membershipId);
+  }
+
   /// O calendário edita o conjunto inteiro: o que a pessoa desmarcar é
   /// removido, o que marcar é criado. Assim o calendário mostra a verdade e
   /// não vira só um formulário de inclusão.
@@ -56,12 +73,18 @@ class _MyUnavailabilityScreenState
     final templates =
         ref.read(serviceTemplatesProvider(widget.teamId)).valueOrNull;
 
+    final scheduled = _scheduledDays();
+
     final result = await showMultiDatePicker(
       context: context,
       initialSelection: existing.keys.toSet(),
       isServiceDay: templates == null || templates.isEmpty
           ? null
           : (day) => templates.any((t) => t.matchesDate(day)),
+      scheduledOn: (day) => switch (scheduled[day]) {
+        final escala? => scheduledDayPhrase(day, escala),
+        null => null,
+      },
     );
 
     if (result == null || !mounted) return;
@@ -92,14 +115,19 @@ class _MyUnavailabilityScreenState
 
       ref.invalidate(myUnavailabilityProvider(widget.teamId));
 
+      // Diz o efeito, e não só o que foi gravado: num dia em que a pessoa já
+      // estava na escala, o recado chega a quem lidera.
+      final comEscala = added.where(scheduled.containsKey).length;
       if (mounted) {
         showAppSnackBar(
           context,
-          added.isEmpty
-              ? 'Dias atualizados. A equipe já vê.'
-              : added.length == 1
-                  ? 'Aviso enviado para 1 dia.'
-                  : 'Aviso enviado para ${added.length} dias.',
+          switch ((added.length, comEscala)) {
+            (0, _) => 'Dias atualizados. A equipe já vê.',
+            (_, > 0) => 'Aviso enviado. Quem lidera já sabe que você não '
+                'pode ${comEscala == 1 ? 'no dia em que estava escalado' : 'nos dias em que estava escalado'}.',
+            (1, _) => 'Aviso enviado para 1 dia.',
+            (final n, _) => 'Aviso enviado para $n dias.',
+          },
           tone: AppTone.success,
         );
       }
@@ -193,8 +221,12 @@ class _MyUnavailabilityScreenState
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final items = ref.watch(myUnavailabilityProvider(widget.teamId));
-    // Observada aqui para já ter chegado quando a pessoa abrir o calendário.
+    // Observadas aqui para já terem chegado quando a pessoa abrir o
+    // calendário: a grade marca os dias de culto; as escalas, os dias em que
+    // ela já está escalada.
     ref.watch(serviceTemplatesProvider(widget.teamId));
+    ref.watch(eventsProvider((widget.teamId, 'upcoming')));
+    final scheduled = _scheduledDays();
 
     final upcoming = items.valueOrNull
             ?.where((i) => !i.date.isBefore(_today))
@@ -205,20 +237,25 @@ class _MyUnavailabilityScreenState
           ref.read(myUnavailabilityProvider(widget.teamId)).value ?? const [],
         );
 
+    // Sem dia marcado, a ação mora no próprio vazio: dois botões para a
+    // mesma coisa na mesma tela seria um a mais.
+    final escolher = items.hasValue && upcoming.isNotEmpty
+        ? AppPrimaryAction(
+            label: 'Escolher dias',
+            icon: Icons.edit_calendar_rounded,
+            onPressed: _saving ? null : openPicker,
+            wrap: (botao) => botao,
+          )
+        : null;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Minha disponibilidade')),
-      // Sem dia marcado, a ação mora no próprio vazio: dois botões para a
-      // mesma coisa na mesma tela seria um a mais.
-      floatingActionButton: items.hasValue && upcoming.isNotEmpty
-          ? TourTarget(
-              id: TourTargetIds.availabilityChoose,
-              child: FloatingActionButton.extended(
-                onPressed: _saving ? null : openPicker,
-                icon: const Icon(Icons.edit_calendar_rounded),
-                label: const Text('Escolher dias'),
-              ),
-            )
-          : null,
+      appBar: AppBar(
+        title: const Text('Minha disponibilidade'),
+        actions: [
+          if (escolher?.headerAction(context) case final acao?) acao,
+        ],
+      ),
+      floatingActionButton: escolher?.fab(context),
       body: SafeArea(
         top: false,
         child: AppContentWidth.reading(
@@ -278,16 +315,13 @@ class _MyUnavailabilityScreenState
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          TourTarget(
-                            id: TourTargetIds.availabilityChoose,
-                            child: FilledButton.icon(
-                              onPressed: _saving ? null : openPicker,
-                              icon: const Icon(
-                                Icons.edit_calendar_rounded,
-                                size: 18,
-                              ),
-                              label: const Text('Escolher dias'),
+                          FilledButton.icon(
+                            onPressed: _saving ? null : openPicker,
+                            icon: const Icon(
+                              Icons.edit_calendar_rounded,
+                              size: 18,
                             ),
+                            label: const Text('Escolher dias'),
                           ),
                         ],
                       ),
@@ -302,6 +336,7 @@ class _MyUnavailabilityScreenState
                         for (final item in upcoming)
                           _UnavailabilityRow(
                             item: item,
+                            scheduled: scheduled[item.date],
                             onEditReason: () => _editReason(item),
                             onRemove: () => _remove(item),
                           ),
@@ -327,11 +362,16 @@ class _UnavailabilityRow extends StatelessWidget {
     required this.item,
     required this.onEditReason,
     required this.onRemove,
+    this.scheduled,
   });
 
   final Unavailability item;
   final VoidCallback onEditReason;
   final VoidCallback onRemove;
+
+  /// A escala em que a pessoa já estava nesse dia. A linha diz que o recado
+  /// chegou a quem lidera — é a pergunta que sobra depois de marcar.
+  final ScheduledDay? scheduled;
 
   @override
   Widget build(BuildContext context) {
@@ -378,6 +418,31 @@ class _UnavailabilityRow extends StatelessWidget {
                       fontStyle: reason == null ? FontStyle.italic : null,
                     ),
                   ),
+                  if (scheduled != null) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.campaign_outlined,
+                          size: 14,
+                          color: AppStatusColors.of(context)
+                              .resolve(AppTone.warning, scheme)
+                              .foreground,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Você está na escala · quem lidera foi avisado',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppStatusColors.of(context)
+                                  .resolve(AppTone.warning, scheme)
+                                  .foreground,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),

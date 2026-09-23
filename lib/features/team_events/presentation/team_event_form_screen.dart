@@ -10,6 +10,7 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../../events/domain/event_datetime.dart';
 import '../../team/data/team_repository.dart';
@@ -41,7 +42,8 @@ class TeamEventFormScreen extends ConsumerStatefulWidget {
       _TeamEventFormScreenState();
 }
 
-class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
+class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen>
+    with UnsavedChangesTracker {
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _location = TextEditingController();
@@ -62,6 +64,16 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
     if (inicial != null) _date = inicial;
     if (widget.isEditing) _carregar();
   }
+
+  @override
+  String unsavedSignature() => [
+        _title.text.trim(),
+        _location.text.trim(),
+        _notes.text.trim(),
+        _date.toIso8601String(),
+        '${_startsAt.hour}:${_startsAt.minute}',
+        _endsAt == null ? '' : '${_endsAt!.hour}:${_endsAt!.minute}',
+      ].join('\n');
 
   @override
   void dispose() {
@@ -156,6 +168,18 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
       final timezone = team.timezone.isEmpty
           ? 'America/Sao_Paulo'
           : team.timezone;
+      // Evento novo no passado avisaria a equipe de algo que já aconteceu —
+      // foi o que o padrão "hoje, 19:30" fez às 21h30. Editar um antigo
+      // continua possível (corrigir o local de uma reunião que passou).
+      if (!widget.isEditing &&
+          _toUtc(_startsAt, timezone).isBefore(DateTime.now().toUtc())) {
+        setState(() {
+          _error = 'Esse horário já passou. Escolha outro dia ou horário '
+              'para a equipe não ser avisada de algo que já aconteceu.';
+          _saving = false;
+        });
+        return;
+      }
       final repo = ref.read(teamEventRepositoryProvider);
       final inicio = _toUtc(_startsAt, timezone).toIso8601String();
       final fim = _endsAt == null ? null : _toUtc(_endsAt!, timezone);
@@ -186,6 +210,7 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
 
       _recarregarAgenda(teamId);
       if (!mounted) return;
+      markSaved();
       showAppSnackBar(
         context,
         widget.isEditing ? 'Evento atualizado.' : 'Evento marcado.',
@@ -221,7 +246,10 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
       );
     }
 
+    markUnsavedBaseline();
+
     return FormScaffold(
+      isDirty: hasUnsavedChanges,
       appBar: AppBar(
         title: Text(widget.isEditing ? 'Editar evento' : 'Novo evento'),
       ),

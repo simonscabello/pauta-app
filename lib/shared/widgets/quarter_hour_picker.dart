@@ -155,7 +155,12 @@ class _QuarterHourSheetState extends State<_QuarterHourSheet> {
               onPressed: () => Navigator.of(context).pop(
                 TimeOfDay(hour: _hour, minute: _minutes[_minuteIndex]),
               ),
-              child: const Text('Confirmar'),
+              // O que o botão faz, e não "Confirmar": a hora escolhida vai
+              // escrita nele, e é a última chance de ler antes de usar.
+              child: Text(
+                'Usar ${_hour.toString().padLeft(2, '0')}:'
+                '${_minutes[_minuteIndex].toString().padLeft(2, '0')}',
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),

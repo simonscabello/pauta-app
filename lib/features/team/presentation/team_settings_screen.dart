@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/team_repository.dart';
 
@@ -26,7 +27,8 @@ class TeamSettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<TeamSettingsScreen> createState() => _TeamSettingsScreenState();
 }
 
-class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen> {
+class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen>
+    with UnsavedChangesTracker {
   final _name = TextEditingController();
   bool _populated = false;
   bool _saving = false;
@@ -37,6 +39,9 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen> {
     _name.dispose();
     super.dispose();
   }
+
+  @override
+  String unsavedSignature() => _name.text.trim();
 
   Future<void> _save() async {
     final name = _name.text.trim();
@@ -57,6 +62,7 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen> {
       // autenticação -- sem recarregar, a agenda continuaria com o nome antigo.
       await ref.read(authControllerProvider.notifier).reloadTeams();
       if (mounted) {
+        markSaved();
         context.pop();
         showAppSnackBar(
           context,
@@ -93,8 +99,10 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen> {
       _populated = true;
       _name.text = value.name;
     }
+    if (_populated) markUnsavedBaseline();
 
     return FormScaffold(
+      isDirty: hasUnsavedChanges,
       appBar: AppBar(title: const Text('Dados da equipe')),
       subtitle: 'O nome aparece na agenda e nos convites.',
       children: [

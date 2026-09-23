@@ -10,11 +10,13 @@ import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
+import '../../../shared/widgets/app_date_picker.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../team/data/team_repository.dart';
@@ -84,7 +86,8 @@ class EventFormScreen extends ConsumerStatefulWidget {
   ConsumerState<EventFormScreen> createState() => _EventFormScreenState();
 }
 
-class _EventFormScreenState extends ConsumerState<EventFormScreen> {
+class _EventFormScreenState extends ConsumerState<EventFormScreen>
+    with UnsavedChangesTracker {
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _location = TextEditingController();
@@ -118,11 +121,27 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
   bool _loading = false;
   String? _error;
 
+  /// Criou e está indo para a escalação: o botão continua travado durante a
+  /// transição (ver [kArrivalTapShield]).
+  bool _saindo = false;
+
   /// Versão da escala no momento em que esta tela a abriu. Vai junto ao salvar
   /// para o servidor recusar a gravação se outra pessoa mexeu no meio.
   DateTime? _expectedUpdatedAt;
 
   bool get _isEditing => widget.eventId != null;
+
+  @override
+  String unsavedSignature() => [
+        _date.toIso8601String(),
+        for (final s in _services) '${s.id}|${s.label}|${s.timeLabel}',
+        _rehearsalAt?.toIso8601String(),
+        _repertoireMode.name,
+        _title.text.trim(),
+        _location.text.trim(),
+        _notes.text.trim(),
+        _colorPalette.text.trim(),
+      ].join('\n');
 
   @override
   void initState() {
@@ -222,13 +241,22 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
   String _timezone(String value) => value.isEmpty ? 'America/Sao_Paulo' : value;
 
+  /// A grade mensal do app, com os dias de culto marcados e o passado
+  /// apagado. O seletor genérico do Material não mostrava a grade e aceitava
+  /// criar escala num domingo que já tinha passado. Editar uma escala antiga
+  /// continua possível: o dia dela fica escolhível.
   Future<void> _pickDate(List<ServiceTemplate> templates) async {
-    final selected = await showDatePicker(
+    final now = DateTime.now();
+    final hoje = DateTime(now.year, now.month, now.day);
+    final ativos = templates.where((t) => t.isActive).toList();
+    final selected = await showAppDatePicker(
       context: context,
-      locale: const Locale('pt', 'BR'),
+      title: 'Dia da escala',
       initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      firstDate: _date.isBefore(hoje) ? _date : hoje,
+      isMarked: ativos.isEmpty
+          ? null
+          : (day) => ativos.any((t) => t.matchesDate(day)),
     );
     if (selected == null || !mounted) return;
 
@@ -501,6 +529,8 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
         ref.invalidate(eventProvider(createdEvent.id));
 
         if (!mounted) return;
+        markSaved();
+        _saindo = true;
         // Criar a escala não é o fim da tarefa: ela nasce sem ninguém escalado
         // e sem repertório. Em vez de devolver o líder à agenda -- de onde ele
         // teria de achar a escala nova e abrir dois menus --, a criação emenda
@@ -524,7 +554,9 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
         return;
       }
 
-      if (mounted) context.pop();
+      if (!mounted) return;
+      markSaved();
+      context.pop();
     } on ApiException catch (error) {
       if (!mounted) return;
       if (error.code == scheduleChangedCode) {
@@ -533,7 +565,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       }
       setState(() => _error = error.message);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !_saindo) setState(() => _loading = false);
     }
   }
 
@@ -548,7 +580,9 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       return;
     }
     ref.invalidate(eventProvider(widget.eventId!));
-    if (mounted) context.pop();
+    if (!mounted) return;
+    markSaved();
+    context.pop();
   }
 
   @override
@@ -599,7 +633,13 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       );
     }
 
+    // A fotografia do "como estava" só depois de o formulário ficar pronto:
+    // antes disso a grade ainda vai trocar a data e os cultos sozinha, e isso
+    // não é alteração de ninguém.
+    if (_isEditing ? _populated : _seededFromTemplates) markUnsavedBaseline();
+
     return FormScaffold(
+      isDirty: hasUnsavedChanges,
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar escala' : 'Nova escala'),
       ),
@@ -780,7 +820,7 @@ class _RepertoireModeSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeader(
-          title: 'Repertório',
+          title: 'Músicas',
           subtitle: switch (mode) {
             RepertoireMode.planned =>
               'As músicas são escolhidas antes e vão junto na escala.',

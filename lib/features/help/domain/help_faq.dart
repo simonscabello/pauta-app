@@ -49,7 +49,9 @@ const helpFaq = <FaqEntry>[
     answer: 'Abra **Minha disponibilidade**: ela fica em **Início**, nos '
         'acessos rápidos, e no **Perfil**. Toque em **Escolher dias**, marque '
         'no calendário os dias em que você não pode servir (podem ser vários), '
-        'escreva o motivo se quiser e toque em **Confirmar**.\n\n'
+        'escreva o motivo se quiser e toque em **Avisar**.\n\n'
+        'Se você já estava escalado num desses dias, o Pauta avisa antes de '
+        'enviar, e quem lidera fica sabendo para achar alguém no seu lugar.\n\n'
         'Para voltar a ficar disponível, toque no X ao lado do dia. Para mudar '
         'o motivo, toque no próprio dia.\n\n'
         'Os líderes veem esses dias na hora de montar as escalas. Manter tudo '
@@ -66,7 +68,8 @@ const helpFaq = <FaqEntry>[
   FaqEntry(
     question: 'Como sugiro uma música?',
     answer:
-        'Abra **Sugestões** (em **Início** ou na aba **Equipe**) e toque em '
+        'Abra **Sugestões** (na aba **Equipe**, na barra lateral do computador '
+        'ou nos atalhos de **Início** no celular) e toque em '
         '**Sugerir**. Procure a música, escolha se ela é para o repertório ou '
         'para uma data e conte por que ela faria bem à equipe — essa parte é '
         'obrigatória. Os links de letra, Spotify e YouTube são opcionais.\n\n'
@@ -95,6 +98,15 @@ const helpFaq = <FaqEntry>[
         'qual equipe está selecionada antes de marcar seus dias.',
   ),
   FaqEntry(
+    question: 'Esqueci minha senha. Como entro?',
+    answer: 'Na tela de entrada, toque em **Esqueci minha senha**. Quem lidera '
+        'a sua equipe cria uma senha temporária para você, e o Pauta já '
+        'mostra o recado pronto para mandar pelo WhatsApp.\n\n'
+        'Ao entrar com a senha temporária, o Pauta pede para você escolher '
+        'uma nova. Não crie outra conta: as suas escalas estão na que você '
+        'já tem.',
+  ),
+  FaqEntry(
     question: 'Como altero meus dados ou preferências?',
     answer: 'Tudo fica no **Perfil**:\n\n'
         '**Meus dados**: nome, e-mail, data de nascimento e gênero.\n'
@@ -104,5 +116,52 @@ const helpFaq = <FaqEntry>[
         '**Avisos no celular**: só no aplicativo para Android.\n\n'
         'As funções que você exerce e o telefone da equipe são cadastrados '
         'pelos líderes.',
+  ),
+];
+
+/// As perguntas de quem lidera. Aparecem na Ajuda só para OWNER e LEADER,
+/// depois das da equipe: a Ajuda falava só com o integrante, e montar,
+/// publicar e redefinir a senha de alguém são as dúvidas de quem começa a
+/// liderar.
+///
+/// A mesma regra da lista acima: cada resposta descreve o app de hoje.
+const leaderHelpFaq = <FaqEntry>[
+  FaqEntry(
+    question: 'Como monto a escala de um domingo?',
+    answer: 'Na **Agenda**, toque em **Nova** e escolha **Nova escala**. O dia já '
+        'vem com a próxima data da grade de cultos. Depois de criar, o Pauta '
+        'leva você para **Escalar equipe** e, dali, para as músicas.\n\n'
+        'Para preparar o mês de uma vez, abra **Datas sem escala** na Agenda e '
+        'toque em **Criar os rascunhos destas datas**.',
+  ),
+  FaqEntry(
+    question: 'Quando a equipe vê a escala?',
+    answer: 'Só depois de publicada. Toda escala nasce como **rascunho**: dá '
+        'para montar com calma, e a equipe não vê nada pela metade. Quando '
+        'estiver pronta, toque em **Publicar**, no pé da escala.\n\n'
+        'Publicar avisa quem está escalado. As músicas podem vir depois. Para '
+        'mandar ao grupo, use **Compartilhar**, no topo da escala publicada.',
+  ),
+  FaqEntry(
+    question: 'Alguém avisou que não pode. Como troco?',
+    answer: 'O aviso aparece em **Início** e na linha da escala na **Agenda**. '
+        'Toque nele (ou em **Substituir**, dentro da escala): a escalação abre '
+        'com a pessoa em destaque. Toque em **Tirar de todas as funções**, '
+        'escolha quem entra e salve.\n\n'
+        'Se a pessoa ministrava, lembre de escolher quem ministra no lugar.',
+  ),
+  FaqEntry(
+    question: 'Como uso as mesmas músicas de manhã e à noite?',
+    answer: 'Nas músicas da escala, monte o primeiro culto. No culto que '
+        'ficou vazio aparece **Copiar de Manhã**: as músicas vêm na mesma '
+        'ordem, com o momento e o tom. Depois ajuste o que mudar.',
+  ),
+  FaqEntry(
+    question: 'Alguém esqueceu a senha. Como ajudo?',
+    answer: 'Na aba **Equipe**, abra o menu da pessoa e toque em **Redefinir '
+        'senha**. O Pauta mostra uma senha temporária uma única vez, com '
+        'botões para copiar e mandar pelo WhatsApp.\n\n'
+        'Ao entrar com ela, a pessoa escolhe uma senha nova. A opção só '
+        'aparece para quem já tem conta.',
   ),
 ];

@@ -13,15 +13,11 @@ abstract final class TourTargetIds {
   /// O atalho "Minha disponibilidade" da Home.
   static const homeAvailability = 'home.availability';
 
-  /// O botão "Escolher dias" de Minha disponibilidade.
-  static const availabilityChoose = 'availability.choose';
-
   /// O calendário da Agenda.
   static const agendaCalendar = 'agenda.calendar';
 
-  /// As linhas "Repertório" e "Sugestões" da aba Equipe.
+  /// A linha "Repertório" da aba Equipe (Sugestões fica logo abaixo).
   static const teamRepertoire = 'team.repertoire';
-  static const teamSuggestions = 'team.suggestions';
 
   /// O interruptor "Avisos no celular" do Perfil (só existe no Android).
   static const profilePush = 'profile.push';
@@ -105,20 +101,17 @@ List<TourStep> memberTourSteps(MemberTourContext context) {
         body: 'Dentro da escala ficam as músicas para preparar. Toque em uma '
             'delas para ver a letra, a cifra, o vídeo e o tom combinado.',
       ),
+    // **Uma parada para a disponibilidade, e não duas.** O tour tinha oito
+    // paradas em cinco telas — longo demais para quem tem pouca intimidade com
+    // aplicativo, que é justamente quem mais precisa dele. "Escolher dias"
+    // virou uma frase desta parada, em vez de uma tela a mais.
     const TourStep(
       route: '/inicio',
       target: TourTargetIds.homeAvailability,
       title: 'Informe sua disponibilidade',
-      body: 'Avise os líderes sobre os dias em que você não pode servir. '
-          'Manter isso atualizado ajuda na organização das próximas escalas.',
-    ),
-    const TourStep(
-      route: '/disponibilidade',
-      target: TourTargetIds.availabilityChoose,
-      title: 'Marque os dias em que não pode',
-      body: 'Toque em Escolher dias, marque no calendário e confirme. Se os '
-          'planos mudarem, volte aqui e desmarque. Também dá para chegar aqui '
-          'pelo Perfil.',
+      body: 'Aqui você avisa os dias em que não pode servir: toque em Escolher '
+          'dias e marque no calendário. Se você já estiver escalado num '
+          'desses dias, quem lidera fica sabendo.',
     ),
     const TourStep(
       route: '/agenda',
@@ -128,20 +121,15 @@ List<TourStep> memberTourSteps(MemberTourContext context) {
           'ensaio, e eventos, como reuniões. Toque num dia para ver o que está '
           'marcado. Em Minhas escalas, só as suas.',
     ),
+    // Repertório e Sugestões numa parada só: as duas moram lado a lado na
+    // aba Equipe, e eram duas paradas na mesma tela.
     const TourStep(
       route: '/equipe',
       target: TourTargetIds.teamRepertoire,
-      title: 'Repertório',
-      body: 'Todas as músicas da equipe. Busque pelo nome e abra uma música '
-          'para ver a letra, a cifra, o tom e o vídeo.',
-    ),
-    const TourStep(
-      route: '/equipe',
-      target: TourTargetIds.teamSuggestions,
-      title: 'Sugira uma música',
-      body: 'Em Sugestões, toque em Sugerir, escolha a música e conte por que '
-          'ela faria bem à equipe. Os líderes respondem, e você acompanha por '
-          'aqui.',
+      title: 'Repertório e sugestões',
+      body: 'No Repertório estão todas as músicas da equipe, com letra, cifra '
+          'e vídeo. Em Sugestões, logo abaixo, você sugere uma música e conta '
+          'por que ela faria bem à equipe.',
     ),
     if (context.pushSupported)
       const TourStep(
@@ -153,12 +141,14 @@ List<TourStep> memberTourSteps(MemberTourContext context) {
             'do ensaio e do dia de servir. Deixe ligado.',
       )
     else
+      // Onde não há push (a Web), a parada diz como ter os avisos, em vez de
+      // só descrever o que o app faria: instalar o app para Android.
       const TourStep(
         title: 'Avisos no celular',
-        body: 'No aplicativo para Android, o Pauta avisa quando você é '
-            'escalado, quando a escala ou as músicas mudam e quando sua '
-            'sugestão é respondida. Também lembra do ensaio e do dia de '
-            'servir.',
+        body: 'Os avisos chegam pelo aplicativo do Pauta para Android: quando '
+            'você é escalado, quando a escala ou as músicas mudam e quando sua '
+            'sugestão é respondida. Para instalar, peça o link a quem lidera a '
+            'equipe.',
       ),
   ];
 }

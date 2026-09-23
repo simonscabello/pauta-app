@@ -14,6 +14,7 @@ import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
@@ -36,7 +37,8 @@ class MemberFormScreen extends ConsumerStatefulWidget {
   ConsumerState<MemberFormScreen> createState() => _MemberFormScreenState();
 }
 
-class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
+class _MemberFormScreenState extends ConsumerState<MemberFormScreen>
+    with UnsavedChangesTracker {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _phone;
@@ -94,6 +96,18 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
     });
   }
 
+  @override
+  String unsavedSignature() => [
+        _name.text.trim(),
+        _phone.text.trim(),
+        _notes.text.trim(),
+        _leaveReason.text.trim(),
+        (_selected.toList()..sort()).join(','),
+        _role,
+        _onLeave,
+        _leaveUntil?.toIso8601String(),
+      ].join('\n');
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -134,6 +148,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
 
       ref.invalidate(membersProvider(widget.teamId));
       if (!mounted) return;
+      markSaved();
 
       final name = _name.text.trim();
       // O convite é o passo seguinte natural de cadastrar alguém, e ficava
@@ -200,8 +215,10 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
   @override
   Widget build(BuildContext context) {
     final positions = ref.watch(positionsProvider(widget.teamId));
+    markUnsavedBaseline();
 
     return FormScaffold(
+      isDirty: hasUnsavedChanges,
       // "Integrante", como na aba Equipe: "membro" é o nome de um papel.
       appBar: AppBar(
         title: Text(
@@ -253,6 +270,8 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Observações (opcional)',
                   helperText: 'Só quem lidera vê. Ex.: "chega depois das 9h"',
+                  // Em 375px a ajuda saía cortada com reticências.
+                  helperMaxLines: 2,
                 ),
                 textCapitalization: TextCapitalization.sentences,
                 maxLines: 3,

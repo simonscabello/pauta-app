@@ -4,6 +4,7 @@ import '../../core/responsive/app_breakpoints.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_status_colors.dart';
 import 'app_avatar.dart';
+import 'app_badge.dart';
 import 'app_brand_mark.dart';
 
 /// Um destino da barra lateral. `route` é sempre uma rota que **existe** no
@@ -15,12 +16,24 @@ class AppNavDestination {
     required this.selectedIcon,
     required this.label,
     required this.route,
+    this.badge,
+    this.alsoMatches = const [],
   });
 
   final IconData icon;
   final IconData selectedIcon;
   final String label;
   final String route;
+
+  /// Um número ao lado do nome (sugestões esperando resposta). Nulo ou zero:
+  /// nada. O número aparecia no ladrilho da Home e não aqui, que é onde o
+  /// olho está no monitor.
+  final int? badge;
+
+  /// Outras rotas que acendem este destino, além das que começam por [route].
+  /// "Relatórios do repertório" moram em `/equipe/musicas/...`, mas se chega a
+  /// eles por Gerenciar equipe — e era "Repertório" que acendia.
+  final List<String> alsoMatches;
 }
 
 /// Um bloco de destinos, com um rótulo por cima.
@@ -87,13 +100,20 @@ class AppSideNav extends StatelessWidget {
     String profileRoute = '/perfil',
   }) {
     String? best;
+    var bestLength = -1;
     for (final section in sections) {
       for (final destination in section.destinations) {
-        final route = destination.route;
-        final matches =
-            currentPath == route || currentPath.startsWith('$route/');
-        if (matches && (best == null || route.length > best.length)) {
-          best = route;
+        // A rota mais específica ganha, contando também as rotas a mais do
+        // destino: `/equipe/musicas/uso` casa com Repertório pelo prefixo e
+        // com Gerenciar equipe por [AppNavDestination.alsoMatches], e o
+        // prefixo mais longo decide.
+        for (final prefix in [destination.route, ...destination.alsoMatches]) {
+          final matches =
+              currentPath == prefix || currentPath.startsWith('$prefix/');
+          if (matches && prefix.length > bestLength) {
+            best = destination.route;
+            bestLength = prefix.length;
+          }
         }
       }
     }
@@ -343,10 +363,16 @@ class _NavItem extends StatelessWidget {
       mainAxisAlignment:
           expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
       children: [
-        Icon(
-          selected ? destination.selectedIcon : destination.icon,
-          size: 21,
-          color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+        Badge(
+          // Recolhida, a barra só tem o ícone: o número vai nele.
+          isLabelVisible: !expanded && (destination.badge ?? 0) > 0,
+          label: Text('${destination.badge ?? 0}'),
+          child: Icon(
+            selected ? destination.selectedIcon : destination.icon,
+            size: 21,
+            color:
+                selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+          ),
         ),
         if (expanded) ...[
           const SizedBox(width: AppSpacing.md),
@@ -360,6 +386,13 @@ class _NavItem extends StatelessWidget {
               ),
             ),
           ),
+          if ((destination.badge ?? 0) > 0)
+            AppBadge(
+              label: '${destination.badge}',
+              tone: AppTone.primary,
+              emphasis: BadgeEmphasis.solid,
+              semanticsLabel: '${destination.badge} aguardando resposta',
+            ),
         ],
       ],
     );

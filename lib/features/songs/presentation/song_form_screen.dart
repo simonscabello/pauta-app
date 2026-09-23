@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../data/song_repository.dart';
 import '../domain/hymnal_models.dart';
 import '../domain/musical_keys.dart';
@@ -49,7 +50,8 @@ class SongFormScreen extends ConsumerStatefulWidget {
   ConsumerState<SongFormScreen> createState() => _SongFormScreenState();
 }
 
-class _SongFormScreenState extends ConsumerState<SongFormScreen> {
+class _SongFormScreenState extends ConsumerState<SongFormScreen>
+    with UnsavedChangesTracker {
   final _title = TextEditingController();
   final _artist = TextEditingController();
   final _composer = TextEditingController();
@@ -111,6 +113,29 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     _youtubeUrl.text = song.youtubeUrl ?? '';
     _spotifyUrl.text = song.spotifyUrl ?? '';
   }
+
+  @override
+  String unsavedSignature() => [
+        for (final c in [
+          _title,
+          _artist,
+          _composer,
+          _lyrics,
+          _lyricsUrl,
+          _chordsUrl,
+          _youtubeUrl,
+          _spotifyUrl,
+        ])
+          c.text.trim(),
+        _defaultKey,
+        _originalKey,
+        _kind,
+        _pace,
+        (_themes.toList()..sort()).join(','),
+        [for (final h in _hymnals) '${h.hymnalId}:${h.number}:${h.isPrimary}']
+            .join(','),
+        _isNew,
+      ].join('\n');
 
   /// A grafia da lista quando dá (`g` vira `G`); o texto como está quando não
   /// dá; nulo quando não há nada.
@@ -176,11 +201,12 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
       // antigo até alguém puxar para atualizar, e com o filtro por tema isso
       // fica pior, porque a música pode ter acabado de sair (ou entrar) no
       // critério que está na tela.
-      ref.invalidate(songsProvider);
+      ref.invalidate(songCatalogProvider);
       // Desmarcar "nova" aqui tira a música do cartão "Estamos aprendendo",
       // e a Home continua viva embaixo desta pilha.
       ref.invalidate(learningSongsProvider(widget.teamId));
       if (mounted) {
+        markSaved();
         context.pop();
         showAppSnackBar(context, '"$title" foi salva.', tone: AppTone.success);
       }
@@ -208,14 +234,15 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     }
 
     if (!_populated) _populate(song);
+    markUnsavedBaseline();
     final recordingKey = normalizeMusicalKey(song.originalKey);
 
     return FormScaffold(
+      isDirty: hasUnsavedChanges,
+      // Sem o nome da música no corpo: ele já é o primeiro campo, logo
+      // abaixo, e repeti-lo em título grande empurrava o formulário para
+      // baixo com a mesma palavra duas vezes.
       appBar: AppBar(title: const Text('Editar música')),
-      // O nome da música no corpo acrescenta o que a barra não diz: qual
-      // música está sendo editada.
-      title: song.title,
-      subtitle: song.subtitle,
       // Preso embaixo: com "Dados da música" aberto (quatro links e a letra),
       // o botão ficava duas telas abaixo de onde a pessoa mexeu.
       bottomAction: AppSubmitButton(

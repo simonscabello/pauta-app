@@ -80,7 +80,7 @@ class AppCard extends StatelessWidget {
         padding == null ? child : Padding(padding: padding!, child: child);
 
     // No claro o bloco rebaixado é um tom abaixo da página ([AppColors.sunken]),
-    // e o botão tonal ("Montar repertório", "Pôr no culto") tem quase esse
+    // e o botão tonal ("Escolher músicas", "Pôr no culto") tem quase esse
     // mesmo tom: dentro dele o botão perdia a forma. Aqui dentro ele fica
     // branco, como a superfície do cartão — o mesmo degrau que tem sobre a
     // página.

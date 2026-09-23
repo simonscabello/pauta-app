@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
@@ -58,11 +59,12 @@ class CompactScheduleTile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
-    final youPositions = event.positionsForMembership(membershipId);
+    final youPositions = event.personalRolesFor(membershipId);
     final facts = ScheduleFacts.of(event, timezone);
     // Rascunho fala do que falta para publicar; escala publicada sem
     // repertório fala do repertório. Uma das duas, ou nenhuma.
-    final temEstado = event.isDraft ||
+    final temEstado = event.warnings.unavailableAssigned.isNotEmpty ||
+        event.isDraft ||
         event.servicesWithoutSongs.isNotEmpty ||
         event.isRepertoireOnTheFly;
 
@@ -79,8 +81,11 @@ class CompactScheduleTile extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // O bloco ao lado já diz "QUI 24"; repetir "24 de setembro" aqui era
+        // a mesma data duas vezes. A linha diz o dia da semana por extenso e
+        // o mês — o que o bloco não diz.
         Text(
-          formatEventDayMonth(event.startsAt, timezone),
+          scheduleRowHeading(event.startsAt, timezone),
           style: theme.textTheme.titleMedium,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -315,10 +320,28 @@ class ScheduleStatusLines extends StatelessWidget {
     // mesmo tempo -- `servicesWithoutSongs` já vem vazio neste modo.
     final naHora = event.isRepertoireOnTheFly;
 
+    final naoPodem = event.warnings.unavailableAssigned;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: alignment,
       children: [
+        // **Quem está escalado e avisou que não pode**, antes de tudo. A
+        // linha da escala não mudava, e o líder só descobria abrindo aquele
+        // domingo. Só quem lidera recebe este dado da API.
+        if (naoPodem.isNotEmpty) ...[
+          _StatusLine(
+            icon: Icons.event_busy_rounded,
+            text: naoPodem.length == 1
+                ? '${naoPodem.single.displayName} não pode'
+                : '${naoPodem.length} escalados não podem',
+            palette: cores.danger,
+          ),
+          if (event.isDraft ||
+              naHora ||
+              semRepertorio.isNotEmpty)
+            const SizedBox(height: AppSpacing.xs),
+        ],
         // Um sinal só para o rascunho. Havia a etiqueta "Rascunho" em cima do
         // título e esta linha embaixo, as duas em âmbar, dizendo o mesmo
         // estado duas vezes na mesma linha da agenda.
@@ -378,13 +401,28 @@ class _StatusLine extends StatelessWidget {
         Flexible(
           child: Text(
             text,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            // 13px, e não os 11,5 do rótulo miúdo: "Rascunho · falta equipe"
+            // é informação que pede providência, e em corpo de legenda
+            // esmaecido ela não era lida (WCAG 1.4.4).
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: palette.foreground,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
           ),
         ),
       ],
     );
   }
+}
+
+/// "Quinta, setembro" — o título da linha de escala, ao lado do bloco "QUI 24".
+///
+/// O bloco já dá o número; a linha completa com o que ele não tem: o dia da
+/// semana por extenso (quem lê "QUI" de relance confunde com "QUA") e o mês,
+/// que separa o 4 de outubro do 4 de setembro numa lista que atravessa meses.
+@visibleForTesting
+String scheduleRowHeading(DateTime utc, String timezone) {
+  final local = eventLocalTime(utc, timezone);
+  final mes = DateFormat('MMMM', 'pt_BR').format(local);
+  return '${capitalizeWeekday(formatEventWeekdayName(utc, timezone))}, $mes';
 }

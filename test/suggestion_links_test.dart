@@ -163,6 +163,13 @@ void main() {
     // Os links vêm recolhidos, depois da justificativa, e o resumo já diz o
     // que a busca trouxe.
     expect(find.text('Spotify (opcional)'), findsNothing);
+    // A folha é uma lista preguiçosa: o botão só existe depois de rolar até
+    // ele (a ajuda do campo do motivo, mais longa, o empurrou para baixo).
+    await tester.scrollUntilVisible(
+      find.text('Links: Spotify'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('Links: Spotify'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Links: Spotify'));

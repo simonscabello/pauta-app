@@ -7,6 +7,7 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_side_nav.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../suggestions/data/suggestion_repository.dart';
 import '../../team/data/team_repository.dart';
 
 /// Casca com a navegação principal.
@@ -44,8 +45,15 @@ class MainShell extends ConsumerWidget {
     final name = user?.firstName ?? '?';
     final form = AppBreakpoints.of(context);
 
+    // Um mensageiro só para o conteúdo da casca. Sem ele os avisos subiam no
+    // Scaffold da casca, que não sabe da barra de baixo de cada tela: "Escala
+    // salva" cobria o "Publicar" por quatro segundos, e no monitor atravessava
+    // por cima da barra lateral. Com ele, cada tela é a dona do aviso, e o
+    // Flutter já o põe acima da barra de ação dela.
+    final content = ScaffoldMessenger(child: child);
+
     if (form.isWide) {
-      return _WideShell(path: path, expanded: form.isDesktop, child: child);
+      return _WideShell(path: path, expanded: form.isDesktop, child: content);
     }
 
     final index = _tabs.indexOf(path);
@@ -56,7 +64,7 @@ class MainShell extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: child,
+      body: content,
       // Fio em cima da barra, como no cabeçalho. Sem ele a barra tem a cor do
       // cartão e o conteúdo passa por baixo sem fronteira nenhuma — e agora que
       // os cartões não projetam sombra, não sobrou nada separando os dois.
@@ -130,6 +138,11 @@ class _WideShell extends ConsumerWidget {
     // `teams.first`. Quem lidera numa equipe e só participa de outra não pode
     // ver "Convites" na barra enquanto a equipe ativa é a segunda.
     final canManage = team?.canManage ?? false;
+    // O mesmo número do ladrilho da Home e do selo da aba Equipe (mesma
+    // chave de cache): só para quem responde às sugestões.
+    final pendingSuggestions = canManage && activeTeamId != null
+        ? ref.watch(openSuggestionCountProvider(activeTeamId)).valueOrNull
+        : null;
 
     return Scaffold(
       body: Row(
@@ -146,14 +159,28 @@ class _WideShell extends ConsumerWidget {
             ],
             onTeamChanged: (id) =>
                 ref.read(activeTeamIdProvider.notifier).select(id),
-            sections: _sectionsFor(canManage: canManage),
+            sections: _sectionsFor(
+              canManage: canManage,
+              pendingSuggestions: pendingSuggestions,
+            ),
             // `go`, e não `push`: a barra lateral troca de seção, não empilha.
             // Empilhar aqui faria a pilha crescer a cada clique e o botão
             // "voltar" do navegador percorrer o histórico de cliques na barra.
             onSelect: (route) => context.go(route),
             onLogout: () => _confirmLogout(context, ref),
           ),
-          Expanded(child: child),
+          // **Um contêiner semântico só para o conteúdo.** Cada página da
+          // casca traz a barreira do Navigator, que bloqueia a semântica de
+          // tudo o que foi pintado antes dela no mesmo contêiner — e a barra
+          // lateral, à esquerda, era pintada antes. O leitor de tela achava
+          // só a área de conteúdo; Início, Agenda e Repertório não existiam.
+          Expanded(
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              child: child,
+            ),
+          ),
         ],
       ),
     );
@@ -161,29 +188,32 @@ class _WideShell extends ConsumerWidget {
 
   /// Só rotas que existem em `app_router.dart`. Nada aqui é funcionalidade
   /// nova — é o mesmo app, com os caminhos à vista.
-  List<AppNavSection> _sectionsFor({required bool canManage}) {
+  List<AppNavSection> _sectionsFor({
+    required bool canManage,
+    int? pendingSuggestions,
+  }) {
     return [
-      const AppNavSection(
+      AppNavSection(
         destinations: [
-          AppNavDestination(
+          const AppNavDestination(
             icon: Icons.home_outlined,
             selectedIcon: Icons.home_rounded,
             label: 'Início',
             route: '/inicio',
           ),
-          AppNavDestination(
+          const AppNavDestination(
             icon: Icons.calendar_today_outlined,
             selectedIcon: Icons.calendar_today_rounded,
             label: 'Agenda',
             route: '/agenda',
           ),
-          AppNavDestination(
+          const AppNavDestination(
             icon: Icons.groups_outlined,
             selectedIcon: Icons.groups_rounded,
             label: 'Equipe',
             route: '/equipe',
           ),
-          AppNavDestination(
+          const AppNavDestination(
             icon: Icons.library_music_outlined,
             selectedIcon: Icons.library_music_rounded,
             label: 'Repertório',
@@ -195,6 +225,7 @@ class _WideShell extends ConsumerWidget {
             selectedIcon: Icons.lightbulb_rounded,
             label: 'Sugestões',
             route: '/equipe/sugestoes',
+            badge: pendingSuggestions,
           ),
         ],
       ),
@@ -219,6 +250,14 @@ class _WideShell extends ConsumerWidget {
               label: 'Convites',
               route: '/equipe/convites',
             ),
+            // "Quem não pode" é o que mais se consulta na semana de quem
+            // monta a escala, e só se chegava a ele por Gerenciar equipe.
+            AppNavDestination(
+              icon: Icons.event_busy_outlined,
+              selectedIcon: Icons.event_busy_rounded,
+              label: 'Quem não pode',
+              route: '/equipe/indisponibilidade',
+            ),
             AppNavDestination(
               icon: Icons.balance_outlined,
               selectedIcon: Icons.balance_rounded,
@@ -230,6 +269,14 @@ class _WideShell extends ConsumerWidget {
               selectedIcon: Icons.settings_rounded,
               label: 'Gerenciar equipe',
               route: '/equipe/gerenciar',
+              // As telas que só se abrem a partir de Gerenciar equipe.
+              alsoMatches: [
+                '/equipe/musicas/uso',
+                '/equipe/musicas/saude',
+                '/equipe/cultos',
+                '/equipe/funcoes',
+                '/equipe/dados',
+              ],
             ),
           ],
         ),

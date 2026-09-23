@@ -6,10 +6,12 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../core/text/text_search.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_bottom_action_bar.dart';
+import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
@@ -21,6 +23,7 @@ import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/on_leave_badge.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_models.dart';
 import '../../events/presentation/schedule_changed_dialog.dart';
@@ -109,9 +112,16 @@ class AssignmentFormScreen extends ConsumerStatefulWidget {
     super.key,
     required this.eventId,
     this.nextIsSetlist = false,
+    this.replaceMembershipId,
   });
 
   final String eventId;
+
+  /// Quem precisa sair desta escala: veio do aviso "Fulano não pode". A tela
+  /// abre com a pessoa destacada e "Tirar de todas as funções" à mão — trocar
+  /// quem não pode levava oito passos (abrir cada função, desmarcar, e lembrar
+  /// do ministrante à parte).
+  final String? replaceMembershipId;
 
   /// Esta tela é o segundo passo de uma escala recém-criada.
   ///
@@ -150,6 +160,13 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   bool _saving = false;
   String? _error;
 
+  /// Ver [kArrivalTapShield]: vindo de "Criar escala", o botão daqui está no
+  /// mesmo lugar do de lá.
+  final DateTime _abertaEm = DateTime.now();
+
+  /// Já salvou e está indo para o passo seguinte: o botão fica travado.
+  bool _saindo = false;
+
   /// Versão da escala no momento em que esta tela a abriu. Vai junto ao salvar
   /// para o servidor recusar a gravação se outra pessoa mexeu no meio.
   DateTime? _expectedUpdatedAt;
@@ -170,6 +187,107 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       }
     }
     _ministerId = event.minister?.membershipId;
+    _salvo = _assinatura();
+  }
+
+  /// A escalação como foi aberta (ou salva por último), para a guarda de
+  /// "Sair sem salvar?".
+  String _salvo = '';
+
+  /// Tudo o que salvar mandaria, em ordem estável: quem está em cada função,
+  /// os recados e o ministrante.
+  String _assinatura() {
+    final funcoes = _selected.entries
+        .where((e) => e.value.isNotEmpty)
+        .map((e) => '${e.key}:${(e.value.toList()..sort()).join(',')}')
+        .toList()
+      ..sort();
+    final recados = _notes.entries
+        .where((e) => e.value.trim().isNotEmpty)
+        .map((e) => '${e.key.$1}/${e.key.$2}=${e.value.trim()}')
+        .toList()
+      ..sort();
+    return '${funcoes.join(';')}|${recados.join(';')}|$_ministerId';
+  }
+
+  bool _alterado() => _seeded && _assinatura() != _salvo;
+
+  /// Tira a pessoa de todas as funções e do ministério, de uma vez.
+  void _tirarDeTudo(String membershipId) {
+    setState(() {
+      for (final ids in _selected.values) {
+        ids.remove(membershipId);
+      }
+      _notes.removeWhere((key, _) => key.$2 == membershipId);
+      if (_ministerId == membershipId) _ministerId = null;
+    });
+  }
+
+  /// "Falta escolher: quem ministra, Vocal e Violão." — o que a pessoa que
+  /// saiu deixou vago, pela escala como estava ao abrir.
+  String _vagas(Event event, String membershipId) {
+    final vagas = [
+      if (event.minister?.membershipId == membershipId && _ministerId == null)
+        'quem ministra',
+      for (final group in event.assignments)
+        if (group.members.any((m) => m.membershipId == membershipId))
+          group.positionName,
+    ];
+    if (vagas.isEmpty) return '';
+    final lista = vagas.length == 1
+        ? vagas.single
+        : '${vagas.sublist(0, vagas.length - 1).join(', ')} e ${vagas.last}';
+    return 'Falta escolher: $lista.';
+  }
+
+  /// O aviso de quem precisa sair, no topo da escalação.
+  Widget? _substituirNotice(Event event) {
+    final id = widget.replaceMembershipId;
+    if (id == null) return null;
+
+    final pessoa = event.warnings.unavailableAssigned
+            .where((u) => u.membershipId == id)
+            .firstOrNull ??
+        event.unavailable.where((u) => u.membershipId == id).firstOrNull;
+    final nome = pessoa?.displayName ??
+        event.assignments
+            .expand((g) => g.members)
+            .where((m) => m.membershipId == id)
+            .firstOrNull
+            ?.displayName;
+    if (nome == null) return null;
+
+    final aindaEsta =
+        _assignedIds.contains(id) || _ministerId == id;
+    // O que ela fazia, lido da escala como estava ao abrir: depois de tirar,
+    // é justamente essa lista que diz o que falta preencher.
+    final fazia = event.rolesPhraseFor(id);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: AppNotice(
+        tone: aindaEsta ? AppTone.danger : AppTone.success,
+        icon: aindaEsta ? Icons.event_busy_rounded : Icons.check_circle_rounded,
+        title: aindaEsta
+            ? '$nome avisou que não pode neste dia'
+            : '$nome saiu da escala',
+        message: aindaEsta
+            ? [
+                if (fazia != null) '$nome $fazia.',
+                if (pessoa?.reason?.isNotEmpty ?? false)
+                  'Motivo: ${pessoa!.reason}.',
+              ].join(' ')
+            : 'Escolha quem entra no lugar e salve. ${_vagas(event, id)}',
+        action: aindaEsta
+            ? FilledButton.tonalIcon(
+                style: AppButtonStyles.compact,
+                onPressed: () => _tirarDeTudo(id),
+                icon: const Icon(Icons.person_remove_alt_1_rounded, size: 18),
+                label: const Text('Tirar de todas as funções'),
+              )
+            : null,
+      ),
+    );
   }
 
   /// Todos os escalados, sem repetir quem acumula duas funções.
@@ -233,6 +351,10 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   /// [force] repete a gravação sem a trava de versão: é o "salvar assim mesmo"
   /// de quem viu o aviso de que a escala mudou e decidiu sobrescrever.
   Future<void> _save({bool force = false}) async {
+    if (widget.nextIsSetlist &&
+        DateTime.now().difference(_abertaEm) < kArrivalTapShield) {
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -255,6 +377,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       ref.invalidate(eventsProvider((updated.teamId, 'upcoming')));
       ref.invalidate(eventsProvider((updated.teamId, 'past')));
       if (!mounted) return;
+      _salvo = _assinatura();
 
       // Avisos depois de salvar, não bloqueios antes: a escala é do líder.
       final warnings = <String>[];
@@ -292,7 +415,8 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
           // Mesma frase do fim do caminho com repertório planejado: o que
           // muda é onde ele termina, não o que a pessoa conquistou.
           (true, true) =>
-            'Escala pronta. Compartilhe com a equipe pelo ícone no topo.',
+            'Rascunho salvo. A equipe só vê a escala depois que você tocar '
+                'em "Publicar".',
           (true, false) => 'Escala salva.',
         },
         tone: warnings.isEmpty ? AppTone.success : AppTone.warning,
@@ -301,6 +425,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       // `pushReplacement` e não `push`: a escalação já foi salva, e voltar para
       // ela do repertório só ofereceria salvá-la de novo. O que fica embaixo é
       // o detalhe da escala, que é onde o repertório desemboca ao terminar.
+      _saindo = true;
       if (proximoPasso != null) {
         context.pushReplacement(proximoPasso);
         return;
@@ -314,7 +439,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       }
       setState(() => _error = error.message);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && !_saindo) setState(() => _saving = false);
     }
   }
 
@@ -329,6 +454,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       return;
     }
     ref.invalidate(eventProvider(widget.eventId));
+    // Escolheu ver a versão do outro: o que estava aqui foi deixado de lado
+    // por decisão, e perguntar "sair sem salvar?" agora seria contradizê-la.
+    _salvo = _assinatura();
     if (mounted) context.pop();
   }
 
@@ -405,6 +533,13 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return UnsavedChangesGuard(
+      isDirty: _alterado,
+      child: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     final eventAsync = ref.watch(eventProvider(widget.eventId));
 
     return eventAsync.when(
@@ -544,8 +679,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(event.describe(), style: theme.textTheme.titleLarge),
+                  Text(event.dateAndTitle, style: theme.textTheme.titleLarge),
                   const SizedBox(height: AppSpacing.lg),
+                  if (_substituirNotice(event) case final aviso?) aviso,
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,13 +754,25 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
             AppSpacing.xxl,
           ),
           children: [
-            Text(event.describe(), style: theme.textTheme.titleLarge),
+            Text(event.dateAndTitle, style: theme.textTheme.titleLarge),
             const SizedBox(height: AppSpacing.lg),
+            if (_substituirNotice(event) case final aviso?) aviso,
             if (_error != null) FormErrorBanner(message: _error!),
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // **Ministrante no topo.** Era a última linha, depois de Som
+                  // e de "Direção do culto" — a responsabilidade maior da
+                  // escala escondida no fim, ao lado de um nome parecido. A
+                  // escolha continua sendo entre quem já está escalado: a
+                  // linha diz isso enquanto a equipe está vazia.
+                  minister,
+                  Divider(
+                    height: 1,
+                    indent: AppSpacing.lg,
+                    color: scheme.outlineVariant,
+                  ),
                   for (final position in activePositions) ...[
                     _PositionListRow(
                       position: position,
@@ -640,15 +788,13 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                       unavailableIds: unavailableIds,
                       onTap: () => openPicker(position),
                     ),
-                    Divider(
-                      height: 1,
-                      indent: AppSpacing.lg,
-                      color: scheme.outlineVariant,
-                    ),
+                    if (position != activePositions.last)
+                      Divider(
+                        height: 1,
+                        indent: AppSpacing.lg,
+                        color: scheme.outlineVariant,
+                      ),
                   ],
-                  // Depois das funções de propósito: só dá para escolher o
-                  // ministrante entre quem já foi escalado.
-                  minister,
                 ],
               ),
             ),
@@ -844,6 +990,7 @@ class _PositionRow extends StatelessWidget {
     );
   }
 }
+
 /// Responde "quanto falta?" sem o líder ter de rolar a lista inteira.
 ///
 /// Texto, e não bloco colorido: mora na barra de baixo, ao lado do botão de
@@ -909,12 +1056,16 @@ class _MinisterRow extends StatelessWidget {
     final current =
         assigned.where((member) => member.id == ministerId).firstOrNull;
 
+    // O subtítulo diz o que a função é quando ainda não há ninguém: ao lado
+    // de "Direção do culto", na lista de funções, as duas se confundiam para
+    // quem é novo.
     return AppGroupRow(
       icon: Icons.record_voice_over_rounded,
       title: 'Ministrante',
       subtitle: assigned.isEmpty
-          ? 'Escale a equipe primeiro'
-          : current?.displayName ?? 'Ninguém escolhido',
+          ? 'Quem conduz o louvor. Escale a equipe primeiro'
+          : current?.displayName ??
+              'Quem conduz o louvor (não é a direção do culto)',
       onTap: !enabled || assigned.isEmpty
           ? null
           : () async {
@@ -1263,8 +1414,18 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
   /// "Outros membros" começa recolhido: na maioria das semanas o líder escala
   /// quem já tem a função cadastrada, e repetir a equipe inteira em cada
   /// função era o que transformava a tela num paredão.
-  bool _showOthers = false;
+  ///
+  /// **Exceto quando ninguém tem a função.** Aí a folha abria só com "Outros
+  /// integrantes (9) — Mostrar", e o primeiro toque era sempre o mesmo.
+  late bool _showOthers = !widget.members.any(
+    (m) => m.positions.any((p) => p.id == widget.position.id),
+  );
   bool _addingGuest = false;
+
+  /// A busca pelo nome, a partir de [_searchFrom] pessoas: numa equipe de 40,
+  /// achar alguém rolando a lista é o que mais demora na escalação.
+  String _search = '';
+  static const _searchFrom = 12;
 
   /// Cadastra o convidado e já o deixa marcado nesta função — quem abre esse
   /// fluxo está com a função vazia na mão.
@@ -1329,7 +1490,13 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    final all = [...widget.members, ..._extraGuests];
+    final everyone = [...widget.members, ..._extraGuests];
+    final termo = normalizeForSearch(_search.trim());
+    final all = termo.isEmpty
+        ? everyone
+        : everyone
+            .where((m) => normalizeForSearch(m.displayName).contains(termo))
+            .toList();
     final registered = all
         .where((m) => m.positions.any((p) => p.id == widget.position.id))
         .toList();
@@ -1339,7 +1506,8 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
 
     // Quem foi escalado fora do cadastro continua visível mesmo com a seção
     // recolhida -- senão a pessoa sumiria da folha logo após ser marcada.
-    final othersToShow = _showOthers
+    // Com busca, a lista abre inteira: quem digitou um nome quer vê-lo.
+    final othersToShow = _showOthers || termo.isNotEmpty
         ? others
         : others.where((m) => _working.contains(m.id)).toList();
 
@@ -1383,6 +1551,24 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                 ],
               ),
             ),
+            if (everyone.length >= _searchFrom)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  0,
+                  AppSpacing.xl,
+                  AppSpacing.md,
+                ),
+                child: TextField(
+                  onChanged: (v) => setState(() => _search = v),
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar pelo nome',
+                    prefixIcon: Icon(Icons.search_rounded),
+                    isDense: true,
+                  ),
+                ),
+              ),
             const Divider(height: 1),
             Flexible(
               child: ListView(
@@ -1393,9 +1579,13 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 children: [
                   if (registered.isEmpty && others.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(AppSpacing.xl),
-                      child: Text('Nenhum integrante cadastrado na equipe.'),
+                    Padding(
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      child: Text(
+                        termo.isEmpty
+                            ? 'Nenhum integrante cadastrado na equipe.'
+                            : 'Ninguém com esse nome na equipe.',
+                      ),
                     ),
                   if (registered.isNotEmpty) ...[
                     _SheetLabel('Com esta função', count: registered.length),

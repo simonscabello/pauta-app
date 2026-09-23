@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_detail_header.dart';
 import '../../../shared/widgets/app_facts_strip.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../songs/data/song_repository.dart';
+import '../../songs/presentation/lyrics_reader.dart';
 import '../../songs/presentation/song_resources.dart';
 import '../domain/event_models.dart';
 
@@ -33,21 +35,35 @@ import '../domain/event_models.dart';
 /// música está sem cifra é o que mais acontece nesta folha, e consertar isso
 /// custava sair da escala, abrir o repertório, procurar a música e abri-la de
 /// novo — quatro passos para chegar a uma tela que já se sabia qual era.
+///
+/// [serviceSongs] são as músicas do mesmo culto, na ordem: a letra aberta
+/// daqui passa para a próxima sem voltar à escala.
 Future<void> showEventSongSheet({
   required BuildContext context,
   required String teamId,
   required EventSong song,
+  List<EventSong>? serviceSongs,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => _EventSongSheet(teamId: teamId, song: song),
+    builder: (_) => _EventSongSheet(
+      teamId: teamId,
+      song: song,
+      serviceSongs: serviceSongs ?? [song],
+    ),
   );
 }
 
 class _EventSongSheet extends ConsumerWidget {
-  const _EventSongSheet({required this.teamId, required this.song});
+  const _EventSongSheet({
+    required this.teamId,
+    required this.song,
+    required this.serviceSongs,
+  });
+
+  final List<EventSong> serviceSongs;
 
   /// A equipe **da escala**, e não a equipe ativa: quem participa de duas veria
   /// a letra ser procurada no repertório errado.
@@ -103,31 +119,40 @@ class _EventSongSheet extends ConsumerWidget {
           // tocar. O tom é o **desta escala**; quando ela mudou o da equipe, o
           // de costume aparece embaixo — quem decorou "sempre em G" precisa
           // ver que hoje é diferente.
-          AppFactsStrip(
-            facts: [
-              AppFact(
-                icon: Icons.piano_rounded,
-                label: song.hasCustomKey ? 'Tom nesta escala' : 'Tom',
-                value: temTom ? song.key! : '—',
-                highlight: temTom,
-                wrapValue: true,
-                hint: song.hasCustomKey && (song.defaultKey?.isNotEmpty ?? false)
-                    ? 'equipe: ${song.defaultKey}'
-                    : null,
-              ),
-              AppFact(
-                icon: Icons.flag_outlined,
-                label: 'Momento',
-                value: song.momentText ?? '—',
-                wrapValue: true,
-              ),
-              AppFact(
-                icon: Icons.menu_book_outlined,
-                label: 'Hinário',
-                value: song.hymnal?.label ?? '—',
-              ),
-            ],
-          ),
+          //
+          // Só o que existe: "Tom — · Momento — · Hinário —" dizia ao músico
+          // três vezes que ninguém preencheu nada, e o travessão no tom
+          // parecia "toque em qualquer um".
+          if (temTom || song.momentText != null || song.hymnal != null)
+            AppFactsStrip(
+              facts: [
+                if (temTom)
+                  AppFact(
+                    icon: Icons.piano_rounded,
+                    label: song.hasCustomKey ? 'Tom nesta escala' : 'Tom',
+                    value: song.key!,
+                    highlight: true,
+                    wrapValue: true,
+                    hint: song.hasCustomKey &&
+                            (song.defaultKey?.isNotEmpty ?? false)
+                        ? 'equipe: ${song.defaultKey}'
+                        : null,
+                  ),
+                if (song.momentText != null)
+                  AppFact(
+                    icon: Icons.flag_outlined,
+                    label: 'Momento',
+                    value: song.momentText!,
+                    wrapValue: true,
+                  ),
+                if (song.hymnal != null)
+                  AppFact(
+                    icon: Icons.menu_book_outlined,
+                    label: 'Hinário',
+                    value: song.hymnal!.label,
+                  ),
+              ],
+            ),
           if (song.note?.isNotEmpty ?? false) ...[
             const SizedBox(height: AppSpacing.md),
             _NoteBand(note: song.note!),
@@ -136,6 +161,12 @@ class _EventSongSheet extends ConsumerWidget {
           // Os quatro, sempre, como na tela da música: "está sem cifra" é
           // justamente o que a equipe precisa ver para ir atrás dela. A letra
           // guardada aparece inteira logo abaixo; o ladrilho abre o site.
+          //
+          // **"Letra" abre a letra guardada, no app**, como na tela da música.
+          // Aqui ela abria o site (com anúncios) mesmo com o texto guardado
+          // logo abaixo — o mesmo rótulo com dois comportamentos. O site
+          // continua a um toque, no topo da tela da letra. Só sem letra
+          // guardada o ladrilho vai direto ao link.
           SongResourceRow(
             resources: songResources(
               context,
@@ -143,6 +174,19 @@ class _EventSongSheet extends ConsumerWidget {
               lyricsUrl: song.lyricsUrl,
               youtubeUrl: song.youtubeUrl,
               spotifyUrl: song.spotifyUrl,
+              onOpenLyrics: _semLetraGuardada(ref)
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => EventLyricsScreen(
+                            teamId: teamId,
+                            songs: serviceSongs,
+                            initialIndex: serviceSongs
+                                .indexWhere((s) => s.songId == song.songId)
+                                .clamp(0, serviceSongs.length - 1),
+                          ),
+                        ),
+                      ),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -153,6 +197,18 @@ class _EventSongSheet extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+extension on _EventSongSheet {
+  /// A música já veio do servidor e não tem letra guardada: aí o ladrilho
+  /// "Letra" vai ao site. Enquanto carrega, o palpite é que há letra — a tela
+  /// da letra sabe esperar e dizer que não há.
+  bool _semLetraGuardada(WidgetRef ref) {
+    final full = ref
+        .watch(songProvider((teamId: teamId, songId: song.songId)))
+        .valueOrNull;
+    return full != null && (full.lyrics?.trim().isEmpty ?? true);
   }
 }
 
@@ -215,13 +271,20 @@ class _RepertoireLink extends StatelessWidget {
     final router = GoRouter.of(context);
     final navigator = Navigator.of(context);
 
-    return IconButton(
-      tooltip: 'Ver no repertório',
-      icon: const Icon(Icons.library_music_outlined),
-      onPressed: () {
-        navigator.pop();
-        router.push('/equipe/musicas/$songId?equipe=$teamId');
-      },
+    // Ícone **com rótulo curto**: sozinho ele não dizia para onde levava
+    // (WCAG 2.5.3), e continua pequeno o bastante para não pesar mais que a
+    // cifra.
+    return Tooltip(
+      message: 'Ver no repertório',
+      child: TextButton.icon(
+        style: AppButtonStyles.compactText,
+        icon: const Icon(Icons.library_music_outlined, size: 18),
+        label: const Text('Repertório'),
+        onPressed: () {
+          navigator.pop();
+          router.push('/equipe/musicas/$songId?equipe=$teamId');
+        },
+      ),
     );
   }
 }

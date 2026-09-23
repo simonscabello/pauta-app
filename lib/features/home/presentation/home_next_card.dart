@@ -328,7 +328,9 @@ class _Fact extends StatelessWidget {
                 if (detail != null)
                   Text(
                     detail!,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    // O ensaio é o que o membro precisa saber da semana: 14px,
+                    // e não o corpo de legenda.
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       color: AppColors.onHeroVariant,
                     ),
                     maxLines: 2,

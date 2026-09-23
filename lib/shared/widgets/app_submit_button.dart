@@ -1,5 +1,15 @@
 import 'package:flutter/material.dart';
 
+/// Quanto tempo a tela recém-aberta ignora o botão principal.
+///
+/// Criar uma escala encadeia três telas com o botão principal **no mesmo
+/// lugar** ("Criar escala", "Salvar e escolher músicas", "Salvar e ver a
+/// escala", "Publicar"). Na Web a troca é instantânea, e o segundo clique de
+/// um clique duplo caía no botão da tela seguinte: a escala ia para o detalhe
+/// sem repertório. Um toque nos primeiros instantes de uma tela nova não pode
+/// ter sido dirigido a ela — ninguém lê e decide em 600 ms.
+const kArrivalTapShield = Duration(milliseconds: 600);
+
 /// O botão que salva, com o estado de "salvando" embutido.
 ///
 /// Estava copiado em nove formulários, sempre assim: um ternário trocando o

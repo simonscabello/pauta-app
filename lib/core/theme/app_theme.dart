@@ -40,7 +40,7 @@ class AppTheme {
       // Foco visível para quem navega por teclado, teclado externo ou controle
       // adaptativo. O padrão do Flutter é um preto translúcido, que some no
       // tema escuro -- e foco invisível é o mesmo que não ter foco.
-      focusColor: scheme.primary.withValues(alpha: 0.12),
+      focusColor: scheme.primary.withValues(alpha: 0.18),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
@@ -126,7 +126,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
           textStyle: textTheme.labelLarge,
-        ),
+        ).copyWith(side: _focusRing(scheme.onSurface)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
@@ -135,8 +135,12 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
-          side: BorderSide(color: scheme.outline),
           textStyle: textTheme.labelLarge,
+        ).copyWith(
+          side: _focusRing(
+            scheme.primary,
+            otherwise: BorderSide(color: scheme.outline),
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -146,7 +150,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           ),
           textStyle: textTheme.labelLarge,
-        ),
+        ).copyWith(side: _focusRing(scheme.primary)),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: scheme.primary,
@@ -248,7 +252,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
-        ),
+        ).copyWith(side: _focusRing(scheme.primary)),
       ),
       listTileTheme: ListTileThemeData(
         iconColor: scheme.onSurfaceVariant,
@@ -319,4 +323,20 @@ class AppTheme {
       ),
     );
   }
+}
+
+/// O anel de foco dos botões: 2px quando o foco é de teclado (WCAG 2.4.7).
+///
+/// O `focusColor` sozinho só clareava o fundo — num botão cheio, e no tema
+/// escuro, a diferença não se via, e quem navega pelo Tab não sabia onde
+/// estava. O anel aparece só no foco, e some no toque e no mouse.
+WidgetStateProperty<BorderSide?> _focusRing(
+  Color color, {
+  BorderSide? otherwise,
+}) {
+  return WidgetStateProperty.resolveWith(
+    (states) => states.contains(WidgetState.focused)
+        ? BorderSide(color: color, width: 2)
+        : otherwise,
+  );
 }

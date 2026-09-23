@@ -125,18 +125,16 @@ void main() {
           MemberTourContext(nextScheduleId: next, pushSupported: push),
         );
 
-    test('oito paradas, na ordem da semana', () {
+    test('seis paradas, na ordem da semana', () {
       expect(steps(next: 'e1').map((s) => s.title), [
         'Sua próxima escala',
         'Músicas da escala',
         'Informe sua disponibilidade',
-        'Marque os dias em que não pode',
         'Agenda da equipe',
-        'Repertório',
-        'Sugira uma música',
+        'Repertório e sugestões',
         'Avisos no celular',
       ]);
-      expect(steps().length, 8);
+      expect(steps().length, 6);
     });
 
     test('com escala, as músicas são as da minha escala', () {
@@ -152,12 +150,11 @@ void main() {
       expect(steps()[0].body, contains('Quando você for escalado'));
     });
 
-    test('disponibilidade: a porta na Home e o botão lá dentro', () {
+    test('disponibilidade: uma parada, na porta da Home', () {
       final all = steps();
       expect(all[2].route, '/inicio');
       expect(all[2].target, TourTargetIds.homeAvailability);
-      expect(all[3].route, '/disponibilidade');
-      expect(all[3].target, TourTargetIds.availabilityChoose);
+      expect(all.any((s) => s.route == '/disponibilidade'), isFalse);
     });
 
     test('sem push no aparelho, os avisos não apontam para interruptor', () {

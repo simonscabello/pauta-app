@@ -39,7 +39,13 @@ class HomeQuickAccess extends ConsumerWidget {
     super.key,
     required this.teamId,
     required this.canManage,
+    this.withSideNav = false,
   });
+
+  /// A barra lateral está à vista (tablet e monitor). Aí só ficam os atalhos
+  /// que ela não tem: "Músicas novas", com a contagem, e "Minha
+  /// disponibilidade", que é a parada do tour na Home.
+  final bool withSideNav;
 
   final String teamId;
 
@@ -141,6 +147,9 @@ class HomeQuickAccess extends ConsumerWidget {
                   ),
                 );
 
+            if (withSideNav) {
+              return linha([novas, disponibilidade]);
+            }
             if (quatroEmLinha) {
               return linha([repertorio, novas, sugestoes, disponibilidade]);
             }

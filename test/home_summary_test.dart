@@ -57,6 +57,77 @@ void main() {
       expect(resumo.myPositions, ['Vocal', 'Violão']);
     });
 
+    test('escalado que não pode vira o primeiro aviso, com a substituição',
+        () {
+      final resumo = HomeSummary.of(
+        [
+          _event(id: 'e0', startsAt: '2026-09-13T12:00:00.000Z', status: 'DRAFT'),
+          _event(
+            id: 'e1',
+            startsAt: '2026-10-04T12:00:00.000Z',
+            assignments: [
+              ..._group('Vocal', ['Maria']),
+              ..._group('Violão', ['Maria']),
+            ],
+            minister: 'Maria',
+            unavailable: ['Maria'],
+          ),
+        ],
+        membershipId: 'm-Simon',
+        canManage: true,
+        now: DateTime.utc(2026, 9, 9, 12),
+      );
+
+      final aviso = resumo.notices.first;
+      expect(aviso.kind, HomeNoticeKind.unavailableAssigned);
+      expect(aviso.route, '/agenda/e1/escalar?substituir=m-Maria');
+      expect(
+        aviso.event!.rolesPhraseFor('m-Maria'),
+        'ministra e está em Vocal e Violão',
+      );
+    });
+
+    test('"Esta semana" do líder: sete dias, sem repetir a manchete', () {
+      final resumo = HomeSummary.of(
+        [
+          _event(
+            id: 'minha',
+            startsAt: '2026-09-10T12:00:00.000Z',
+            assignments: _group('Vocal', ['Simon']),
+          ),
+          _event(id: 'rascunho', startsAt: '2026-09-13T12:00:00.000Z', status: 'DRAFT'),
+          _event(id: 'longe', startsAt: '2026-09-20T12:00:00.000Z'),
+        ],
+        membershipId: 'm-Simon',
+        canManage: true,
+        now: DateTime.utc(2026, 9, 9, 12),
+      );
+
+      expect(resumo.myNext?.id, 'minha');
+      expect(resumo.teamWeek.map((e) => e.id), ['rascunho']);
+    });
+
+    test('quem ministra lê "Ministra" antes das funções', () {
+      final resumo = HomeSummary.of(
+        [
+          _event(
+            id: 'e1',
+            startsAt: '2026-09-13T12:00:00.000Z',
+            assignments: [
+              ..._group('Vocal', ['Simon', 'Maria']),
+              ..._group('Violão', ['Simon']),
+            ],
+            minister: 'Simon',
+          ),
+        ],
+        membershipId: 'm-Simon',
+        canManage: false,
+        now: DateTime.utc(2026, 9, 9, 12),
+      );
+
+      expect(resumo.myPositions, ['Ministra', 'Vocal', 'Violão']);
+    });
+
     test('sem participação, a manchete sabe que a equipe tem escalas', () {
       final resumo = HomeSummary.of(
         [_event(id: 'e1', startsAt: '2026-09-13T12:00:00.000Z')],
@@ -284,6 +355,8 @@ Event _event({
   String status = 'PUBLISHED',
   List<Map<String, dynamic>> assignments = const [],
   List<Map<String, dynamic>> services = const [],
+  String? minister,
+  List<String> unavailable = const [],
 }) =>
     Event.fromJson({
       'id': id,
@@ -299,6 +372,15 @@ Event _event({
       'assignments': assignments,
       'services': services,
       'songs': const [],
+      if (minister != null)
+        'minister': {'membershipId': 'm-$minister', 'displayName': minister},
+      if (unavailable.isNotEmpty)
+        'warnings': {
+          'unavailableAssigned': [
+            for (final p in unavailable)
+              {'membershipId': 'm-$p', 'displayName': p, 'reason': null},
+          ],
+        },
     });
 
 Map<String, dynamic> _service({

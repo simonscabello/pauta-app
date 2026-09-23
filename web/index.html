@@ -69,13 +69,7 @@
       background-color: #312E81;
       color: #FFFFFF;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      transition: opacity 200ms ease-out;
       z-index: 10;
-    }
-
-    #pauta-boot.is-done {
-      opacity: 0;
-      pointer-events: none;
     }
 
     /* Caixa alta com espacejamento aberto, como o logotipo dentro do app
@@ -105,7 +99,6 @@
     /* Quem pediu menos movimento no sistema nao ganha uma rodinha girando. */
     @media (prefers-reduced-motion: reduce) {
       #pauta-boot .spinner { animation: none; }
-      #pauta-boot { transition: none; }
     }
 
     @keyframes pauta-spin {
@@ -125,10 +118,11 @@
     window.addEventListener('flutter-first-frame', function () {
       var boot = document.getElementById('pauta-boot');
       if (!boot) return;
-      boot.classList.add('is-done');
-      // Removido de vez depois da transicao: um elemento fixo com
-      // `pointer-events: none` ainda apareceria no leitor de tela.
-      window.setTimeout(function () { boot.remove(); }, 260);
+      // Sai de uma vez, sem esmaecer. O fundo das duas aberturas e o mesmo
+      // violeta, entao nao ha clarao; o esmaecimento de 200ms deixava as duas
+      // marcas visiveis ao mesmo tempo, em tamanhos e posicoes diferentes
+      // ("PAUTA" duas vezes, desalinhado).
+      boot.remove();
     });
   </script>
 

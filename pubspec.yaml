@@ -1,7 +1,7 @@
 name: louvor_app
 description: Pauta - sua equipe no mesmo ritmo
 publish_to: "none"
-version: 0.23.0+30
+version: 0.24.0+31
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -57,6 +57,10 @@ dependencies:
   firebase_messaging: ^16.6.0
   flutter_local_notifications: ^22.3.0
   local_auth: 3.0.2
+  # Mantém a tela ligada enquanto a letra está aberta (modo leitura): quem
+  # canta com o celular na estante não pode ver a tela apagar no meio da
+  # música. Na Web usa a Screen Wake Lock API; onde ela não existe, nada muda.
+  wakelock_plus: ^1.5.2
 
 dev_dependencies:
   flutter_test:

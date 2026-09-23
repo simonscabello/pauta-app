@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,6 +17,7 @@ import '../../features/events/presentation/event_history_screen.dart';
 import '../../features/events/presentation/event_form_screen.dart';
 import '../../features/events/presentation/main_shell.dart';
 import '../../features/events/presentation/setlist_form_screen.dart';
+import '../../features/events/domain/agenda_entry.dart';
 import '../../features/events/domain/event_models.dart';
 import '../../features/health/presentation/health_screen.dart';
 import '../../features/help/presentation/help_screen.dart';
@@ -46,6 +49,8 @@ import '../../features/team/presentation/positions_screen.dart';
 import '../../features/team/presentation/service_templates_screen.dart';
 import '../../features/team/presentation/team_settings_screen.dart';
 import '../../features/team/presentation/workload_report_screen.dart';
+import '../../shared/widgets/unsaved_changes_guard.dart';
+import 'page_title.dart';
 import '../../features/unavailability/presentation/team_unavailability_screen.dart';
 
 /// `AAAA-MM-DD` da barra de endereço. Inválida ou ausente vira nulo: a tela
@@ -122,7 +127,13 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
   final pending = _PendingLocation();
 
-  return GoRouter(
+  // `push` também muda o endereço. Sem isto, com a escala aberta a barra do
+  // navegador seguia em `#/inicio`: F5 voltava para a lista, o link não servia
+  // para mandar a ninguém e o voltar do navegador ficava imprevisível. As
+  // rotas de detalhe já existiam — só não apareciam.
+  GoRouter.optionURLReflectsImperativeAPIs = true;
+
+  final router = GoRouter(
     initialLocation: '/',
     refreshListenable: refresh,
     redirect: (context, state) {
@@ -221,6 +232,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           // aviso de evento novo -- ver `route` no backend.
           GoRoute(
             path: '/eventos/novo',
+            onExit: confirmLeaveIfUnsaved,
             builder: (_, state) => TeamEventFormScreen(
               initialDate: state.uri.queryParameters['data'],
             ),
@@ -233,6 +245,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'editar',
+                onExit: confirmLeaveIfUnsaved,
                 builder: (_, state) => TeamEventFormScreen(
                   eventId: state.pathParameters['eventoId']!,
                 ),
@@ -263,6 +276,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/equipe/dados',
+            onExit: confirmLeaveIfUnsaved,
             builder: (_, __) =>
                 _withActiveTeam(ref, (id) => TeamSettingsScreen(teamId: id)),
           ),
@@ -363,6 +377,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'editar',
+                    onExit: confirmLeaveIfUnsaved,
                     builder: (_, state) => _withRouteTeam(
                       ref,
                       state,
@@ -379,10 +394,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/agenda',
-            builder: (_, __) => const AgendaScreen(),
+            builder: (_, state) => AgendaScreen(
+              initialFilter: state.uri.queryParameters['filtro'] == 'rascunhos'
+                  ? AgendaFilter.drafts
+                  : null,
+            ),
             routes: [
               GoRoute(
                 path: 'novo',
+                onExit: confirmLeaveIfUnsaved,
                 builder: (_, state) => EventFormScreen(
                   initialDate: _parseDate(state.uri.queryParameters['data']),
                 ),
@@ -395,6 +415,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'editar',
+                    onExit: confirmLeaveIfUnsaved,
                     builder: (_, state) => EventFormScreen(
                       eventId: state.pathParameters['eventId'],
                     ),
@@ -407,6 +428,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'escalar',
+                    onExit: confirmLeaveIfUnsaved,
                     builder: (_, state) => AssignmentFormScreen(
                       eventId: state.pathParameters['eventId']!,
                       // `?novo=1` só é posto por quem acabou de criar a
@@ -414,10 +436,16 @@ final routerProvider = Provider<GoRouter>((ref) {
                       // voltar. Na consulta, e não em `extra`, para o encadeamento
                       // sobreviver a um recarregamento da rota.
                       nextIsSetlist: state.uri.queryParameters['novo'] == '1',
+                      // `?substituir=<membershipId>`: vem do aviso de quem não
+                      // pode (Home, detalhe) e abre a escalação com a pessoa
+                      // destacada.
+                      replaceMembershipId:
+                          state.uri.queryParameters['substituir'],
                     ),
                   ),
                   GoRoute(
                     path: 'repertorio',
+                    onExit: confirmLeaveIfUnsaved,
                     builder: (_, state) => _withActiveTeam(
                       ref,
                       (id) => SetlistFormScreen(
@@ -443,6 +471,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'dados',
+                onExit: confirmLeaveIfUnsaved,
                 builder: (_, __) => const EditProfileScreen(),
               ),
               // Troca voluntária. A obrigatória continua em /trocar-senha, que
@@ -466,11 +495,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'membros/novo',
+                onExit: confirmLeaveIfUnsaved,
                 builder: (_, __) =>
                     _withActiveTeam(ref, (id) => MemberFormScreen(teamId: id)),
               ),
               GoRoute(
                 path: 'membros/editar',
+                onExit: confirmLeaveIfUnsaved,
                 builder: (_, state) => _withActiveTeam(
                   ref,
                   (id) => MemberFormScreen(
@@ -485,6 +516,34 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  // O título da aba acompanha a rota (ver `pageTitleFor`). Só na Web: no
+  // Android o mesmo canal troca o nome do app na lista de recentes.
+  if (kIsWeb) {
+    void atualizarTitulo() {
+      // Pelo mesmo caminho que monta o endereço da barra: com `push`, a
+      // configuração guarda a rota de baixo e a empilhada à parte, e é o
+      // parser que sabe qual delas está na tela.
+      final path = router.routeInformationParser
+              .restoreRouteInformation(
+                router.routerDelegate.currentConfiguration,
+              )
+              ?.uri
+              .path ??
+          '/';
+      SystemChrome.setApplicationSwitcherDescription(
+        ApplicationSwitcherDescription(
+          label: pageTitleFor(path),
+          primaryColor: 0xFF4F46E5,
+        ),
+      );
+    }
+
+    router.routerDelegate.addListener(atualizarTitulo);
+    ref.onDispose(() => router.routerDelegate.removeListener(atualizarTitulo));
+  }
+
+  return router;
 });
 
 /// A equipe que a **rota** pediu (`?equipe=`), caindo na ativa quando não

@@ -194,6 +194,10 @@ class _WorkloadRow extends StatelessWidget {
                     ? null
                     : FractionallySizedBox(
                         widthFactor: count / maximum,
+                        // Sem isto a barra tinha largura e altura zero: dentro
+                        // de um Container com `alignment`, o filho ganha
+                        // restrição frouxa, e o ColoredBox encolhe até nada.
+                        heightFactor: 1,
                         child: ColoredBox(
                           color:
                               count == 0 ? warning.foreground : scheme.primary,

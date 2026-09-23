@@ -21,6 +21,7 @@ import '../../../shared/widgets/greeting_header.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
+import '../../team/domain/service_template.dart';
 import '../../team/presentation/team_onboarding.dart';
 import '../../team_events/data/team_event_repository.dart';
 import '../../team_events/domain/team_event.dart';
@@ -58,7 +59,11 @@ final agendaNowProvider = Provider<DateTime>((ref) => DateTime.now());
 /// "Próximos compromissos" e não "Próximas escalas" — prometer só escala
 /// faria a reunião de quinta parecer uma delas.
 class AgendaScreen extends ConsumerStatefulWidget {
-  const AgendaScreen({super.key});
+  const AgendaScreen({super.key, this.initialFilter});
+
+  /// O recorte pedido pela rota (`/agenda?filtro=rascunhos`, vindo do aviso
+  /// da Home). Nulo: o de sempre.
+  final AgendaFilter? initialFilter;
 
   @override
   ConsumerState<AgendaScreen> createState() => _AgendaScreenState();
@@ -69,15 +74,67 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   DateTime? _month;
   String? _teamKey;
   int _upcomingCount = 6;
-  AgendaFilter _filter = AgendaFilter.all;
+  late AgendaFilter _filter = widget.initialFilter ?? AgendaFilter.all;
+
+  @override
+  void didUpdateWidget(covariant AgendaScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A agenda pode já estar montada quando o aviso da Home a abre com outro
+    // recorte: a rota muda, a tela continua.
+    if (widget.initialFilter != null &&
+        widget.initialFilter != oldWidget.initialFilter) {
+      _filter = widget.initialFilter!;
+      _upcomingCount = 6;
+    }
+  }
 
   /// As datas sem escala abertas embaixo do resumo. Começam recolhidas: são
   /// planejamento, e a lista inteira empurrava "Próximos compromissos" para
   /// longe.
   bool _openDatesExpanded = false;
 
+  /// No celular, o calendário pode mostrar só a semana. O mês inteiro ocupa
+  /// quase uma tela, e a primeira escala da lista aparecia depois de uma tela
+  /// e meia.
+  bool _calendarCollapsed = false;
+
+  /// Trocar de mês **não escolhe o dia 1**. "Quinta-feira, 1 de outubro — Nada
+  /// marcado" aparecia sem ninguém ter pedido. O mês novo abre no primeiro dia
+  /// com compromisso (ou em hoje, no mês atual); sem compromisso nenhum,
+  /// nenhum dia fica escolhido e a lista do dia some.
+  void _changeMonth(
+    DateTime month, {
+    required DateTime today,
+    required Map<String, int> markedDays,
+  }) {
+    final mes = DateTime(month.year, month.month);
+    DateTime? dia;
+    if (mes.year == today.year && mes.month == today.month) {
+      dia = today;
+    } else {
+      final ultimo = DateTime(mes.year, mes.month + 1, 0).day;
+      for (var d = 1; d <= ultimo; d++) {
+        final candidato = DateTime(mes.year, mes.month, d);
+        if ((markedDays[dateKey(candidato)] ?? 0) > 0) {
+          dia = candidato;
+          break;
+        }
+      }
+    }
+    setState(() {
+      _month = mes;
+      _selected = dia;
+      _monthWithoutDay = dia == null;
+      _upcomingCount = 6;
+    });
+  }
+
+  /// O mês foi trocado e não havia dia com compromisso: nada escolhido.
+  bool _monthWithoutDay = false;
+
   void _select(DateTime day) => setState(() {
         _selected = day;
+        _monthWithoutDay = false;
         _month = DateTime(day.year, day.month);
         _upcomingCount = 6;
       });
@@ -142,10 +199,14 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     if (_teamKey != '$teamId/$timezone') {
       _teamKey = '$teamId/$timezone';
       _selected = today;
+      _monthWithoutDay = false;
       _month = DateTime(today.year, today.month);
       _upcomingCount = 6;
     }
-    final selected = _selected!;
+    // Sem dia escolhido (mês trocado sem compromisso), as contas usam hoje,
+    // mas a lista do dia não aparece.
+    final hasDay = !_monthWithoutDay;
+    final selected = _selected ?? today;
     final month = _month!;
 
     // A agenda inteira **e** o recorte escolhido. As duas listas existem por
@@ -167,7 +228,9 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final markedDays = {
       for (final entry in groups.entries) entry.key: entry.value.length,
     };
-    final selectedRows = groups[dateKey(selected)] ?? const <AgendaEntry>[];
+    final selectedRows = hasDay
+        ? groups[dateKey(selected)] ?? const <AgendaEntry>[]
+        : const <AgendaEntry>[];
     final dayHasAny = (groupAgendaRows(allEntries)[dateKey(selected)] ??
             const <AgendaEntry>[])
         .isNotEmpty;
@@ -224,7 +287,21 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final scheme = theme.colorScheme;
     void createSchedule() =>
         context.push('/agenda/novo?data=${dateKey(selected)}');
-    void create() => _openCreateMenu(context, selected, today);
+
+    // **O "+" leva a próxima data da grade quando o dia escolhido não tem
+    // culto.** Com hoje (uma terça) selecionado, "Nova escala" abria numa
+    // terça "sem grade" e sem culto nenhum, e a primeira coisa a fazer era
+    // trocar a data. A linha do dia vazio continua indo para o próprio dia:
+    // ali a pessoa escolheu o dia de propósito.
+    final gradeDaEquipe = team.canManage
+        ? ref.watch(serviceTemplatesProvider(teamId)).valueOrNull
+        : null;
+    final scheduleDay = _scheduleDayFor(
+      selected.isBefore(today) ? today : selected,
+      gradeDaEquipe,
+    );
+    void create() =>
+        _openCreateMenu(context, selected, today, scheduleDay: scheduleDay);
 
     // Largura da **janela**, e não a da lista: onde o botão de criar mora é
     // decisão sobre o formato da tela (polegar × mouse), e é a mesma decisão
@@ -238,15 +315,36 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       children: [
         TourTarget(
           id: TourTargetIds.agendaCalendar,
-          child: AgendaCalendar(
-            month: month,
-            selectedDay: selected,
-            today: today,
-            markedDays: markedDays,
-            onSelected: _select,
-            onMonthChanged: _select,
-            onToday: () => _select(today),
-            legend: _filter.isMine ? 'Seus compromissos' : 'Com compromisso',
+          child: Builder(
+            builder: (context) {
+              // Recolher só faz sentido no celular, onde o calendário empurra
+              // a lista. Com a barra lateral ele fica ao lado dela, e cabe.
+              final narrow = !AppBreakpoints.of(context).isWide;
+              return AgendaCalendar(
+                month: month,
+                selectedDay: hasDay ? selected : null,
+                today: today,
+                markedDays: markedDays,
+                onSelected: _select,
+                onMonthChanged: (m) => _changeMonth(
+                  m,
+                  today: today,
+                  markedDays: markedDays,
+                ),
+                onToday: () => _select(today),
+                legend: switch (_filter) {
+                  AgendaFilter.mine => 'Seus compromissos',
+                  AgendaFilter.drafts => 'Com rascunho',
+                  AgendaFilter.all => 'Com compromisso',
+                },
+                collapsed: narrow && _calendarCollapsed,
+                onToggleCollapsed: narrow
+                    ? () => setState(
+                          () => _calendarCollapsed = !_calendarCollapsed,
+                        )
+                    : null,
+              );
+            },
           ),
         ),
         // Mês que a consulta não cobre inteiro fica calado: dizer "pode ter
@@ -295,6 +393,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   // vai acontecer ("Criar escala"). Perguntar de novo logo
                   // depois seria um passo a mais para chegar no mesmo lugar.
                   onCreate: createSchedule,
+                  drafts: _filter.isDrafts,
                 ),
               ]
             : [
@@ -309,6 +408,107 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               ],
       );
     }
+
+    // Planejamento (datas da grade sem escala) e a lista de próximos
+    // compromissos, como blocos: no celular vêm um embaixo do outro; no
+    // monitor cada um vai para a sua coluna.
+    List<Widget> planningBlock({required bool wide}) => [
+        // **Planejamento perto do topo, e recolhido.** As datas da
+        // grade sem escala moravam no fim da tela, depois de todos
+        // os próximos compromissos — justamente a informação que
+        // pede providência de quem lidera. Aqui ela é uma linha
+        // que conta, e a lista abre ao tocar.
+        if (planningDates.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          AppGroup(
+            children: [
+              AppGroupRow(
+                icon: Icons.event_repeat_rounded,
+                title: planningDates.length == 1
+                    ? '1 data sem escala'
+                    : '${planningDates.length} datas sem escala',
+                subtitle:
+                    'Pela grade de cultos, nas próximas '
+                    '$openDatesWeeks semanas',
+                trailing: Icon(
+                  _openDatesExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  color: scheme.onSurfaceVariant,
+                ),
+                onTap: () => setState(
+                  () => _openDatesExpanded =
+                      !_openDatesExpanded,
+                ),
+              ),
+            ],
+          ),
+          if (_openDatesExpanded) ...[
+            const SizedBox(height: AppSpacing.lg),
+            AgendaOpenDates(
+              teamId: teamId,
+              dates: planningDates,
+              wide: wide,
+            ),
+          ],
+        ],
+        ];
+
+    List<Widget> upcomingBlock({required bool wide}) => [
+        if (past.hasError &&
+            !past.hasValue &&
+            !selected.isBefore(today))
+          _AgendaError(
+            error: past.error!,
+            message:
+                'Não foi possível carregar as escalas passadas.',
+            onRetry: () => _refresh(teamId),
+          ),
+        if (upcoming.isLoading && !upcoming.hasValue)
+          const _AgendaLoading()
+        else if (upcoming.hasError && !upcoming.hasValue)
+          _AgendaError(
+            error: upcoming.error!,
+            onRetry: () => _refresh(teamId),
+          )
+        else
+          // O mesmo bloco da Home, com a mesma linha de escala. O
+          // título diz "compromissos" e não "escalas" porque aqui
+          // a lista tem as duas coisas -- e prometer só escala
+          // faria a reunião de quinta parecer uma delas.
+          AppGroup(
+            title: 'Próximos compromissos',
+            dividerIndent: AppGroup.textIndent,
+            children: [
+              if (nextRows.isEmpty)
+                AppGroupRow(
+                  title: _filter.isMine
+                      ? 'Nada seu por perto.'
+                      : 'Nada mais marcado por perto.',
+                  showChevron: false,
+                )
+              else ...[
+                for (final row
+                    in nextRows.take(_upcomingCount))
+                  _agendaRow(
+                    row,
+                    prefixo: 'upcoming',
+                    canManage: team.canManage,
+                    membershipId: team.membershipId,
+                    wide: wide,
+                  ),
+                if (nextRows.length > _upcomingCount)
+                  AppGroupRow(
+                    icon: Icons.expand_more_rounded,
+                    title: 'Ver mais',
+                    showChevron: false,
+                    onTap: () =>
+                        setState(() => _upcomingCount += 6),
+                  ),
+              ],
+            ],
+          ),
+        ];
 
     return Scaffold(
       // No celular, o canto inferior direito é onde o polegar chega. Com
@@ -364,9 +564,6 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                       // A largura de que a **lista** dispõe, e não a da janela: é o
                       // mesmo número com que a Home vira a linha em colunas.
                       final wide = constraints.maxWidth >= 880;
-                      final desktop =
-                          AppBreakpoints.fromWidth(constraints.maxWidth)
-                              .isDesktop;
 
                       return ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -395,129 +592,72 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                             child: AppChoiceBar<AgendaFilter>(
                               value: _filter,
                               onChanged: _changeFilter,
-                              options: const [
-                                AppChoice(
+                              options: [
+                                const AppChoice(
                                   value: AgendaFilter.all,
                                   label: 'Todas',
                                 ),
-                                AppChoice(
+                                const AppChoice(
                                   value: AgendaFilter.mine,
                                   label: 'Minhas escalas',
                                   icon: Icons.star_rounded,
                                 ),
+                                if (team.canManage)
+                                  const AppChoice(
+                                    value: AgendaFilter.drafts,
+                                    label: 'Rascunhos',
+                                    icon: Icons.edit_note_rounded,
+                                  ),
                               ],
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          if (desktop)
+                          // **Lado a lado quando cabe**: o calendário à
+                          // esquerda e, à direita, o dia e os próximos
+                          // compromissos. Empilhados, a primeira escala da
+                          // lista aparecia a 700px do topo num monitor.
+                          if (wide)
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(child: calendar),
+                                Expanded(
+                                  flex: 5,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      calendar,
+                                      ...planningBlock(wide: false),
+                                    ],
+                                  ),
+                                ),
                                 const SizedBox(width: AppSpacing.xl),
-                                // Meia largura: a linha em colunas precisa dos 880px
-                                // inteiros, e aqui ela tem metade.
-                                Expanded(child: daySection(wide: false)),
+                                Expanded(
+                                  flex: 6,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (hasDay) ...[
+                                        daySection(wide: false),
+                                        const SizedBox(height: AppSpacing.xl),
+                                      ],
+                                      ...upcomingBlock(wide: false),
+                                    ],
+                                  ),
+                                ),
                               ],
                             )
                           else ...[
                             calendar,
-                            const SizedBox(height: AppSpacing.lg),
-                            daySection(wide: wide),
-                          ],
-                          // **Planejamento perto do topo, e recolhido.** As datas da
-                          // grade sem escala moravam no fim da tela, depois de todos
-                          // os próximos compromissos — justamente a informação que
-                          // pede providência de quem lidera. Aqui ela é uma linha
-                          // que conta, e a lista abre ao tocar.
-                          if (planningDates.isNotEmpty) ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            AppGroup(
-                              children: [
-                                AppGroupRow(
-                                  icon: Icons.event_repeat_rounded,
-                                  title: planningDates.length == 1
-                                      ? '1 data sem escala'
-                                      : '${planningDates.length} datas sem escala',
-                                  subtitle:
-                                      'Pela grade de cultos, nas próximas '
-                                      '$openDatesWeeks semanas',
-                                  trailing: Icon(
-                                    _openDatesExpanded
-                                        ? Icons.expand_less_rounded
-                                        : Icons.expand_more_rounded,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                  onTap: () => setState(
-                                    () => _openDatesExpanded =
-                                        !_openDatesExpanded,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_openDatesExpanded) ...[
+                            if (hasDay) ...[
                               const SizedBox(height: AppSpacing.lg),
-                              AgendaOpenDates(
-                                teamId: teamId,
-                                dates: planningDates,
-                                wide: wide,
-                              ),
+                              daySection(wide: wide),
                             ],
+                            ...planningBlock(wide: wide),
+                            const SizedBox(height: AppSpacing.xl),
+                            ...upcomingBlock(wide: wide),
                           ],
-                          if (past.hasError &&
-                              !past.hasValue &&
-                              !selected.isBefore(today))
-                            _AgendaError(
-                              error: past.error!,
-                              message:
-                                  'Não foi possível carregar as escalas passadas.',
-                              onRetry: () => _refresh(teamId),
-                            ),
-                          const SizedBox(height: AppSpacing.xl),
-                          if (upcoming.isLoading && !upcoming.hasValue)
-                            const _AgendaLoading()
-                          else if (upcoming.hasError && !upcoming.hasValue)
-                            _AgendaError(
-                              error: upcoming.error!,
-                              onRetry: () => _refresh(teamId),
-                            )
-                          else
-                            // O mesmo bloco da Home, com a mesma linha de escala. O
-                            // título diz "compromissos" e não "escalas" porque aqui
-                            // a lista tem as duas coisas -- e prometer só escala
-                            // faria a reunião de quinta parecer uma delas.
-                            AppGroup(
-                              title: 'Próximos compromissos',
-                              dividerIndent: AppGroup.textIndent,
-                              children: [
-                                if (nextRows.isEmpty)
-                                  AppGroupRow(
-                                    title: _filter.isMine
-                                        ? 'Nada seu por perto.'
-                                        : 'Nada mais marcado por perto.',
-                                    showChevron: false,
-                                  )
-                                else ...[
-                                  for (final row
-                                      in nextRows.take(_upcomingCount))
-                                    _agendaRow(
-                                      row,
-                                      prefixo: 'upcoming',
-                                      canManage: team.canManage,
-                                      membershipId: team.membershipId,
-                                      wide: wide,
-                                    ),
-                                  if (nextRows.length > _upcomingCount)
-                                    AppGroupRow(
-                                      icon: Icons.expand_more_rounded,
-                                      title: 'Ver mais',
-                                      showChevron: false,
-                                      onTap: () =>
-                                          setState(() => _upcomingCount += 6),
-                                    ),
-                                ],
-                              ],
-                            ),
                         ],
                       );
                     },
@@ -549,11 +689,25 @@ enum _NewKind { schedule, event }
 /// Os dois caminhos continuam sendo os de sempre -- este menu só decide para
 /// qual deles ir, e leva junto o **dia selecionado**, que é o que o botão da
 /// agenda sempre teve de seu.
+/// O dia em que a escala nova nasce: o escolhido, se tem culto na grade;
+/// senão, o próximo dia da grade a partir dele. Sem grade, o escolhido.
+DateTime _scheduleDayFor(DateTime from, List<ServiceTemplate>? templates) {
+  final ativos = templates?.where((t) => t.isActive).toList() ?? const [];
+  if (ativos.isEmpty) return from;
+  for (var offset = 0; offset < 8 * 7; offset++) {
+    final dia = DateTime(from.year, from.month, from.day + offset);
+    if (ativos.any((t) => t.matchesDate(dia))) return dia;
+  }
+  return from;
+}
+
 Future<void> _openCreateMenu(
   BuildContext context,
   DateTime selected,
-  DateTime today,
-) async {
+  DateTime today, {
+  required DateTime scheduleDay,
+}) async {
+  final escalaEmOutroDia = dateKey(scheduleDay) != dateKey(selected);
   final choice = await showAdaptiveSheet<_NewKind>(
     context: context,
     maxWidth: 420,
@@ -589,7 +743,12 @@ Future<void> _openCreateMenu(
               _CreateOption(
                 icon: Icons.groups_rounded,
                 title: 'Nova escala',
-                subtitle: 'Culto com equipe escalada e repertório',
+                // Quando o dia escolhido não tem culto, a escala vai para o
+                // próximo dia da grade — e isso é dito aqui, antes do toque.
+                subtitle: escalaEmOutroDia
+                    ? 'No próximo dia de culto: '
+                        '${_dayLabel(scheduleDay, today)}'
+                    : 'Culto com equipe escalada e repertório',
                 onTap: () => Navigator.pop(sheetContext, _NewKind.schedule),
               ),
               Divider(
@@ -616,7 +775,7 @@ Future<void> _openCreateMenu(
   final dia = dateKey(selected);
   switch (choice) {
     case _NewKind.schedule:
-      context.push('/agenda/novo?data=$dia');
+      context.push('/agenda/novo?data=${dateKey(scheduleDay)}');
     case _NewKind.event:
       context.push('/eventos/novo?data=$dia');
   }
@@ -711,6 +870,7 @@ Widget _emptyDayRow({
   required bool dayHasAny,
   required bool canManage,
   required VoidCallback onCreate,
+  bool drafts = false,
 }) {
   // A consulta não cobre o dia inteiro: dizer "nada marcado" poderia esconder
   // uma escala que existe. A frase é a de uma falha, com a saída dela.
@@ -718,6 +878,13 @@ Widget _emptyDayRow({
     return const AppGroupRow(
       title: 'Não carregou tudo deste dia.',
       subtitle: 'Puxe a tela para baixo para atualizar.',
+      showChevron: false,
+    );
+  }
+  if (dayHasAny && drafts) {
+    return const AppGroupRow(
+      title: 'Nenhum rascunho neste dia.',
+      subtitle: 'O que há neste dia já foi publicado. Veja em "Todas".',
       showChevron: false,
     );
   }

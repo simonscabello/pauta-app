@@ -465,6 +465,19 @@ class Event {
     );
   }
 
+  /// "Domingo, 4 de outubro · Páscoa" — **sempre com a data**.
+  ///
+  /// É o topo das telas de montar a escala (escalação e repertório). Com
+  /// [describe], a escala com título mostrava só o título, e quem escalava não
+  /// via de que domingo se tratava; o repertório não mostrava nem um nem outro.
+  String get dateAndTitle {
+    final date = formatEventWeekdayDate(
+      startsAt,
+      timezone.isEmpty ? 'America/Sao_Paulo' : timezone,
+    );
+    return hasTitle ? '$date · $title' : date;
+  }
+
   /// Os cultos para exibir.
   ///
   /// Cache antigo, gravado antes desta versão, não tem `services`. Em vez de
@@ -607,6 +620,40 @@ class Event {
         if (group.members.any((m) => m.membershipId == membershipId))
           group.positionName,
     ];
+  }
+
+  /// O que esta pessoa faz na escala, **para mostrar**: "Ministra" primeiro, e
+  /// depois as funções.
+  ///
+  /// Quem ministra lia "Vocal · Violão" na Home, no detalhe e na pílula da
+  /// agenda — a responsabilidade maior ficava de fora das três. O verbo, e não
+  /// "Ministrante", porque a linha é sobre o que a pessoa faz e cabe ao lado
+  /// dos instrumentos sem adivinhar gênero.
+  ///
+  /// Para decidir "é minha?" continua valendo [positionsForMembership]: o
+  /// servidor recusa ministrante fora da escalação, então as duas respostas
+  /// coincidem, e só uma delas precisa existir como regra.
+  List<String> personalRolesFor(String? membershipId) {
+    final positions = positionsForMembership(membershipId);
+    final ministra = membershipId != null &&
+        membershipId.isNotEmpty &&
+        minister?.membershipId == membershipId;
+    return [if (ministra) 'Ministra', ...positions];
+  }
+
+  /// "ministra e está em Vocal e Violão" — o que esta pessoa faz na escala,
+  /// dito de outra pessoa. É o que o líder precisa ler para substituir alguém
+  /// sem esquecer o ministrante. Nulo quando ela não está na escala.
+  String? rolesPhraseFor(String membershipId) {
+    final positions = positionsForMembership(membershipId);
+    final ministra = minister?.membershipId == membershipId;
+    if (positions.isEmpty && !ministra) return null;
+    final funcoes = positions.length <= 1
+        ? positions.join()
+        : '${positions.sublist(0, positions.length - 1).join(', ')} e '
+            '${positions.last}';
+    if (!ministra) return 'está em $funcoes';
+    return positions.isEmpty ? 'ministra' : 'ministra e está em $funcoes';
   }
 
   static DateTime? _parseUtcDateTime(Object? value) {

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/date/civil_date.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_month_grid.dart';
+import '../../../shared/widgets/app_notice.dart';
 
 /// O que o seletor devolve: o conjunto final de dias marcados (não só os
 /// novos, para a tela calcular o que entrou e o que saiu) e o motivo dos dias
@@ -28,10 +30,16 @@ const unavailabilityReasons = ['Viagem', 'Trabalho', 'Saúde', 'Família'];
 /// [isServiceDay] marca os dias em que a igreja tem culto pela grade: são os
 /// únicos que importam, e sem a marca a pessoa procurava o domingo certo entre
 /// trinta números iguais.
+///
+/// [scheduledOn] descreve os dias em que a pessoa **já está escalada**
+/// ("dom 4/10 (Vocal e Violão)"). Marcar um deles mostra, antes de enviar, que
+/// quem lidera vai ser avisado: sem isso o retorno era só "Aviso enviado para
+/// 1 dia", e a pessoa não sabia se a troca estava resolvida.
 Future<MultiDatePick?> showMultiDatePicker({
   required BuildContext context,
   required Set<DateTime> initialSelection,
   bool Function(DateTime day)? isServiceDay,
+  String? Function(DateTime day)? scheduledOn,
   int monthsAhead = 12,
 }) {
   return showModalBottomSheet<MultiDatePick>(
@@ -41,9 +49,21 @@ Future<MultiDatePick?> showMultiDatePicker({
     builder: (_) => _MultiDatePickerSheet(
       initialSelection: initialSelection,
       isServiceDay: isServiceDay,
+      scheduledOn: scheduledOn,
       monthsAhead: monthsAhead,
     ),
   );
+}
+
+/// O rótulo do botão diz o que vai acontecer (a regra do app para botões),
+/// e não "Confirmar".
+@visibleForTesting
+String multiDatePickerActionLabel({required int added, required int removed}) {
+  String dias(int n) => n == 1 ? '1 dia' : '$n dias';
+  if (added > 0 && removed == 0) return 'Avisar ${dias(added)}';
+  if (removed > 0 && added == 0) return 'Liberar ${dias(removed)}';
+  if (added > 0 && removed > 0) return 'Salvar os dias';
+  return 'Manter como está';
 }
 
 DateTime _dayOnly(DateTime date) => DateTime(date.year, date.month, date.day);
@@ -53,10 +73,12 @@ class _MultiDatePickerSheet extends StatefulWidget {
     required this.initialSelection,
     required this.isServiceDay,
     required this.monthsAhead,
+    this.scheduledOn,
   });
 
   final Set<DateTime> initialSelection;
   final bool Function(DateTime day)? isServiceDay;
+  final String? Function(DateTime day)? scheduledOn;
   final int monthsAhead;
 
   @override
@@ -76,6 +98,20 @@ class _MultiDatePickerSheetState extends State<_MultiDatePickerSheet> {
 
   bool get _hasNewDays =>
       _selected.any((day) => !widget.initialSelection.contains(day));
+
+  /// Os dias novos em que a pessoa já está na escala, já descritos.
+  List<String> get _newScheduledDays {
+    final describe = widget.scheduledOn;
+    if (describe == null) return const [];
+    final novos = _selected
+        .where((day) => !widget.initialSelection.contains(day))
+        .toList()
+      ..sort();
+    return [
+      for (final day in novos)
+        if (describe(day) case final phrase?) phrase,
+    ];
+  }
 
   void _toggle(DateTime day) {
     setState(() {
@@ -185,14 +221,19 @@ class _MultiDatePickerSheetState extends State<_MultiDatePickerSheet> {
                             describe: (day) {
                               final service =
                                   widget.isServiceDay?.call(day) ?? false;
+                              final marcado = _selected.contains(day);
                               return AppMonthDay(
-                                selected: _selected.contains(day),
+                                selected: marcado,
+                                icon: marcado ? Icons.close_rounded : null,
                                 marks: service ? 1 : 0,
                                 // Dia passado não é marcável: o backend recusa
                                 // e não haveria o que avisar sobre uma escala
                                 // que já aconteceu.
                                 enabled: !day.isBefore(_today),
-                                detail: service ? 'dia de culto' : null,
+                                detail: [
+                                  if (marcado) 'marcado como "não posso"',
+                                  if (service) 'dia de culto',
+                                ].join(', ').ifEmptyNull,
                               );
                             },
                           ),
@@ -203,6 +244,26 @@ class _MultiDatePickerSheetState extends State<_MultiDatePickerSheet> {
                 ),
               ),
               const Divider(height: 1),
+              if (_newScheduledDays.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                    0,
+                  ),
+                  child: AppNotice(
+                    tone: AppTone.warning,
+                    liveRegion: true,
+                    message: _newScheduledDays.length == 1
+                        ? 'Você já está na escala de '
+                            '${_newScheduledDays.single}. Quem lidera vai ser '
+                            'avisado para achar alguém no seu lugar.'
+                        : 'Você já está na escala de '
+                            '${_newScheduledDays.join(' e de ')}. Quem lidera '
+                            'vai ser avisado para achar alguém no seu lugar.',
+                  ),
+                ),
               if (_hasNewDays)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -231,7 +292,16 @@ class _MultiDatePickerSheetState extends State<_MultiDatePickerSheet> {
                     const SizedBox(width: AppSpacing.md),
                     FilledButton(
                       onPressed: _confirm,
-                      child: const Text('Confirmar'),
+                      child: Text(
+                        multiDatePickerActionLabel(
+                          added: _selected
+                              .difference(widget.initialSelection)
+                              .length,
+                          removed: widget.initialSelection
+                              .difference(_selected)
+                              .length,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -329,4 +399,8 @@ class _WeekdayHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+extension on String {
+  String? get ifEmptyNull => isEmpty ? null : this;
 }

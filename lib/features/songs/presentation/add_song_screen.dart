@@ -8,6 +8,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_bottom_action_bar.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
@@ -243,7 +244,7 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
       // ela (ou para o seletor da escala) procuraria por algo que a resposta
       // em cache não tem. A família inteira, porque a lista de trás está com
       // os filtros que a pessoa deixou ligados.
-      ref.invalidate(songsProvider);
+      ref.invalidate(songCatalogProvider);
       // A música nasce marcada como nova com frequência, e o cartão da Home
       // precisa enxergá-la.
       ref.invalidate(learningSongsProvider(widget.teamId));
@@ -302,6 +303,38 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Adicionar música')),
+      // "Música nova" e os temas valem para a música que for escolhida, e por
+      // isso moram no rodapé: acima dos resultados eles vinham antes da
+      // própria busca — a primeira coisa da tela era um interruptor sobre uma
+      // música que ainda não existia. No rodapé ficam parados (a tela não
+      // pula enquanto se digita) e à mão na hora de escolher.
+      bottomNavigationBar: _adding
+          ? null
+          : AppBottomActionBar(
+              // Material transparente: a barra tem cor própria, e sem um
+              // Material entre ela e o interruptor o respingo do toque não
+              // aparece.
+              action: Material(
+                type: MaterialType.transparency,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      value: _isNew,
+                      onChanged: (v) => setState(() => _isNew = v),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text('Entra como música nova'),
+                    ),
+                    SongThemeStrip(
+                      themes: _themes,
+                      onChanged: (themes) => setState(() => _themes = themes),
+                    ),
+                  ],
+                ),
+              ),
+            ),
       body: SafeArea(
         top: false,
         child: AppContentWidth.reading(
@@ -337,34 +370,6 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                     horizontal: AppSpacing.screenPadding,
                   ),
                   child: FormErrorBanner(message: _error!),
-                ),
-              // **Uma faixa fixa, logo abaixo da busca.** Ela só aparecia quando
-              // chegavam resultados, acima deles — a tela pulava no meio da
-              // digitação e as opções nasciam antes de haver música escolhida.
-              // No mesmo lugar sempre, ela é lida uma vez e deixada para trás.
-              // "Música nova" é interruptor, como na edição da música.
-              if (!_adding)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: AppSpacing.screenPadding,
-                    right: AppSpacing.screenPadding,
-                    bottom: AppSpacing.sm,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SwitchListTile(
-                        value: _isNew,
-                        onChanged: (v) => setState(() => _isNew = v),
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Música nova'),
-                      ),
-                      SongThemeStrip(
-                        themes: _themes,
-                        onChanged: (themes) => setState(() => _themes = themes),
-                      ),
-                    ],
-                  ),
                 ),
               Expanded(
                 child: _adding
@@ -467,8 +472,11 @@ class _Results extends StatelessWidget {
         if (external.isNotEmpty)
           AppGroup(
             title: 'Spotify',
-            subtitle: 'Buscamos a cifra e o tom ao adicionar. A letra não vem '
-                'do Spotify: dá para colar depois, na edição.',
+            // O que o cadastro faz de verdade: cifra e letra vêm do
+            // CifraClub/Letras, o vídeo do YouTube. O tom **de vocês** nenhum
+            // serviço sabe — o da gravação entra só como referência.
+            subtitle: 'Ao adicionar, buscamos a cifra, a letra e o vídeo. O '
+                'tom de vocês fica para a edição.',
             dividerIndent: AppGroup.iconIndent,
             children: [
               for (final item in external)

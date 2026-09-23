@@ -21,6 +21,7 @@ import '../domain/song_history.dart';
 import '../domain/song_models.dart';
 import 'song_resources.dart';
 import 'song_theme_picker.dart';
+import 'lyrics_reader.dart';
 
 class SongDetailScreen extends ConsumerWidget {
   const SongDetailScreen({
@@ -144,7 +145,7 @@ class SongDetailScreen extends ConsumerWidget {
             isArchived: !restoring,
           );
       ref.invalidate(songProvider((teamId: teamId, songId: songId)));
-      ref.invalidate(songsProvider);
+      ref.invalidate(songCatalogProvider);
       ref.invalidate(learningSongsProvider(teamId));
       if (context.mounted) {
         showAppSnackBar(
@@ -195,7 +196,7 @@ class SongDetailScreen extends ConsumerWidget {
       return;
     }
 
-    ref.invalidate(songsProvider);
+    ref.invalidate(songCatalogProvider);
     ref.invalidate(learningSongsProvider(teamId));
     // A análise conta as ativas e as que nunca entraram em escala — esta era
     // uma delas.
@@ -368,12 +369,18 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Tom, tipo e andamento, numa faixa só ([AppFactsStrip]).
+/// Tom, tipo e andamento, numa faixa só ([AppFactsStrip]) — **só os que
+/// existem**.
 ///
-/// O tom da equipe vem primeiro e na cor da marca quando existe; sem ele, o da
-/// gravação aparece embaixo, como sugestão — são coisas diferentes. Os ícones
-/// são medidos contra o vocabulário inteiro, e não contra os valores desta
-/// música: senão "Calma" teria ícones e "Moderada" não.
+/// O tom da equipe vem na cor da marca quando existe; sem ele, o da gravação
+/// entra com o próprio nome ("Tom da gravação"), em cinza — são coisas
+/// diferentes. A faixa já mostrou "Tom — · Tipo — · Andamento —": três
+/// travessões no lugar mais nobre da tela, dizendo ao integrante o que a
+/// equipe ainda não cadastrou. O que falta preencher é cobrado na Análise do
+/// repertório, e não aqui.
+///
+/// Os ícones são medidos contra o vocabulário inteiro, e não contra os valores
+/// desta música: senão "Calma" teria ícones e "Moderada" não.
 class _Facts extends StatelessWidget {
   const _Facts({required this.song});
 
@@ -382,38 +389,40 @@ class _Facts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasKey = _filled(song.defaultKey);
+    final hasRecording = _filled(song.originalKey);
+    final hasKind = song.kind == 'HYMN' || song.kind == 'SONG';
+    final hasPace = paceLabel(song.pace) != '—';
 
-    return AppFactsStrip(
-      facts: [
+    final facts = [
+      if (hasKey || hasRecording)
         AppFact(
           icon: Icons.piano_rounded,
-          label: 'Tom',
-          value: hasKey ? song.defaultKey!.trim() : '—',
+          label: hasKey ? 'Tom' : 'Tom da gravação',
+          value: hasKey ? song.defaultKey!.trim() : song.originalKey!.trim(),
           // Anotação antiga ("G (capo 2)") quebra em duas linhas em vez de
           // encolher até ninguém ler. Tom da lista sempre cabe.
           wrapValue: true,
-          hint: !hasKey && _filled(song.originalKey)
-              ? 'gravação: ${song.originalKey}'
-              : null,
           highlight: hasKey,
           probeValues: const ['C#m'],
         ),
+      if (hasKind)
         AppFact(
           icon: Icons.library_music_outlined,
           label: 'Tipo',
           value: kindLabel(song.kind),
           probeValues: ['HYMN', 'SONG'].map(kindLabel).toList(),
         ),
+      if (hasPace || song.bpm != null)
         AppFact(
           icon: Icons.speed_rounded,
           label: 'Andamento',
-          value: paceLabel(song.pace),
-          hint:
-              song.pace == null && song.bpm != null ? '${song.bpm} bpm' : null,
+          value: hasPace ? paceLabel(song.pace) : '${song.bpm} bpm',
           probeValues: ['CALM', 'MODERATE', 'UPBEAT'].map(paceLabel).toList(),
         ),
-      ],
-    );
+    ];
+
+    if (facts.isEmpty) return const SizedBox.shrink();
+    return AppFactsStrip(facts: facts);
   }
 }
 
@@ -570,40 +579,41 @@ class SongLyricsScreen extends StatelessWidget {
     final scheme = theme.colorScheme;
     final url = song.lyricsUrl;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Letra'),
-        actions: [
-          if (_filled(url))
-            IconButton(
-              tooltip: 'Abrir no site',
-              icon: const Icon(Icons.open_in_new_rounded),
-              onPressed: () => openResourceLink(context, url!),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: AppContentWidth.reading(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenPadding,
-              AppSpacing.lg,
-              AppSpacing.screenPadding,
-              AppSpacing.xxl,
-            ),
-            children: [
-              Text(_displayTitle(song), style: theme.textTheme.headlineMedium),
-              const SizedBox(height: AppSpacing.xs),
-              SmallCapsLine(song.subtitle),
-              const SizedBox(height: AppSpacing.lg),
-              Divider(height: 1, color: scheme.outlineVariant),
-              const SizedBox(height: AppSpacing.lg),
-              SelectableText(
-                (song.lyrics ?? '').trim(),
-                style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
+    return KeepScreenOn(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Letra'),
+          actions: [
+            // Modo leitura: tamanho da letra e tela sempre ligada.
+            const LyricsFontButtons(),
+            if (_filled(url))
+              IconButton(
+                tooltip: 'Abrir no site',
+                icon: const Icon(Icons.open_in_new_rounded),
+                onPressed: () => openResourceLink(context, url!),
               ),
-            ],
+          ],
+        ),
+        body: SafeArea(
+          top: false,
+          child: AppContentWidth.reading(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenPadding,
+                AppSpacing.lg,
+                AppSpacing.screenPadding,
+                AppSpacing.xxl,
+              ),
+              children: [
+                Text(_displayTitle(song), style: theme.textTheme.headlineMedium),
+                const SizedBox(height: AppSpacing.xs),
+                SmallCapsLine(song.subtitle),
+                const SizedBox(height: AppSpacing.lg),
+                Divider(height: 1, color: scheme.outlineVariant),
+                const SizedBox(height: AppSpacing.lg),
+                LyricsText(lyrics: song.lyrics ?? ''),
+              ],
+            ),
           ),
         ),
       ),

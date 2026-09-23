@@ -329,7 +329,7 @@ void main() {
     expect(find.text('G (capo 2)'), findsOneWidget);
   });
 
-  testWidgets('sem tom da equipe, a gravação aparece como sugestão',
+  testWidgets('sem tom da equipe, a gravação aparece com o próprio nome',
       (tester) async {
     await _abrir(
       tester,
@@ -337,7 +337,9 @@ void main() {
       size: const Size(390, 2000),
     );
 
-    expect(find.text('gravação: G'), findsOneWidget);
+    expect(find.text('Tom da gravação'), findsOneWidget);
+    expect(find.text('G'), findsOneWidget);
+    expect(find.text('—'), findsNothing);
   });
 
   group('sem estouro de layout', () {

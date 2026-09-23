@@ -60,7 +60,15 @@ void showAppSnackBar(
             ),
           ],
         ),
-        action: action,
+        // A ação na cor do texto do aviso: com a cor padrão (a da marca) ela
+        // sumia sobre o verde e o âmbar dos avisos de sucesso e de atenção.
+        action: action == null
+            ? null
+            : SnackBarAction(
+                label: action.label,
+                onPressed: action.onPressed,
+                textColor: palette.onContainer,
+              ),
       ),
     );
 }
@@ -78,7 +86,9 @@ Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
-  String confirmLabel = 'Confirmar',
+  // Obrigatório: o botão diz o que acontece ("Excluir escala", "Sair"). Um
+  // "Confirmar" padrão deixava a regra do app a um parâmetro esquecido.
+  required String confirmLabel,
   String cancelLabel = 'Cancelar',
   bool destructive = false,
 }) async {

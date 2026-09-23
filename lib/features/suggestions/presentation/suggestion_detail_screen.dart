@@ -17,7 +17,11 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/app_options_sheet.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../events/data/event_repository.dart';
+import '../../events/domain/event_datetime.dart';
+import '../../events/domain/event_models.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../../songs/presentation/add_song_screen.dart';
@@ -222,6 +226,99 @@ class _SuggestionDetailScreenState
       (s.spotifyUrl ?? '').trim().isNotEmpty &&
       (s.artist ?? '').trim().length >= 2;
 
+  /// A escala do dia pedido, quando existe e a sugestão já aponta para uma
+  /// música do repertório. É o que torna "Adicionar ao culto" possível.
+  Event? _escalaDaData(SongSuggestion s) {
+    final data = s.targetDate;
+    final songId = s.songId ?? _songIdCriado;
+    if (data == null || songId == null) return null;
+    final escalas =
+        ref.watch(eventsProvider((widget.teamId, 'upcoming'))).valueOrNull?.data;
+    return escalas?.where((e) {
+      final local = eventLocalTime(
+        e.startsAt,
+        e.timezone.isEmpty ? 'America/Sao_Paulo' : e.timezone,
+      );
+      return local.year == data.year &&
+          local.month == data.month &&
+          local.day == data.day;
+    }).firstOrNull;
+  }
+
+  /// **Aceitar e pôr no culto, de uma vez.**
+  ///
+  /// "Aceitar sugestão" só registrava o aceite: a música não entrava em escala
+  /// nenhuma, e quem sugeriu para o domingo 4/10 lia "aceita" como "vai ser
+  /// cantada". Quando o dia pedido já tem escala, a ação principal faz as duas
+  /// coisas que o líder quer — e diz isso no botão. Aceitar sem pôr no culto
+  /// continua ali, como segunda opção.
+  Future<void> _acceptIntoSchedule(SongSuggestion s, Event escala) async {
+    final songId = s.songId ?? _songIdCriado;
+    if (songId == null) return;
+
+    // A escala inteira, com o repertório: a da lista não traz as músicas, e o
+    // PUT substitui a lista — mandar só a nova apagaria as outras.
+    final atual = (await ref.read(eventRepositoryProvider).find(escala.id)).data;
+    if (!mounted) return;
+
+    final fuso = atual.timezone.isEmpty ? 'America/Sao_Paulo' : atual.timezone;
+    final cultos = atual.displayServices;
+    var culto = cultos.first;
+    if (cultos.length > 1) {
+      final escolha = await showAppOptionsSheet<String>(
+        context: context,
+        title: 'Em qual culto?',
+        selected: cultos.first.id,
+        options: [
+          for (final c in cultos)
+            AppOption(
+              value: c.id,
+              label: '${c.label} ${formatEventTime(c.startsAt, fuso)}',
+            ),
+        ],
+      );
+      if (escolha == null || !mounted) return;
+      culto = cultos.firstWhere((c) => c.id == escolha.value);
+    }
+
+    final jaEsta =
+        atual.songs.any((m) => m.songId == songId && m.serviceId == culto.id);
+
+    await _run(
+      () async {
+        await ref
+            .read(suggestionRepositoryProvider)
+            .accept(widget.teamId, s.id, songId: songId);
+        if (jaEsta) return;
+        final musica = await ref
+            .read(songRepositoryProvider)
+            .find(widget.teamId, songId);
+        await ref.read(eventRepositoryProvider).replaceSongs(atual.id, [
+          ...atual.songs,
+          EventSong(
+            songId: musica.id,
+            serviceId: culto.id,
+            title: musica.title,
+            artist: musica.artist,
+            key: musica.defaultKey,
+            defaultKey: musica.defaultKey,
+            hymnals: musica.hymnals,
+            chordsUrl: musica.chordsUrl,
+            lyricsUrl: musica.lyricsUrl,
+            youtubeUrl: musica.youtubeUrl,
+            spotifyUrl: musica.spotifyUrl,
+          ),
+        ]);
+        ref.invalidate(eventProvider(atual.id));
+        ref.invalidate(eventsProvider((widget.teamId, 'upcoming')));
+      },
+      jaEsta
+          ? 'Sugestão aceita. A música já estava no culto.'
+          : 'Sugestão aceita e a música entrou no culto de '
+              '${formatEventShortDate(atual.startsAt, fuso)}.',
+    );
+  }
+
   /// A música criada por um aceite que falhou no meio.
   ///
   /// Cadastrar e aceitar são duas chamadas. Se a segunda falha, a música já
@@ -260,7 +357,7 @@ class _SuggestionDetailScreenState
             youtubeUrl: s.youtubeUrl,
           );
           _songIdCriado = song.id;
-          ref.invalidate(songsProvider);
+          ref.invalidate(songCatalogProvider);
           ref.invalidate(learningSongsProvider(widget.teamId));
         }
         await sugestoes.accept(widget.teamId, s.id, songId: _songIdCriado!);
@@ -306,7 +403,7 @@ class _SuggestionDetailScreenState
       ),
     );
     if (criada == null || !mounted) return;
-    ref.invalidate(songsProvider);
+    ref.invalidate(songCatalogProvider);
 
     await _run(
       () => ref
@@ -431,6 +528,8 @@ class _SuggestionDetailScreenState
             busy: _busy,
             busyMessage: _busyMessage,
             onAccept: () => _accept(s),
+            scheduleForDate: canManage ? _escalaDaData(s) : null,
+            onAcceptIntoSchedule: (escala) => _acceptIntoSchedule(s, escala),
             onDecline: () => _decline(s),
             onReopen: () => _reopen(s),
             onOpenSong: s.songId == null
@@ -458,7 +557,13 @@ class _Body extends StatelessWidget {
     required this.onDecline,
     required this.onReopen,
     this.onOpenSong,
+    this.scheduleForDate,
+    this.onAcceptIntoSchedule,
   });
+
+  /// A escala do dia pedido, quando dá para pôr a música nela.
+  final Event? scheduleForDate;
+  final ValueChanged<Event>? onAcceptIntoSchedule;
 
   final SongSuggestion suggestion;
   final bool isMine;
@@ -661,6 +766,42 @@ class _Body extends StatelessWidget {
       ];
     }
 
+    final theme = Theme.of(context);
+    final escala = scheduleForDate;
+    final ajuda = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    // O que cada botão faz vai escrito embaixo dele: "Aceitar" era lido como
+    // "já entrou no culto", e não entrava.
+    if (escala != null && onAcceptIntoSchedule != null) {
+      final dia = formatEventShortDate(
+        escala.startsAt,
+        escala.timezone.isEmpty ? 'America/Sao_Paulo' : escala.timezone,
+      );
+      return [
+        FilledButton.icon(
+          onPressed: () => onAcceptIntoSchedule!(escala),
+          icon: const Icon(Icons.playlist_add_check_rounded),
+          label: Text('Adicionar ao culto de $dia'),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'A música entra no repertório desta escala, e quem sugeriu fica '
+          'sabendo que foi aceita.',
+          textAlign: TextAlign.center,
+          style: ajuda,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        OutlinedButton(
+          onPressed: onAccept,
+          child: const Text('Aceitar sem pôr no culto'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextButton(onPressed: onDecline, child: const Text('Recusar')),
+      ];
+    }
+
     return [
       // Empilhados, e não lado a lado: "Aceitar sugestão" não cabe ao lado de
       // "Recusar" num celular estreito, e meio botão cortado num par de
@@ -669,6 +810,16 @@ class _Body extends StatelessWidget {
         onPressed: onAccept,
         icon: const Icon(Icons.check_rounded),
         label: const Text('Aceitar sugestão'),
+      ),
+      const SizedBox(height: AppSpacing.xs),
+      Text(
+        suggestion.songId == null
+            ? 'Aceitar começa pelo cadastro da música no repertório. Ela não '
+                'entra em nenhuma escala sozinha.'
+            : 'Quem sugeriu fica sabendo. A música não entra em nenhuma '
+                'escala sozinha.',
+        textAlign: TextAlign.center,
+        style: ajuda,
       ),
       const SizedBox(height: AppSpacing.sm),
       TextButton(onPressed: onDecline, child: const Text('Recusar')),
@@ -751,7 +902,7 @@ class _AddFromSpotifySheetState extends State<_AddFromSpotifySheet> {
             Text('Adicionar ao repertório', style: theme.textTheme.titleLarge),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Buscamos a cifra e o tom ao adicionar.',
+              'Ao adicionar, buscamos a cifra, a letra e o vídeo.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),

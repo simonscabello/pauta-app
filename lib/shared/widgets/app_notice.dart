@@ -56,6 +56,9 @@ class AppNotice extends StatelessWidget {
           Icons.info_outline_rounded,
       };
 
+  /// Abaixo desta largura a ação vai para baixo do texto.
+  static const double _stackBelow = 480;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -77,51 +80,86 @@ class AppNotice extends StatelessWidget {
           color: palette.container,
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),
-        child: Row(
-          crossAxisAlignment: action == null
-              ? CrossAxisAlignment.start
-              : CrossAxisAlignment.center,
-          children: [
-            Icon(icon ?? _iconFor(tone), size: 20, color: palette.onContainer),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
+        // Estreito, a ação desce para baixo do texto: ao lado dele, um botão
+        // comprido ("Ver em Ministério de Louvor", "Tirar de todas as
+        // funções") espremia a frase numa coluna de uma palavra por linha.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final icone =
+                Icon(icon ?? _iconFor(tone), size: 20, color: palette.onContainer);
+            final textos = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (title != null) ...[
+                  Text(
+                    title!,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: palette.onContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
+                Text(
+                  message,
+                  style: (title == null
+                          ? theme.textTheme.bodyMedium
+                          : theme.textTheme.bodySmall)
+                      ?.copyWith(color: palette.onContainer),
+                ),
+              ],
+            );
+            final acao = action == null
+                ? null
+                : TextButtonTheme(
+                    data: TextButtonThemeData(
+                      style: TextButton.styleFrom(
+                        foregroundColor: palette.onContainer,
+                        minimumSize:
+                            const Size(0, AppSpacing.compactButtonHeight),
+                      ),
+                    ),
+                    child: action!,
+                  );
+
+            if (acao != null && constraints.maxWidth < _stackBelow) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (title != null) ...[
-                    Text(
-                      title!,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: palette.onContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                  ],
-                  Text(
-                    message,
-                    style: (title == null
-                            ? theme.textTheme.bodyMedium
-                            : theme.textTheme.bodySmall)
-                        ?.copyWith(color: palette.onContainer),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      icone,
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(child: textos),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 20 + AppSpacing.md),
+                    child: acao,
                   ),
                 ],
-              ),
-            ),
-            if (action != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              TextButtonTheme(
-                data: TextButtonThemeData(
-                  style: TextButton.styleFrom(
-                    foregroundColor: palette.onContainer,
-                    minimumSize: const Size(0, AppSpacing.compactButtonHeight),
-                  ),
-                ),
-                child: action!,
-              ),
-            ],
-          ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: action == null
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+                icone,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: textos),
+                if (acao != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  acao,
+                ],
+              ],
+            );
+          },
         ),
       ),
     );

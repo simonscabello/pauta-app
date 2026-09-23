@@ -6,6 +6,7 @@ import '../../core/theme/app_status_colors.dart';
 import 'app_bottom_action_bar.dart';
 import 'app_brand_mark.dart';
 import 'app_notice.dart';
+import 'unsaved_changes_guard.dart';
 
 export 'app_notice.dart' show AppNotice;
 
@@ -30,6 +31,7 @@ class FormScaffold extends StatelessWidget {
     this.appBar,
     this.showBrand = false,
     this.bottomAction,
+    this.isDirty,
   });
 
   final String? title;
@@ -39,6 +41,11 @@ class FormScaffold extends StatelessWidget {
   final bool showBrand;
   final Widget? bottomAction;
 
+  /// Com alteração por salvar, sair pergunta antes (ver
+  /// [UnsavedChangesGuard]). Nulo nos formulários que não guardam trabalho —
+  /// login, cadastro —, onde voltar não perde nada.
+  final bool Function()? isDirty;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -46,11 +53,17 @@ class FormScaffold extends StatelessWidget {
     final hasBar = appBar != null;
     final hasHeading = title != null || subtitle != null;
 
-    return Scaffold(
+    // Mesma coluna do formulário: o botão preso embaixo tem a largura dos
+    // campos, e não a da tela de leitura.
+    final formWidth = AppBreakpoints.of(context).isDesktop
+        ? AppBreakpoints.formMaxWidthDesktop
+        : AppSpacing.formMaxWidth;
+
+    final scaffold = Scaffold(
       appBar: appBar,
       bottomNavigationBar: bottomAction == null
           ? null
-          : AppBottomActionBar(action: bottomAction!),
+          : AppBottomActionBar(action: bottomAction!, maxWidth: formWidth),
       body: SafeArea(
         // Alinhado ao topo quando há AppBar: centralizar deixava um vazio
         // grande entre a barra e o título do formulário.
@@ -69,9 +82,7 @@ class FormScaffold extends StatelessWidget {
               constraints: BoxConstraints(
                 // Mesma coluna de sempre no celular e no tablet; um pouco mais
                 // larga no monitor (ver `formMaxWidthDesktop`).
-                maxWidth: AppBreakpoints.of(context).isDesktop
-                    ? AppBreakpoints.formMaxWidthDesktop
-                    : AppSpacing.formMaxWidth,
+                maxWidth: formWidth,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -107,6 +118,8 @@ class FormScaffold extends StatelessWidget {
         ),
       ),
     );
+    if (isDirty == null) return scaffold;
+    return UnsavedChangesGuard(isDirty: isDirty!, child: scaffold);
   }
 }
 

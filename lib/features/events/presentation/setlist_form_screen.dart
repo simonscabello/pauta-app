@@ -9,6 +9,7 @@ import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_bottom_action_bar.dart';
+import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
@@ -16,6 +17,7 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/moment_suggestion.dart';
 import '../../songs/domain/song_history.dart';
@@ -75,13 +77,36 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
   bool _saving = false;
   String? _error;
 
+  /// Ver [kArrivalTapShield]: a tela chega pelo botão da escalação, que fica
+  /// exatamente onde está o "Salvar" daqui.
+  final DateTime _abertaEm = DateTime.now();
+
+  /// Já salvou e está saindo: o botão fica travado durante a transição, em vez
+  /// de voltar a aceitar toque por alguns quadros.
+  bool _saindo = false;
+
+  /// O repertório como foi aberto (ou salvo por último). É contra ele que a
+  /// guarda de "Sair sem salvar?" compara.
+  String _salvo = '';
+
   void _populate(Event event) {
     _populated = true;
     _cultos = event.displayServices;
     for (final grupo in event.songsByService) {
       _porCulto[grupo.service.id] = [...grupo.songs];
     }
+    _salvo = _assinatura();
   }
+
+  /// Tudo o que salvar mandaria: a ordem, a música e os ajustes de cada linha.
+  String _assinatura() => [
+        for (final culto in _cultos)
+          for (final s in _lista(culto.id))
+            '${culto.id}|${s.songId}|${s.keyOverride}|${s.note}|'
+                '${s.moment}|${s.momentLabel}',
+      ].join('\n');
+
+  bool _alterado() => _populated && _assinatura() != _salvo;
 
   List<EventSong> _lista(String serviceId) =>
       _porCulto.putIfAbsent(serviceId, () => []);
@@ -90,6 +115,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
       _porCulto.values.fold(0, (soma, musicas) => soma + musicas.length);
 
   Future<void> _save() async {
+    if (DateTime.now().difference(_abertaEm) < kArrivalTapShield) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -108,12 +134,19 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
       ref.invalidate(eventProvider(widget.eventId));
       if (!mounted) return;
+      _salvo = _assinatura();
+      _saindo = true;
 
       if (widget.isNewSchedule) {
         context.pushReplacement('/agenda/${widget.eventId}');
+        // A escala nova é rascunho: "pronta" e "compartilhe" faziam o líder
+        // procurar um ícone que só existe depois de publicar — ou mandar ao
+        // grupo algo que a equipe ainda não enxerga. O botão "Publicar" fica
+        // logo acima deste aviso, na barra de baixo do detalhe.
         showAppSnackBar(
           context,
-          'Escala pronta. Compartilhe com a equipe pelo ícone no topo.',
+          'Rascunho salvo. A equipe só vê a escala depois que você '
+              'tocar em "Publicar".',
           tone: AppTone.success,
         );
         return;
@@ -123,7 +156,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && !_saindo) setState(() => _saving = false);
     }
   }
 
@@ -204,6 +237,55 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     }
   }
 
+  /// De onde o culto vazio pode copiar: o primeiro outro culto que já tem
+  /// música. Nulo quando não há nada a copiar.
+  EventService? _fonteDeCopia(EventService culto) {
+    if (_lista(culto.id).isNotEmpty) return null;
+    for (final outro in _cultos) {
+      if (outro.id != culto.id && _lista(outro.id).isNotEmpty) return outro;
+    }
+    return null;
+  }
+
+  /// Manhã e noite costumam ter o mesmo repertório, e o culto vazio só
+  /// oferecia "Escolher músicas" — tudo escolhido de novo, e tom e momento
+  /// acertados de novo, música por música. A cópia leva a ordem, o momento e
+  /// o tom desta escala; o recado fica, porque costuma ser do culto
+  /// ("intro só no violão" de manhã não vale para a banda da noite).
+  void _copiar({required EventService de, required EventService para}) {
+    final origem = _lista(de.id);
+    setState(() {
+      _lista(para.id).addAll([
+        for (final s in origem)
+          EventSong(
+            songId: s.songId,
+            serviceId: para.id,
+            title: s.title,
+            artist: s.artist,
+            key: s.key,
+            keyOverride: s.keyOverride,
+            defaultKey: s.defaultKey,
+            isNew: s.isNew,
+            moment: s.moment,
+            momentLabel: s.momentLabel,
+            hymnals: s.hymnals,
+            chordsUrl: s.chordsUrl,
+            lyricsUrl: s.lyricsUrl,
+            youtubeUrl: s.youtubeUrl,
+            spotifyUrl: s.spotifyUrl,
+          ),
+      ]);
+    });
+    showAppSnackBar(
+      context,
+      origem.length == 1
+          ? '1 música copiada de ${de.label}, com momento e tom.'
+          : '${origem.length} músicas copiadas de ${de.label}, com momento e '
+              'tom.',
+      tone: AppTone.success,
+    );
+  }
+
   EventSong _novoItem(EventService culto, Song song, {String? moment}) =>
       EventSong(
         songId: song.id,
@@ -272,6 +354,13 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return UnsavedChangesGuard(
+      isDirty: _alterado,
+      child: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     // O histórico das músicas começa a carregar ao abrir a montagem, e não ao
     // abrir o seletor: quando o líder toca em "Escolher músicas", as linhas já
     // nascem dizendo "Cantada há 12 dias". Observá-lo aqui também o mantém
@@ -284,7 +373,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
     if (event == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Repertório')),
+        appBar: AppBar(title: const Text('Músicas da escala')),
         body: const AppLoading(),
       );
     }
@@ -300,12 +389,15 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
       // mesmo fluxo. Como link de texto no canto superior ele tinha o peso de
       // uma ação secundária, ficava longe do polegar e desaparecia atrás do
       // teclado ao editar o tom de uma música.
-      appBar: AppBar(title: const Text('Repertório da escala')),
+      // "Músicas da escala", e não "Repertório da escala": no app, Repertório
+      // é o acervo da equipe (a barra lateral, a aba), e "montar o
+      // repertório" soava, para quem é novo, como cadastrar músicas.
+      appBar: AppBar(title: const Text('Músicas da escala')),
       bottomNavigationBar: AppBottomActionBar(
         action: AppSubmitButton(
           label: widget.isNewSchedule
               ? 'Salvar e ver a escala'
-              : 'Salvar repertório',
+              : 'Salvar músicas',
           loading: _saving,
           onPressed: _save,
         ),
@@ -334,6 +426,15 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
                     AppSpacing.xxl,
                   ),
                   children: [
+                    // A data no topo, como na escalação: a montagem é de um
+                    // domingo, e sem ela nada na tela dizia qual.
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                      child: Text(
+                        event.dateAndTitle,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
                     // As sugestões da equipe para ESTE domingo, antes de tudo.
                     // É a razão de a funcionalidade existir: o líder monta o
                     // repertório vendo o que a equipe pediu, em vez de
@@ -355,7 +456,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
                         padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                         child: Text(
                           _cultos.length > 1
-                              ? 'Cada culto tem o próprio repertório. A ordem '
+                              ? 'Cada culto tem as próprias músicas. A ordem '
                                   'aqui é a ordem que vocês vão tocar.'
                               : 'Escolha do repertório da equipe. A ordem aqui '
                                   'é a ordem que vocês vão tocar.',
@@ -375,6 +476,8 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
                         timezone: timezone,
                         songs: _lista(culto.id),
                         saving: _saving,
+                        copyFrom: _fonteDeCopia(culto),
+                        onCopy: (fonte) => _copiar(de: fonte, para: culto),
                         onAdd: () => _addSongs(culto),
                         onEdit: (index) => _editItem(culto.id, index),
                         onRemove: (index) =>
@@ -411,12 +514,18 @@ class _ServiceSetlist extends StatelessWidget {
     required this.onEdit,
     required this.onRemove,
     required this.onReorder,
+    this.copyFrom,
+    this.onCopy,
   });
 
   final EventService culto;
   final String timezone;
   final List<EventSong> songs;
   final bool saving;
+
+  /// O outro culto de onde dá para copiar, quando este está vazio.
+  final EventService? copyFrom;
+  final ValueChanged<EventService>? onCopy;
   final VoidCallback onAdd;
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onRemove;
@@ -462,11 +571,25 @@ class _ServiceSetlist extends StatelessWidget {
             AppCard(
               surface: CardSurface.sunken,
               padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Text(
-                'Nenhuma música neste culto ainda.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nenhuma música neste culto ainda.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (copyFrom case final fonte? when onCopy != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    FilledButton.tonalIcon(
+                      style: AppButtonStyles.compact,
+                      onPressed: saving ? null : () => onCopy!(fonte),
+                      icon: const Icon(Icons.copy_all_rounded, size: 18),
+                      label: Text('Copiar de ${fonte.label}'),
+                    ),
+                  ],
+                ],
               ),
             )
           else
@@ -534,6 +657,13 @@ class _ServiceSetlist extends StatelessWidget {
     );
   }
 }
+
+/// Os ajustes ainda vazios de uma música da escala, na ordem da folha.
+List<String> _faltando(EventSong song, bool hasKey) => [
+      if (!hasKey) 'tom',
+      if (song.moment == null) 'momento',
+      if (song.note == null || song.note!.isEmpty) 'recado',
+    ];
 
 class _SetlistTile extends StatelessWidget {
   const _SetlistTile({
@@ -627,8 +757,25 @@ class _SetlistTile extends StatelessWidget {
                       song.note!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
+                      style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  // **O que falta ajustar, escrito na linha.** A linha abria
+                  // tom, momento e recado ao toque, sem nenhum sinal disso: quem
+                  // não descobria deixava o tom vazio, e o músico lia "Tom —".
+                  // Cada marcador some quando o valor existe — aí é o próprio
+                  // valor que aparece.
+                  if (_faltando(song, hasKey) case final faltam
+                      when faltam.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        faltam.map((f) => '+ $f').join('  ·  '),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                 ],
@@ -955,10 +1102,16 @@ class _PickerEmpty extends StatelessWidget {
     required this.themes,
     required this.onCadastrar,
     required this.onClearThemes,
+    this.otherTabs = const {},
+    this.onOpenTab,
   });
 
   final SongFilter filter;
   final bool searching;
+
+  /// Com busca: as outras abas que têm resultado, e quantos.
+  final Map<SongFilter, int> otherTabs;
+  final ValueChanged<SongFilter>? onOpenTab;
   final Set<String> themes;
   final VoidCallback onCadastrar;
   final VoidCallback onClearThemes;
@@ -966,10 +1119,30 @@ class _PickerEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (searching) {
+      // A música pode estar na aba ao lado: o hino procurado em Cânticos
+      // "não existia", e a saída oferecida era cadastrá-lo de novo.
+      if (otherTabs.isNotEmpty && onOpenTab != null) {
+        final (aba, quantas) = (otherTabs.keys.first, otherTabs.values.first);
+        final nome = switch (aba) {
+          SongFilter.hinos => 'Hinos',
+          SongFilter.novas => 'Novas',
+          SongFilter.canticos => 'Cânticos',
+          SongFilter.arquivadas => 'Arquivadas',
+        };
+        return AppEmptyState(
+          icon: Icons.search_rounded,
+          title: 'Nada nesta aba',
+          message: quantas == 1
+              ? 'Há 1 música com esse nome em $nome.'
+              : 'Há $quantas músicas com esse nome em $nome.',
+          actionLabel: 'Ver em $nome',
+          onAction: () => onOpenTab!(aba),
+        );
+      }
       return AppEmptyState(
         icon: Icons.search_off_rounded,
         title: 'Nenhuma música com esse nome',
-        message: 'Procure nas outras abas ou cadastre a música agora.',
+        message: 'Não está em nenhuma aba. Dá para cadastrar agora.',
         actionLabel: 'Cadastrar música',
         onAction: onCadastrar,
       );
@@ -1169,93 +1342,6 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
     );
   }
 
-  /// Momento e temas numa folha: os dois filtros que não cabiam na linha das
-  /// abas. O momento continua sendo escolha do líder — nenhum vem marcado.
-  Future<void> _openFilters() async {
-    await showAdaptiveSheet<void>(
-      context: context,
-      maxWidth: 480,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheet) {
-          final theme = Theme.of(sheetContext);
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                0,
-                AppSpacing.xl,
-                AppSpacing.lg,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Filtrar músicas', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text('Momento do culto', style: theme.textTheme.titleSmall),
-                  Text(
-                    'Com um momento, as "Sugestões do Pauta" aparecem no topo, '
-                    'e as músicas marcadas entram nele.',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      for (final entry in _pickerMoments)
-                        ChoiceChip(
-                          label: Text(entry.value),
-                          selected: _moment == entry.key,
-                          // Tocar no marcado desmarca, como na folha de
-                          // ajustes.
-                          onSelected: (marcado) {
-                            setState(
-                              () => _moment = marcado ? entry.key : null,
-                            );
-                            setSheet(() {});
-                          },
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  Text('Temas', style: theme.textTheme.titleSmall),
-                  const SizedBox(height: AppSpacing.sm),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: ActionChip(
-                      avatar: const Icon(Icons.sell_outlined, size: 18),
-                      label: Text(
-                        _themes.isEmpty
-                            ? 'Escolher temas'
-                            : 'Temas (${_themes.length})',
-                      ),
-                      onPressed: () async {
-                        final escolha = await showSongThemePicker(
-                          sheetContext,
-                          selected: _themes,
-                        );
-                        if (escolha != null) {
-                          setState(() => _themes = escolha);
-                          setSheet(() {});
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  FilledButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('Ver músicas'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   Widget? _historyLine(Song song, SongHistory? history, DateTime now) {
     final linha = songPickerHistory(song, history, now);
     if (linha.lastPlayed == null && linha.rest == null) return null;
@@ -1312,16 +1398,14 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
     final now = DateTime.now();
     final searching = _search.trim().isNotEmpty;
 
-    final songs = ref.watch(
-      songsProvider(
-        SongQuery(
-          teamId: widget.teamId,
-          search: _search,
-          filter: _filter,
-          themes: _themes,
-        ),
-      ),
+    final query = SongQuery(
+      teamId: widget.teamId,
+      search: _search,
+      filter: _filter,
+      themes: _themes,
     );
+    final songs = ref.watch(songsProvider(query));
+    final contagens = searching ? ref.watch(songTabCountsProvider(query)) : null;
 
     // Uma chamada para a lista inteira (ver `songHistoryProvider`). Sem ela, as
     // linhas só não ganham a segunda frase: a escolha continua possível.
@@ -1380,11 +1464,49 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          // **Abas e filtros numa linha só.** Eram quatro faixas de controle —
-          // busca, abas, momento e temas — antes da primeira música: num
-          // celular de 640px sobravam três ou quatro músicas à vista. Momento
-          // e temas foram para uma folha atrás de um botão com a contagem, e
-          // o que está escolhido aparece numa faixa só quando existe.
+          // **O momento à vista, e não atrás de um ícone de filtro.** Ele não
+          // é filtro: escolher "Momento de Louvor" traz as Sugestões do Pauta
+          // para o topo e faz as músicas marcadas entrarem já com o momento —
+          // a ferramenta mais útil da montagem, que quase ninguém achava num
+          // diálogo empilhado sobre a folha. Opcional, e nenhum vem marcado.
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
+              ),
+              children: [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: Text(
+                      'Para qual momento?',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+                for (final entry in _pickerMoments)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: ChoiceChip(
+                      label: Text(entry.value),
+                      selected: _moment == entry.key,
+                      // Tocar no marcado desmarca, como na folha de ajustes.
+                      onSelected: (marcado) => setState(
+                        () => _moment = marcado ? entry.key : null,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Abas e temas numa linha só. Com busca, cada aba diz quantas
+          // músicas tem — "Hinos (3)" — para ninguém concluir que o hino não
+          // existe por estar olhando Cânticos.
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.screenPadding,
@@ -1400,71 +1522,45 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                   child: AppChoiceBar<SongFilter>(
                     value: _filter,
                     onChanged: (value) => setState(() => _filter = value),
-                    options: const [
-                      AppChoice(value: SongFilter.canticos, label: 'Cânticos'),
-                      AppChoice(value: SongFilter.hinos, label: 'Hinos'),
-                      AppChoice(value: SongFilter.novas, label: 'Novas'),
+                    options: [
+                      AppChoice(
+                        value: SongFilter.canticos,
+                        label: songTabLabel(
+                          'Cânticos',
+                          contagens?[SongFilter.canticos],
+                        ),
+                      ),
+                      AppChoice(
+                        value: SongFilter.hinos,
+                        label: songTabLabel(
+                          'Hinos',
+                          contagens?[SongFilter.hinos],
+                        ),
+                      ),
+                      AppChoice(
+                        value: SongFilter.novas,
+                        label: songTabLabel(
+                          'Novas',
+                          contagens?[SongFilter.novas],
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                IconButton(
-                  tooltip: 'Filtrar por momento e tema',
-                  isSelected: _moment != null || _themes.isNotEmpty,
-                  onPressed: _openFilters,
-                  icon: Badge(
-                    isLabelVisible: _moment != null || _themes.isNotEmpty,
-                    label: Text(
-                      '${(_moment == null ? 0 : 1) + _themes.length}',
-                    ),
-                    child: const Icon(Icons.tune_rounded),
-                  ),
+                SongThemeFilterButton(
+                  selected: _themes,
+                  onChanged: (themes) => setState(() => _themes = themes),
                 ),
               ],
             ),
           ),
-          if (_moment != null || _themes.isNotEmpty) ...[
+          if (_themes.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding,
-              ),
-              child: Row(
-                children: [
-                  if (_moment case final moment?)
-                    Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.sm),
-                      child: InputChip(
-                        label: Text(serviceMoments[moment] ?? moment),
-                        avatar: const Icon(Icons.flag_outlined, size: 16),
-                        selected: true,
-                        showCheckmark: false,
-                        onPressed: _openFilters,
-                        onDeleted: () => setState(() => _moment = null),
-                        deleteIcon: const Icon(Icons.close_rounded, size: 16),
-                        deleteButtonTooltipMessage: 'Tirar o momento',
-                      ),
-                    ),
-                  for (final tema in songThemeValues)
-                    if (_themes.contains(tema))
-                      Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.sm),
-                        child: InputChip(
-                          label: Text(songThemeLabel(tema)),
-                          selected: true,
-                          showCheckmark: false,
-                          onPressed: _openFilters,
-                          onDeleted: () => setState(
-                            () => _themes = {..._themes}..remove(tema),
-                          ),
-                          deleteIcon: const Icon(Icons.close_rounded, size: 16),
-                          deleteButtonTooltipMessage:
-                              'Tirar ${songThemeLabel(tema)}',
-                        ),
-                      ),
-                ],
-              ),
+            SongThemeFilterBar(
+              selected: _themes,
+              showTrigger: false,
+              onChanged: (themes) => setState(() => _themes = themes),
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
@@ -1485,6 +1581,13 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                   return _PickerEmpty(
                     filter: _filter,
                     searching: searching,
+                    otherTabs: {
+                      for (final entry
+                          in (contagens ?? const <SongFilter, int>{}).entries)
+                        if (entry.key != _filter && entry.value > 0)
+                          entry.key: entry.value,
+                    },
+                    onOpenTab: (tab) => setState(() => _filter = tab),
                     themes: _themes,
                     onCadastrar: () => Navigator.pop(
                       context,
@@ -1549,6 +1652,35 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
           // ao meio. `SafeArea` usa `padding`, que já desconta o teclado: com
           // ele aberto o recuo vai a zero, porque aí é o teclado que cobre a
           // barra e somar os dois empurraria os botões para o meio da tela.
+          // **As escolhidas pelo nome**, e não só "Adicionar 3": marcar em
+          // Cânticos, trocar para Hinos e marcar mais deixava as primeiras
+          // fora de vista, sem jeito de conferir nem de desmarcar.
+          if (_selecionadas.isNotEmpty) ...[
+            const Divider(height: 1),
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.screenPadding,
+                  vertical: AppSpacing.xs,
+                ),
+                children: [
+                  for (final song in _selecionadas.values)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                      child: InputChip(
+                        label: Text(song.title),
+                        onDeleted: () =>
+                            setState(() => _selecionadas.remove(song.id)),
+                        deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                        deleteButtonTooltipMessage: 'Desmarcar ${song.title}',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
           SafeArea(
             top: false,
             child: Padding(

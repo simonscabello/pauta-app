@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 import '../domain/auth_models.dart';
+import 'forgot_password_sheet.dart';
 
 /// Um aviso para a próxima abertura do login — hoje, só "sua sessão expirou",
 /// vindo da `UnlockScreen`. Quem o põe já foi desmontado quando o login abre,
@@ -193,6 +194,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           loading: _loading,
           loadingLabel: 'Entrando',
           onPressed: _submit,
+        ),
+        // Logo abaixo do "Entrar", que é onde se percebe o esquecimento.
+        TextButton(
+          onPressed: _loading
+              ? null
+              : () => showForgotPasswordSheet(context, email: _email.text),
+          child: const Text('Esqueci minha senha'),
         ),
         if (_biometricAvailable &&
             ref.watch(authControllerProvider).status == AuthStatus.locked)

@@ -36,33 +36,34 @@ void main() {
 
     await tester.tap(find.text('Conhecer o Pauta'));
     await _settle(tester);
-    expect(find.text('1 DE 8'), findsOneWidget);
+    expect(find.text('1 DE 6'), findsOneWidget);
     expect(find.text('Sua próxima escala'), findsOneWidget);
     // A primeira parada não tem para onde voltar.
     expect(find.text('Voltar'), findsNothing);
 
     await tester.tap(find.text('Próximo'));
     await _settle(tester);
-    expect(find.text('2 DE 8'), findsOneWidget);
+    expect(find.text('2 DE 6'), findsOneWidget);
     expect(find.text('Músicas da escala'), findsOneWidget);
 
     await tester.tap(find.text('Voltar'));
     await _settle(tester);
-    expect(find.text('1 DE 8'), findsOneWidget);
+    expect(find.text('1 DE 6'), findsOneWidget);
 
-    // Disponibilidade: a porta na Home, depois o botão dentro da tela.
+    // A agenda é a quarta parada: a disponibilidade virou uma parada só, na
+    // porta da Home.
     for (var i = 0; i < 3; i++) {
       await tester.tap(find.text('Próximo'));
       await _settle(tester);
     }
-    expect(find.text('4 DE 8'), findsOneWidget);
-    expect(find.text('Marque os dias em que não pode'), findsOneWidget);
-    expect(app.location(), '/disponibilidade');
+    expect(find.text('4 DE 6'), findsOneWidget);
+    expect(find.text('Agenda da equipe'), findsOneWidget);
+    expect(app.location(), '/agenda');
 
     await tester.tap(find.text('Pular'));
     await _settle(tester);
 
-    expect(find.text('4 DE 8'), findsNothing);
+    expect(find.text('4 DE 6'), findsNothing);
     expect(app.repository.recorded, [
       (OnboardingFlows.member, OnboardingOutcome.skipped),
     ]);
@@ -80,18 +81,16 @@ void main() {
     await _settle(tester);
 
     final visited = <String>[];
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < 6; i++) {
       visited.add(app.location());
-      await tester.tap(find.text(i == 7 ? 'Concluir' : 'Próximo'));
+      await tester.tap(find.text(i == 5 ? 'Concluir' : 'Próximo'));
       await _settle(tester);
     }
     expect(visited, [
       '/inicio',
       '/inicio',
       '/inicio',
-      '/disponibilidade',
       '/agenda',
-      '/equipe',
       '/equipe',
       // O `flutter_test` finge ser Android: a parada dos avisos aponta para o
       // interruptor do Perfil. Na Web ela é um cartão sem destaque.
@@ -102,7 +101,7 @@ void main() {
     // Da última tela ainda se volta.
     await tester.tap(find.text('Voltar'));
     await _settle(tester);
-    expect(find.text('8 DE 8'), findsOneWidget);
+    expect(find.text('6 DE 6'), findsOneWidget);
     await tester.tap(find.text('Concluir'));
     await _settle(tester);
 
@@ -141,7 +140,7 @@ void main() {
 
     await tester.tap(find.text('Rever o tour'));
     await _settle(tester);
-    expect(find.text('1 DE 8'), findsOneWidget);
+    expect(find.text('1 DE 6'), findsOneWidget);
     // Sem boas-vindas: quem pediu já disse que quer.
     expect(find.text('Agora não'), findsNothing);
 
@@ -152,8 +151,8 @@ void main() {
 
     await tester.tap(find.text('Rever o tour'));
     await _settle(tester);
-    for (var i = 0; i < 8; i++) {
-      await tester.tap(find.text(i == 7 ? 'Concluir' : 'Próximo'));
+    for (var i = 0; i < 6; i++) {
+      await tester.tap(find.text(i == 5 ? 'Concluir' : 'Próximo'));
       await _settle(tester);
     }
     await tester.tap(find.text('Começar'));
@@ -173,15 +172,15 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await _settle(tester);
-    expect(find.text('2 DE 8'), findsOneWidget);
+    expect(find.text('2 DE 6'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await _settle(tester);
-    expect(find.text('1 DE 8'), findsOneWidget);
+    expect(find.text('1 DE 6'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await _settle(tester);
-    expect(find.text('1 DE 8'), findsNothing);
+    expect(find.text('1 DE 6'), findsNothing);
     expect(app.repository.recorded, [
       (OnboardingFlows.member, OnboardingOutcome.skipped),
     ]);
@@ -304,7 +303,7 @@ Future<_App> _pumpApp(WidgetTester tester, {String initial = '/inicio'}) async {
       GoRoute(
         path: '/disponibilidade',
         builder: (_, __) => _page('Minha disponibilidade', [
-          _block(TourTargetIds.availabilityChoose, 'Escolher dias'),
+          const Text('Escolher dias'),
         ]),
       ),
       GoRoute(
@@ -317,7 +316,7 @@ Future<_App> _pumpApp(WidgetTester tester, {String initial = '/inicio'}) async {
         path: '/equipe',
         builder: (_, __) => _page('Equipe', [
           _block(TourTargetIds.teamRepertoire, 'Repertório'),
-          _block(TourTargetIds.teamSuggestions, 'Sugestões'),
+          const Text('Sugestões'),
         ]),
       ),
       GoRoute(

@@ -12,6 +12,7 @@ import '../../../shared/widgets/app_options_sheet.dart';
 import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/data/auth_repository.dart';
 
@@ -30,7 +31,8 @@ class EditProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
+class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
+    with UnsavedChangesTracker {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _email = TextEditingController();
@@ -70,6 +72,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     });
   }
 
+  @override
+  String unsavedSignature() => [
+        _name.text.trim(),
+        _email.text.trim().toLowerCase(),
+        _dateOrNull(_birthDate),
+        _gender?.name,
+      ].join('\n');
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -106,6 +116,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           );
 
       if (!mounted) return;
+      markSaved();
       context.pop();
       showAppSnackBar(context, 'Dados atualizados.', tone: AppTone.success);
     } on ApiException catch (error) {
@@ -132,8 +143,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _birthDate = user.birthDate;
       _gender = user.gender;
     }
+    markUnsavedBaseline();
 
     return FormScaffold(
+      isDirty: hasUnsavedChanges,
       appBar: AppBar(title: const Text('Meus dados')),
       subtitle: 'Seu nome aparece para a equipe, e o e-mail é o que você '
           'usa para entrar.',

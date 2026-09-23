@@ -14,6 +14,7 @@ import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/position_icon.dart';
+import '../../../shared/widgets/app_primary_action.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -40,13 +41,20 @@ class PositionsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final positions = ref.watch(allPositionsProvider(teamId));
 
+    final nova = AppPrimaryAction(
+      label: 'Nova função',
+      icon: Icons.add_rounded,
+      onPressed: () => _openEditor(context, ref),
+    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Funções')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(context, ref),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Nova função'),
+      appBar: AppBar(
+        title: const Text('Funções'),
+        actions: [
+          if (nova.headerAction(context) case final acao?) acao,
+        ],
       ),
+      floatingActionButton: nova.fab(context),
       body: SafeArea(
         top: false,
         child: AppContentWidth.reading(
