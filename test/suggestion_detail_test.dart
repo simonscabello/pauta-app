@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
@@ -143,6 +144,7 @@ Future<_RepositorioFake> _montar(
   String role = 'OWNER',
   ThemeData? theme,
   Size size = const Size(375 * 3, 812 * 3),
+  bool comRotas = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 3;
@@ -178,17 +180,55 @@ Future<_RepositorioFake> _montar(
           ),
         ),
       ],
-      child: MaterialApp(
-        theme: theme ?? AppTheme.light,
-        home: SuggestionDetailScreen(
-          teamId: 't1',
-          suggestionId: 'sg1',
-          initial: suggestion,
-        ),
-      ),
+      child: comRotas
+          // Só o bastante para ver aonde o atalho leva: a sugestão na raiz e,
+          // no lugar da tela da música, o endereço que a rota recebeu.
+          ? MaterialApp.router(
+              theme: theme ?? AppTheme.light,
+              routerConfig: GoRouter(
+                routes: [
+                  // A sugestão é empilhada à mão por cima de uma rota, como
+                  // no app: é essa mistura que o "voltar" precisa respeitar.
+                  GoRoute(
+                    path: '/',
+                    builder: (_, __) => Scaffold(
+                      body: Builder(
+                        builder: (context) => TextButton(
+                          onPressed: () => openSuggestionDetail(
+                            context,
+                            teamId: 't1',
+                            suggestion: suggestion,
+                          ),
+                          child: const Text('abrir sugestão'),
+                        ),
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: '/equipe/musicas/:songId',
+                    builder: (_, state) => Scaffold(
+                      appBar: AppBar(),
+                      body: Text('rota ${state.uri}'),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : MaterialApp(
+              theme: theme ?? AppTheme.light,
+              home: SuggestionDetailScreen(
+                teamId: 't1',
+                suggestionId: 'sg1',
+                initial: suggestion,
+              ),
+            ),
     ),
   );
   await tester.pumpAndSettle();
+  if (comRotas) {
+    await tester.tap(find.text('abrir sugestão'));
+    await tester.pumpAndSettle();
+  }
   return repositorio;
 }
 
@@ -244,7 +284,7 @@ void main() {
       suggestion: _sugestao(songId: 's1'),
     );
 
-    expect(find.text('Já está no repertório'), findsOneWidget);
+    expect(find.text('Ver no repertório'), findsOneWidget);
 
     await tester.tap(find.text('Aceitar sugestão'));
     await tester.pumpAndSettle();
@@ -403,6 +443,54 @@ void main() {
     );
     expect(find.text('Aceitar sugestão'), findsNothing);
     expect(find.text('Recusar'), findsNothing);
+  });
+
+  testWidgets('sem música no repertório, não há atalho para ela',
+      (tester) async {
+    await _montar(tester, suggestion: _sugestao());
+
+    expect(find.text('Ver no repertório'), findsNothing);
+  });
+
+  testWidgets('aceita: o integrante chega à música pelo id, na equipe dela',
+      (tester) async {
+    await _montar(
+      tester,
+      suggestion: _sugestao(status: 'ACCEPTED', songId: 's1'),
+      role: 'MEMBER',
+      comRotas: true,
+    );
+
+    expect(find.text('Tom, cifra e letra da equipe'), findsOneWidget);
+
+    await tester.tap(find.text('Ver no repertório'));
+    await tester.pumpAndSettle();
+
+    // A equipe da sugestão vai junto: quem serve em duas equipes não pode
+    // ver a música procurada no repertório da equipe ativa.
+    expect(find.text('rota /equipe/musicas/s1?equipe=t1'), findsOneWidget);
+
+    // Voltar da música devolve a sugestão, e não a tela de baixo dela.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Ver no repertório'), findsOneWidget);
+  });
+
+  testWidgets('aceitar oferece ver a música no aviso', (tester) async {
+    await _montar(
+      tester,
+      suggestion: _sugestao(songId: 's1'),
+      comRotas: true,
+    );
+
+    await tester.tap(find.text('Aceitar sugestão'));
+    await tester.pumpAndSettle();
+
+    // A sugestão fechou; o aviso, na tela de baixo, leva à música aceita.
+    expect(find.text('Aceitar sugestão'), findsNothing);
+    await tester.tap(find.text('Ver música'));
+    await tester.pumpAndSettle();
+    expect(find.text('rota /equipe/musicas/s1?equipe=t1'), findsOneWidget);
   });
 
   testWidgets('quem resolveu não aparece; quem mais sugeriu, sim',

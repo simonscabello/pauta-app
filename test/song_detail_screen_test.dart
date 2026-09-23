@@ -1,6 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:louvor_app/core/network/api_exception.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
@@ -26,6 +28,39 @@ class _FakeAuthController extends AuthController {
   @override
   Future<void> bootstrap() async {
     state = _initial;
+  }
+}
+
+/// O repertório, para excluir e arquivar sem servidor.
+class _MusicasFake extends SongRepository {
+  _MusicasFake({this.emUso = false}) : super(Dio());
+
+  /// A música já entrou em escala: o servidor recusa a exclusão.
+  final bool emUso;
+
+  bool excluiu = false;
+  bool? arquivou;
+
+  @override
+  Future<void> remove(String teamId, String songId) async {
+    if (emUso) {
+      throw const ApiException(
+        'Esta música já foi usada em uma escala.',
+        statusCode: 409,
+        code: 'SONG_IN_USE',
+      );
+    }
+    excluiu = true;
+  }
+
+  @override
+  Future<Song> update(
+    String teamId,
+    String songId,
+    Map<String, dynamic> body,
+  ) async {
+    arquivou = body['isArchived'] as bool?;
+    return Song(id: songId, title: 'Cristo Venceu');
   }
 }
 
@@ -68,6 +103,8 @@ Future<void> _abrir(
   Size size = const Size(390, 844),
   ThemeData? theme,
   double textScale = 1.0,
+  SongRepository? musicas,
+  bool empilhada = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -78,6 +115,7 @@ Future<void> _abrir(
       overrides: [
         songProvider.overrideWith((ref, args) async => song),
         songHistoryProvider.overrideWith((ref, teamId) async => history),
+        if (musicas != null) songRepositoryProvider.overrideWithValue(musicas),
         authControllerProvider.overrideWith(
           (ref) => _FakeAuthController(
             ref,
@@ -109,10 +147,35 @@ Future<void> _abrir(
           ),
           child: child!,
         ),
-        home: const SongDetailScreen(teamId: 't1', songId: 's1'),
+        // Empilhada, a música tem para onde voltar depois de excluída --
+        // como no app, onde ela se abre por cima do repertório.
+        home: empilhada
+            ? Scaffold(
+                body: Builder(
+                  builder: (context) => TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const SongDetailScreen(teamId: 't1', songId: 's1'),
+                      ),
+                    ),
+                    child: const Text('repertório'),
+                  ),
+                ),
+              )
+            : const SongDetailScreen(teamId: 't1', songId: 's1'),
       ),
     ),
   );
+  await tester.pumpAndSettle();
+  if (empilhada) {
+    await tester.tap(find.text('repertório'));
+    await tester.pumpAndSettle();
+  }
+}
+
+Future<void> _abrirMenu(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Mais opções'));
   await tester.pumpAndSettle();
 }
 
@@ -312,5 +375,59 @@ void main() {
         }
       }
     }
+  });
+  testWidgets('excluir é de quem lidera', (tester) async {
+    await _abrir(tester, song: _musica(), role: 'MEMBER');
+
+    expect(find.byTooltip('Mais opções'), findsNothing);
+  });
+
+  testWidgets('excluir pergunta antes e volta ao repertório', (tester) async {
+    final musicas = _MusicasFake();
+    await _abrir(tester, song: _musica(), musicas: musicas, empilhada: true);
+
+    await _abrirMenu(tester);
+    await tester.tap(find.text('Excluir música'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Excluir "Cristo Venceu"?'), findsOneWidget);
+
+    // Manter não exclui nada.
+    await tester.tap(find.text('Manter'));
+    await tester.pumpAndSettle();
+    expect(musicas.excluiu, isFalse);
+
+    await _abrirMenu(tester);
+    await tester.tap(find.text('Excluir música'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Excluir música'));
+    await tester.pumpAndSettle();
+
+    expect(musicas.excluiu, isTrue);
+    // A tela da música saiu da pilha: ela não existe mais.
+    expect(find.text('repertório'), findsOneWidget);
+    expect(find.text('Cristo Venceu foi excluída.'), findsOneWidget);
+  });
+
+  testWidgets('música já em escala: a exclusão vira oferta de arquivar',
+      (tester) async {
+    final musicas = _MusicasFake(emUso: true);
+    await _abrir(tester, song: _musica(), musicas: musicas);
+
+    await _abrirMenu(tester);
+    await tester.tap(find.text('Excluir música'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Excluir música'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Esta música já entrou em escala'), findsOneWidget);
+
+    await tester.tap(find.text('Arquivar'));
+    await tester.pumpAndSettle();
+
+    // Direto, sem a segunda pergunta de "Arquivar Cristo Venceu?": a pessoa
+    // acabou de responder a ela.
+    expect(musicas.arquivou, isTrue);
+    expect(find.text('Cristo Venceu foi arquivada.'), findsOneWidget);
   });
 }

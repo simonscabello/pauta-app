@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
@@ -13,6 +14,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_detail_header.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
@@ -49,6 +51,23 @@ Future<void> openSuggestionDetail(
       ),
     ),
   );
+}
+
+/// Abre, no repertório, a música para a qual a sugestão aponta.
+///
+/// **Pelo `songId`, nunca pelo título** — o mesmo motivo do "Ver no
+/// repertório" da escala (`event_song_sheet.dart`): o repertório pode ter duas
+/// versões da mesma canção. E a equipe **da sugestão** vai na consulta: quem
+/// serve em duas equipes procuraria a música na equipe ativa (armadilha 10).
+///
+/// A rota do go_router entra por cima do detalhe da sugestão, que foi empilhado
+/// à mão e continua embaixo: voltar da música devolve a sugestão.
+void openSuggestedSong(
+  GoRouter router, {
+  required String teamId,
+  required String songId,
+}) {
+  router.push('/equipe/musicas/$songId?equipe=$teamId');
 }
 
 /// A sugestão inteira, e as decisões sobre ela.
@@ -99,18 +118,42 @@ class _SuggestionDetailScreenState
   /// Fechar a tela faz parte da decisão: respondida, a sugestão mudou de aba,
   /// e deixar a pessoa olhando para uma tela que já não corresponde à lista de
   /// trás seria pedir que ela mesma descobrisse isso.
+  ///
+  /// [songToShow], num aceite, devolve a música aceita — lida só depois da
+  /// ação, porque no aceite que cadastra ela ainda não existe antes. O aviso
+  /// ganha "Ver música": a tela fecha, e o líder que acabou de acolher a
+  /// sugestão costuma querer conferir o tom e a cifra em seguida.
   Future<void> _run(
     Future<void> Function() action,
     String ok, {
     bool close = true,
+    String? Function()? songToShow,
   }) async {
     setState(() => _busy = true);
     try {
       await action();
       _refresh();
       if (!mounted) return;
+      // Antes do `pop`: o contexto desta tela não serve para navegar depois
+      // que ela sai da pilha.
+      final router = GoRouter.maybeOf(context);
+      final songId = songToShow?.call();
       if (close) Navigator.of(context).pop();
-      showAppSnackBar(context, ok, tone: AppTone.success);
+      showAppSnackBar(
+        context,
+        ok,
+        tone: AppTone.success,
+        action: songId == null || router == null
+            ? null
+            : SnackBarAction(
+                label: 'Ver música',
+                onPressed: () => openSuggestedSong(
+                  router,
+                  teamId: widget.teamId,
+                  songId: songId,
+                ),
+              ),
+      );
     } on ApiException catch (error) {
       if (mounted) {
         showAppSnackBar(context, error.message, tone: AppTone.danger);
@@ -165,6 +208,7 @@ class _SuggestionDetailScreenState
           .accept(widget.teamId, s.id, songId: songId)
           .then((_) {}),
       'Sugestão aceita.',
+      songToShow: () => songId,
     );
   }
 
@@ -222,6 +266,7 @@ class _SuggestionDetailScreenState
         await sugestoes.accept(widget.teamId, s.id, songId: _songIdCriado!);
       },
       'Sugestão aceita. "${s.title}" entrou no repertório.',
+      songToShow: () => _songIdCriado,
     );
   }
 
@@ -269,6 +314,7 @@ class _SuggestionDetailScreenState
           .accept(widget.teamId, s.id, songId: criada.id)
           .then((_) {}),
       'Sugestão aceita.',
+      songToShow: () => criada.id,
     );
   }
 
@@ -387,6 +433,13 @@ class _SuggestionDetailScreenState
             onAccept: () => _accept(s),
             onDecline: () => _decline(s),
             onReopen: () => _reopen(s),
+            onOpenSong: s.songId == null
+                ? null
+                : () => openSuggestedSong(
+                      GoRouter.of(context),
+                      teamId: widget.teamId,
+                      songId: s.songId!,
+                    ),
           ),
         ),
       ),
@@ -404,6 +457,7 @@ class _Body extends StatelessWidget {
     required this.onAccept,
     required this.onDecline,
     required this.onReopen,
+    this.onOpenSong,
   });
 
   final SongSuggestion suggestion;
@@ -414,6 +468,9 @@ class _Body extends StatelessWidget {
   final VoidCallback onAccept;
   final VoidCallback onDecline;
   final VoidCallback onReopen;
+
+  /// Nulo quando a sugestão ainda não aponta para uma música do repertório.
+  final VoidCallback? onOpenSong;
 
   @override
   Widget build(BuildContext context) {
@@ -450,13 +507,28 @@ class _Body extends StatelessWidget {
                   ? 'Para o repertório'
                   : 'Para ${_dataLonga(s.targetDate!)}',
             ),
-            if (s.inRepertoire)
-              const DetailMetaLine(
-                icon: Icons.check_rounded,
-                text: 'Já está no repertório',
-              ),
           ],
         ),
+        // A música do repertório a um toque, e não só a frase "já está no
+        // repertório": depois de aceita, a pergunta de quem abre a sugestão
+        // passa a ser "em que tom ficou, tem cifra?" — e a resposta mora lá.
+        // Para todos os papéis, porque o integrante também lê o repertório, e
+        // fora das decisões do rodapé, porque não é uma delas.
+        if (onOpenSong != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          AppGroup(
+            children: [
+              AppGroupRow(
+                icon: Icons.library_music_outlined,
+                title: 'Ver no repertório',
+                subtitle: s.inRepertoire
+                    ? 'Tom, cifra e letra da equipe'
+                    : 'Arquivada no repertório',
+                onTap: onOpenSong,
+              ),
+            ],
+          ),
+        ],
         if (s.materials.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
           // Os mesmos ladrilhos de recurso da música, só com o que a sugestão

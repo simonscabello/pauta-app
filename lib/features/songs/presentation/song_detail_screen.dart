@@ -15,6 +15,7 @@ import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../suggestions/data/suggestion_repository.dart';
 import '../data/song_repository.dart';
 import '../domain/song_history.dart';
 import '../domain/song_models.dart';
@@ -64,12 +65,24 @@ class SongDetailScreen extends ConsumerWidget {
           if (canManage && song.valueOrNull != null)
             PopupMenuButton<String>(
               tooltip: 'Mais opções',
-              onSelected: (_) => _toggleArchived(context, ref, song.value!),
-              itemBuilder: (_) => [
+              onSelected: (value) => switch (value) {
+                'delete' => _delete(context, ref, song.value!),
+                _ => _toggleArchived(context, ref, song.value!),
+              },
+              itemBuilder: (menuContext) => [
                 PopupMenuItem(
                   value: 'archive',
                   child: Text(
                     song.value!.isArchived ? 'Restaurar' : 'Arquivar',
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(
+                    'Excluir música',
+                    style: TextStyle(
+                      color: Theme.of(menuContext).colorScheme.error,
+                    ),
                   ),
                 ),
               ],
@@ -98,17 +111,22 @@ class SongDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Arquivar é o que existe no lugar de excluir: a API recusa apagar música
-  /// que já foi tocada, para não abrir buracos nas escalas passadas. O caminho
-  /// de volta fica em Repertório → arquivadas.
+  /// Arquivar tira a música do repertório do dia a dia sem apagá-la: é o que
+  /// sobra quando excluir não é possível (a música já entrou em escala) e o
+  /// que se quer quando ela só saiu de uso. O caminho de volta fica em
+  /// Repertório → arquivadas.
+  ///
+  /// [confirm] falso quando a pergunta já foi feita — pelo diálogo que oferece
+  /// arquivar no lugar da exclusão recusada.
   Future<void> _toggleArchived(
     BuildContext context,
     WidgetRef ref,
-    Song song,
-  ) async {
+    Song song, {
+    bool confirm = true,
+  }) async {
     final restoring = song.isArchived;
 
-    if (!restoring) {
+    if (!restoring && confirm) {
       final confirmed = await showConfirmDialog(
         context,
         title: 'Arquivar ${song.title}?',
@@ -142,6 +160,100 @@ class SongDetailScreen extends ConsumerWidget {
         showAppSnackBar(context, e.message, tone: AppTone.danger);
       }
     }
+  }
+
+  /// Excluir de vez: a música cadastrada por engano, repetida, ou que nunca
+  /// chegou a ser cantada.
+  ///
+  /// A regra 21 continua no servidor: música que já entrou em escala não se
+  /// exclui, para as escalas passadas não ficarem com buraco. A tela não tenta
+  /// adivinhar isso antes — o histórico que ela tem só conta escala publicada
+  /// e passada, e um rascunho também segura a música. Quando o servidor recusa
+  /// (`SONG_IN_USE`), a resposta vira a oferta de arquivar, que é o que a
+  /// pessoa provavelmente queria: tirar a música da frente.
+  Future<void> _delete(BuildContext context, WidgetRef ref, Song song) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Excluir "${song.title}"?',
+      message: 'Ela sai do repertório de vez, com letra, links e hinários, e '
+          'não dá para desfazer. Para só tirar do dia a dia, arquive.',
+      confirmLabel: 'Excluir música',
+      cancelLabel: 'Manter',
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+
+    try {
+      await ref.read(songRepositoryProvider).remove(teamId, songId);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      if (e.code == 'SONG_IN_USE') {
+        await _offerArchive(context, ref, song);
+      } else {
+        showAppSnackBar(context, e.message, tone: AppTone.danger);
+      }
+      return;
+    }
+
+    ref.invalidate(songsProvider);
+    ref.invalidate(learningSongsProvider(teamId));
+    // A análise conta as ativas e as que nunca entraram em escala — esta era
+    // uma delas.
+    ref.invalidate(repertoireHealthProvider(teamId));
+    // Uma sugestão que apontava para esta música perdeu o vínculo (o servidor
+    // anula o `songId` e guarda o título): quem voltar para ela precisa ver
+    // isso, e não um atalho para uma música que não existe mais.
+    ref.invalidate(suggestionsProvider);
+    ref.invalidate(suggestionProvider);
+    ref.invalidate(openSuggestionCountProvider);
+    ref.invalidate(eventSuggestionsProvider);
+    if (!context.mounted) return;
+
+    // O `Navigator` desta tela, e não o do go_router: ela também é aberta por
+    // cima de telas empilhadas à mão (o detalhe de uma sugestão). Aberta por
+    // link direto, sem tela embaixo, volta ao repertório.
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      context.go('/equipe/musicas');
+    }
+    showAppSnackBar(
+      context,
+      '${song.title} foi excluída.',
+      tone: AppTone.success,
+    );
+  }
+
+  /// A exclusão recusada porque a música já está em escala.
+  Future<void> _offerArchive(
+    BuildContext context,
+    WidgetRef ref,
+    Song song,
+  ) async {
+    // Já arquivada, não há o que oferecer: só dizer por que ela fica.
+    if (song.isArchived) {
+      showAppSnackBar(
+        context,
+        '${song.title} já entrou em escala e não pode ser excluída. '
+        'Ela continua arquivada.',
+        tone: AppTone.warning,
+      );
+      return;
+    }
+
+    final archive = await showConfirmDialog(
+      context,
+      title: 'Esta música já entrou em escala',
+      message: 'Excluir "${song.title}" abriria um buraco nas escalas em que '
+          'ela aparece. Arquivar tira a música do repertório e mantém essas '
+          'escalas como estão.',
+      confirmLabel: 'Arquivar',
+      cancelLabel: 'Manter como está',
+    );
+    if (!archive || !context.mounted) return;
+
+    await _toggleArchived(context, ref, song, confirm: false);
   }
 }
 
