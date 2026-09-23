@@ -460,7 +460,7 @@ class _Results extends StatelessWidget {
         if (catalog.isNotEmpty) ...[
           AppGroup(
             title: 'Já cadastrada por outra equipe',
-            subtitle: 'Vem completa, inclusive a letra',
+            subtitle: 'Vem com cifra, links e hinário',
             dividerIndent: AppGroup.iconIndent,
             children: [
               for (final item in catalog)
@@ -619,7 +619,6 @@ class _CatalogTile extends StatelessWidget {
     final scheme = theme.colorScheme;
 
     final traz = [
-      if (item.hasLyrics) 'letra',
       if (item.hasChords) 'cifra',
       if (item.originalKey != null) 'tom ${item.originalKey}',
       if (item.hasYoutube) 'YouTube',

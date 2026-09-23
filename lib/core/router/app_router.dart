@@ -27,6 +27,7 @@ import '../../features/invites/presentation/join_team_screen.dart';
 import '../../features/team_events/presentation/team_event_detail_screen.dart';
 import '../../features/team_events/presentation/team_event_form_screen.dart';
 import '../../features/unavailability/presentation/my_unavailability_screen.dart';
+import '../../features/profile/presentation/delete_account_screen.dart';
 import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/team/data/team_repository.dart';
@@ -473,6 +474,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: 'dados',
                 onExit: confirmLeaveIfUnsaved,
                 builder: (_, __) => const EditProfileScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'excluir',
+                    builder: (_, __) => const DeleteAccountScreen(),
+                  ),
+                ],
               ),
               // Troca voluntária. A obrigatória continua em /trocar-senha, que
               // fica fora da casca porque o redirect prende o app nela.

@@ -50,6 +50,18 @@ class ReadCache {
     await _prefs.setString('$_eventPrefix$eventId', payload);
   }
 
+  /// Apaga tudo o que o cache guardou: agenda e escalas de todas as equipes.
+  /// Chamado quando a conta é excluída -- os nomes da equipe ficariam no
+  /// aparelho depois de a pessoa ter pedido para sumir.
+  Future<void> clearAll() async {
+    final keys = _prefs.getKeys().where(
+          (key) => key.startsWith(_agendaPrefix) || key.startsWith(_eventPrefix),
+        );
+    for (final key in keys.toList()) {
+      await _prefs.remove(key);
+    }
+  }
+
   CachedPayload<Map<String, dynamic>>? readEvent(String eventId) {
     final raw = _prefs.getString('$_eventPrefix$eventId');
     if (raw == null) return null;

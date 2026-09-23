@@ -149,6 +149,29 @@ class AuthRepository {
     }
   }
 
+  Future<AccountDeletionPreview> deletionPreview() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/users/me/deletion-preview',
+      );
+      return AccountDeletionPreview.fromJson(response.data!);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// A senha vai no corpo: o servidor confere de novo, porque um token
+  /// esquecido num aparelho não pode bastar para apagar uma pessoa. Senha
+  /// errada volta 403 (e não 401), para o interceptor não tratá-la como
+  /// sessão vencida.
+  Future<void> deleteAccount(String password) async {
+    try {
+      await _dio.delete<void>('/users/me', data: {'password': password});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<MeResult> me() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/auth/me');

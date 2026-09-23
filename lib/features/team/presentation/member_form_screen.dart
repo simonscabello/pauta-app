@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -174,6 +176,52 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen>
     }
   }
 
+  /// Passa a posse para quem está nesta ficha. Não é "salvar": grava na hora,
+  /// sozinha, e o que mais estiver editado no formulário continua pendente --
+  /// sair depois ainda pergunta pelas alterações.
+  Future<void> _transferOwnership() async {
+    final name = widget.member!.displayName;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Passar a posse para $name?',
+      message: 'Você passa a ser líder e continua fazendo tudo na equipe. '
+          'Só $name poderá passar a posse de novo.',
+      confirmLabel: 'Passar a posse',
+      cancelLabel: 'Manter comigo',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final auth = ref.read(authControllerProvider.notifier);
+    try {
+      await ref
+          .read(teamRepositoryProvider)
+          .transferOwnership(widget.teamId, widget.member!.id);
+      ref.invalidate(membersProvider(widget.teamId));
+      if (!mounted) return;
+      context.pop(true);
+      showAppSnackBar(
+        context,
+        'Agora $name é dono da equipe.',
+        tone: AppTone.success,
+      );
+      // O papel de quem está usando o app mudou (o menu de dono some), mas
+      // só depois de sair: recarregar muda a sessão, o roteador reconstrói a
+      // rota, e com esta tela ainda de pé o `extra` -- o integrante -- se
+      // perdia, e a ficha virava "Adicionar integrante".
+      unawaited(auth.reloadTeams());
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   /// Pergunta, logo depois do cadastro, se o líder quer o convite na mão.
   ///
   /// Devolve `true` quando o convite foi gerado e copiado — aí a tela não
@@ -327,6 +375,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen>
             member: widget.member!,
             value: _role,
             enabled: !_loading,
+            onTransferOwnership: _transferOwnership,
             // Quem está mexendo. Vem da equipe DESTA tela, e não da primeira
             // da lista: quem participa de duas veria a regra da equipe errada.
             actor: ref
@@ -603,6 +652,9 @@ class _InlineError extends StatelessWidget {
 
 /// Papel na equipe: membro ou líder.
 ///
+/// O dono vê aqui, na ficha de outro integrante com conta, o "Passar a posse"
+/// -- é o que destrava a exclusão da conta de quem criou a equipe.
+///
 /// Líder faz tudo o que o dono faz — cria e edita escalas, escala a equipe,
 /// convida, mexe no repertório, nas funções, na grade de cultos e nos dados da
 /// equipe. É o caminho para quem lidera junto.
@@ -617,11 +669,13 @@ class _RoleField extends StatelessWidget {
     required this.enabled,
     required this.actor,
     required this.onChanged,
+    required this.onTransferOwnership,
   });
 
   final Member member;
   final String? value;
   final bool enabled;
+  final VoidCallback onTransferOwnership;
 
   /// A participação de quem está editando, nesta equipe.
   final TeamSummary? actor;
@@ -633,9 +687,19 @@ class _RoleField extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
+    final souDono = actor?.role == 'OWNER';
+    final souEu = actor != null && actor!.membershipId == member.id;
+    // Placeholder não entra no app, e convidado não é da equipe: a posse só
+    // passa para quem conseguiria administrar.
+    final podeReceberPosse =
+        souDono && !souEu && member.hasAccount && !member.isGuest;
+
     final bloqueio = switch (member) {
+      _ when member.isOwner && souEu =>
+        'Para passar a posse, abra a ficha do integrante que vai cuidar da '
+            'equipe.',
       _ when member.isOwner =>
-        'Quem criou a equipe é sempre o dono, e isso não se transfere por aqui.',
+        'O papel do dono não se altera. Só o próprio dono passa a posse.',
       _ when member.isGuest =>
         'Convidado toca numa ocasião e não é integrante da equipe.',
       _ when actor != null && actor!.membershipId == member.id =>
@@ -710,6 +774,17 @@ class _RoleField extends StatelessWidget {
                     'que você faz.'
                 : 'Vê as escalas e onde está escalado.',
             style: theme.textTheme.bodySmall,
+          ),
+        ],
+        if (podeReceberPosse) ...[
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: enabled ? onTransferOwnership : null,
+              icon: const Icon(Icons.key_rounded, size: 18),
+              label: Text('Passar a posse para ${member.displayName}'),
+            ),
           ),
         ],
       ],

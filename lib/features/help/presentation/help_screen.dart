@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
+import '../../../shared/widgets/open_link.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../onboarding/presentation/tour_overlay.dart';
 import '../domain/help_faq.dart';
@@ -68,6 +70,25 @@ class HelpScreen extends ConsumerWidget {
                   ],
                 ),
               ],
+              const SizedBox(height: AppSpacing.xxl),
+              // Páginas públicas do site: abrem no navegador, e são as mesmas
+              // que o cadastro cita.
+              AppGroup(
+                title: 'Sobre o Pauta',
+                children: [
+                  AppGroupRow(
+                    icon: Icons.privacy_tip_outlined,
+                    title: 'Política de privacidade',
+                    onTap: () =>
+                        openExternalLink(context, AppConfig.privacyUrl),
+                  ),
+                  AppGroupRow(
+                    icon: Icons.gavel_rounded,
+                    title: 'Termos de uso',
+                    onTap: () => openExternalLink(context, AppConfig.termsUrl),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

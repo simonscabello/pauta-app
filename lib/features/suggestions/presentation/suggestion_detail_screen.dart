@@ -25,6 +25,7 @@ import '../../events/domain/event_models.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../../songs/presentation/add_song_screen.dart';
+import '../../../shared/widgets/open_link.dart';
 import '../../songs/presentation/song_resources.dart';
 import '../../songs/presentation/song_theme_picker.dart';
 import '../data/suggestion_repository.dart';
@@ -646,7 +647,7 @@ class _Body extends StatelessWidget {
                   icon: suggestionMaterialIcon(material.kind),
                   label: material.label,
                   status: 'Abrir link',
-                  onTap: () => openResourceLink(context, material.url),
+                  onTap: () => openExternalLink(context, material.url),
                 ),
             ],
           ),
@@ -917,7 +918,7 @@ class _AddFromSpotifySheetState extends State<_AddFromSpotifySheet> {
                 trailing: IconButton(
                   tooltip: 'Ouvir no Spotify',
                   icon: const Icon(Icons.open_in_new_rounded),
-                  onPressed: () => openResourceLink(context, s.spotifyUrl!),
+                  onPressed: () => openExternalLink(context, s.spotifyUrl!),
                 ),
               ),
             ),

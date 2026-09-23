@@ -144,9 +144,9 @@ String paceLabel(String? pace) => switch (pace) {
 
 /// Música que outra equipe já cadastrou.
 ///
-/// É o único caminho para a letra numa igreja que chega agora: nenhuma API
-/// devolve letra, e a maioria das igrejas não tem como exportar acervo de
-/// lugar nenhum.
+/// Vem o cadastro -- cifra, links, hinário, temas --, **e não a letra**: o
+/// texto que outra igreja digitou não é dela para redistribuir. O servidor lê
+/// a letra de novo da página da cifra ou do Letras, quando ela responde.
 class CatalogCandidate {
   const CatalogCandidate({
     required this.sourceSongId,
@@ -155,7 +155,6 @@ class CatalogCandidate {
     this.composer,
     this.originalKey,
     this.bpm,
-    this.hasLyrics = false,
     this.hasChords = false,
     this.hasYoutube = false,
     this.hasSpotify = false,
@@ -167,7 +166,6 @@ class CatalogCandidate {
   final String? composer;
   final String? originalKey;
   final int? bpm;
-  final bool hasLyrics;
   final bool hasChords;
   final bool hasYoutube;
   final bool hasSpotify;
@@ -180,7 +178,6 @@ class CatalogCandidate {
       composer: json['composer'] as String?,
       originalKey: json['originalKey'] as String?,
       bpm: json['bpm'] as int?,
-      hasLyrics: json['hasLyrics'] as bool? ?? false,
       hasChords: json['hasChords'] as bool? ?? false,
       hasYoutube: json['hasYoutube'] as bool? ?? false,
       hasSpotify: json['hasSpotify'] as bool? ?? false,

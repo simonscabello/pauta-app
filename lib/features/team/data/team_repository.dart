@@ -286,6 +286,16 @@ class TeamRepository {
     });
   }
 
+  /// Passa a posse da equipe. Só o dono chama; ele sai dela como LEADER.
+  Future<Member> transferOwnership(String teamId, String membershipId) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/members/$membershipId/transfer-ownership',
+      );
+      return Member.fromJson(response.data!);
+    });
+  }
+
   Future<void> removeMember(String teamId, String membershipId) async {
     return _guard(() async {
       await _dio.delete<void>('/teams/$teamId/members/$membershipId');

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/push/push_service.dart';
+import '../../../core/storage/read_cache.dart';
+import '../../../core/storage/shared_preferences_provider.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../shared/domain/person_fields.dart';
 import '../data/auth_repository.dart';
@@ -258,6 +260,19 @@ class AuthController extends StateNotifier<AuthState> {
     } finally {
       await _signOutLocally();
     }
+  }
+
+  Future<AccountDeletionPreview> deletionPreview() =>
+      _repository.deletionPreview();
+
+  /// Exclui a conta e sai. Não passa por `_forgetDevice` nem pelo logout do
+  /// servidor: a cascata do `DELETE /users/me` já levou os aparelhos e os
+  /// refresh tokens. O que sobra é o que mora neste aparelho -- os tokens e
+  /// o cache de leitura, que guarda nomes da equipe.
+  Future<void> deleteAccount(String password) async {
+    await _repository.deleteAccount(password);
+    await ReadCache(_ref.read(sharedPreferencesProvider)).clearAll();
+    await _signOutLocally();
   }
 
   /// Esquece este aparelho no servidor. Falhar aqui nao pode segurar a saida:

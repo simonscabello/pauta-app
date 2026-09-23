@@ -117,6 +117,18 @@ const helpFaq = <FaqEntry>[
         'As funções que você exerce e o telefone da equipe são cadastrados '
         'pelos líderes.',
   ),
+  FaqEntry(
+    question: 'Como excluo minha conta?',
+    answer: 'No **Perfil**, abra **Meus dados** e toque em **Excluir minha '
+        'conta**, no fim da tela. O Pauta mostra o que acontece antes de '
+        'pedir a sua senha.\n\n'
+        'Você sai das próximas escalas; as que já aconteceram continuam na '
+        'equipe, com o seu nome trocado por "Ex-integrante". Não há como '
+        'desfazer.\n\n'
+        'Se você é o dono de uma equipe em que há outras pessoas com conta, '
+        'passe a posse antes: abra o integrante que vai cuidar da equipe e '
+        'toque em **Passar a posse**.',
+  ),
 ];
 
 /// As perguntas de quem lidera. Aparecem na Ajuda só para OWNER e LEADER,

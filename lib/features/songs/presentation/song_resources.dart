@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_card.dart';
-import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/open_link.dart';
 
 /// Um recurso para ensaiar: cifra, letra, YouTube, Spotify.
 class SongResource {
@@ -36,18 +34,6 @@ abstract final class SongResourceIcons {
 
 bool _filled(String? value) => value != null && value.trim().isNotEmpty;
 
-Future<void> openResourceLink(BuildContext context, String url) async {
-  final uri = Uri.tryParse(url.trim());
-  final ok =
-      uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (!ok && context.mounted) {
-    showAppSnackBar(
-      context,
-      'Não foi possível abrir o link.',
-      tone: AppTone.danger,
-    );
-  }
-}
 
 /// Os quatro recursos de uma música, **sempre os quatro e na mesma ordem**.
 ///
@@ -67,7 +53,7 @@ List<SongResource> songResources(
         icon: icon,
         label: label,
         status: _filled(url) ? action : 'Sem link',
-        onTap: _filled(url) ? () => openResourceLink(context, url!) : null,
+        onTap: _filled(url) ? () => openExternalLink(context, url!) : null,
       );
 
   return [

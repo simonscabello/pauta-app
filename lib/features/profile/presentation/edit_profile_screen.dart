@@ -53,15 +53,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
 
   Future<void> _pickBirthDate() async {
     final hoje = today();
+    // A idade mínima dos termos de uso; o servidor recusa o que passar daqui
+    // (`BIRTH_DATE_TOO_YOUNG`).
+    final ultimaData = DateTime(hoje.year - minimumAgeYears, hoje.month, hoje.day);
+    final atual = _birthDate;
     final selected = await showDatePicker(
       context: context,
       locale: const Locale('pt', 'BR'),
       // Sem data cadastrada o calendário abre trinta anos atrás, e não hoje:
       // quem vai preencher a própria data de nascimento teria de voltar mês a
       // mês, e a grade de anos fica a um toque de qualquer jeito.
-      initialDate: _birthDate ?? DateTime(hoje.year - 30, hoje.month, hoje.day),
+      initialDate: atual != null && !atual.isAfter(ultimaData)
+          ? atual
+          : DateTime(hoje.year - 30, hoje.month, hoje.day),
       firstDate: DateTime(1900),
-      lastDate: hoje,
+      lastDate: ultimaData,
       helpText: 'Data de nascimento',
       initialDatePickerMode: DatePickerMode.year,
     );
@@ -224,10 +230,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
           loading: _saving,
           onPressed: _save,
         ),
+        const SizedBox(height: AppSpacing.xl),
+        // Rara e sem volta: fica no fim da edição dos próprios dados, e não
+        // como linha do Perfil ao lado de "Sair da conta".
+        Center(
+          child: TextButton(
+            onPressed: _saving ? null : () => context.push('/perfil/dados/excluir'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Excluir minha conta'),
+          ),
+        ),
       ],
     );
   }
 }
+
+/// A idade mínima para ter conta, a mesma dos termos de uso.
+const minimumAgeYears = 13;
 
 /// A data como campo de formulário, e não como linha de configuração: ela está
 /// entre o e-mail e o gênero, e trocar de linguagem visual no meio de um

@@ -19,6 +19,7 @@ import '../../suggestions/data/suggestion_repository.dart';
 import '../data/song_repository.dart';
 import '../domain/song_history.dart';
 import '../domain/song_models.dart';
+import '../../../shared/widgets/open_link.dart';
 import 'song_resources.dart';
 import 'song_theme_picker.dart';
 import 'lyrics_reader.dart';
@@ -590,7 +591,7 @@ class SongLyricsScreen extends StatelessWidget {
               IconButton(
                 tooltip: 'Abrir no site',
                 icon: const Icon(Icons.open_in_new_rounded),
-                onPressed: () => openResourceLink(context, url!),
+                onPressed: () => openExternalLink(context, url!),
               ),
           ],
         ),

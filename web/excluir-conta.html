@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#312E81">
+  <title>Excluir conta · Pauta</title>
+  <meta name="description" content="Como excluir sua conta do Pauta e o que acontece com os seus dados.">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <!--
+    O endereço que a Google Play pede para o pedido de exclusão de conta.
+    A lista "O que é apagado" é a mesma da tela do app
+    (delete_account_screen.dart, _WhatHappens); mudou uma, mude a outra.
+    Mesmo estilo de privacidade.html e termos.html.
+  -->
+  <style>
+    :root {
+      --bg: #F7F7FB; --card: #FFFFFF; --text: #1C1B2E; --muted: #5B5B72;
+      --brand: #4F46E5; --line: #E3E3EE; --todo: #FEF3C7; --todo-text: #78350F;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12121C; --card: #1C1C29; --text: #ECECF4; --muted: #A5A5BC;
+        --brand: #A5B4FC; --line: #2E2E40; --todo: #4A3410; --todo-text: #FDE68A;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    header { background: #312E81; color: #fff; padding: 28px 16px; }
+    header .wrap { max-width: 760px; margin: 0 auto; }
+    header a { color: #C7D2FE; text-decoration: none; font-weight: 600; }
+    header h1 { margin: 8px 0 4px; font-size: 1.75rem; line-height: 1.25; }
+    header p { margin: 0; color: #C7D2FE; font-size: .95rem; }
+    main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+    section {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; padding: 20px; margin-bottom: 16px;
+    }
+    h2 { font-size: 1.15rem; margin: 0 0 8px; }
+    ol, ul { padding-left: 22px; margin: 8px 0; }
+    li { margin-bottom: 6px; }
+    a { color: var(--brand); }
+    mark.todo { background: var(--todo); color: var(--todo-text); padding: 0 4px; border-radius: 4px; }
+    footer { max-width: 760px; margin: 0 auto; padding: 0 16px 40px; color: var(--muted); font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a href="./">Pauta</a>
+      <h1>Excluir sua conta</h1>
+      <p>Pauta, de <mark class="todo">[RAZÃO SOCIAL]</mark></p>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Pelo aplicativo</h2>
+      <ol>
+        <li>Abra o Pauta e entre na sua conta.</li>
+        <li>Toque em <strong>Perfil</strong> e depois em <strong>Meus dados</strong>.</li>
+        <li>No fim da tela, toque em <strong>Excluir minha conta</strong>.</li>
+        <li>Confira o que vai acontecer, digite a sua senha e confirme.</li>
+      </ol>
+      <p>A exclusão é imediata. O mesmo caminho existe na versão para navegador, em <a href="./">pautapp.up.railway.app</a>.</p>
+      <p><strong>Se você é dono de uma equipe</strong> em que há outras pessoas com conta, passe a posse antes: em <strong>Equipe</strong>, abra o integrante que vai cuidar da equipe e toque em <strong>Passar a posse</strong>. Se ninguém mais na equipe tiver conta, a equipe é apagada junto com a sua conta.</p>
+    </section>
+
+    <section>
+      <h2>Sem o aplicativo</h2>
+      <p>Não consegue mais entrar? Escreva para <mark class="todo">[E-MAIL DE CONTATO]</mark>, do e-mail cadastrado na conta, com o assunto "Excluir conta". Confirmaremos que o pedido é seu e concluiremos a exclusão em até 15 dias.</p>
+    </section>
+
+    <section>
+      <h2>O que é apagado</h2>
+      <ul>
+        <li>Sua conta, sua foto e seus dados pessoais (nome, e-mail, data de nascimento, gênero, telefone). Os avisos param de chegar em todos os aparelhos.</li>
+        <li>Suas escalas futuras, os dias em que você avisou que não pode e as suas sugestões de música.</li>
+        <li>As anotações que a liderança tinha sobre você.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>O que continua, e por quanto tempo</h2>
+      <ul>
+        <li>As escalas que já aconteceram continuam com a equipe, porque fazem parte da história dela, mas o seu nome é trocado por "Ex-integrante".</li>
+        <li>Frases antigas do histórico de alterações de uma escala ("Fulano entrou no Baixo") ficam como foram escritas.</li>
+        <li>Cópias de segurança do banco de dados podem conter os dados apagados por até <mark class="todo">[PRAZO DOS BACKUPS]</mark> dias, até serem substituídas.</li>
+      </ul>
+      <p>Mais detalhes na <a href="privacidade.html">Política de privacidade</a>.</p>
+    </section>
+  </main>
+
+  <footer>
+    <a href="privacidade.html">Política de privacidade</a> · <a href="termos.html">Termos de uso</a>
+  </footer>
+</body>
+</html>

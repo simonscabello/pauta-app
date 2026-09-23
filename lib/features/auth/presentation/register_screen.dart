@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/open_link.dart';
 import '../application/auth_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -126,6 +128,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           loading: _loading,
           loadingLabel: 'Criando sua conta',
           onPressed: _submit,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // Aviso e não caixa de marcar: criar a conta já é o aceite, e uma
+        // caixa a mais é um passo a mais para quem chegou pelo convite.
+        Text(
+          'Ao criar a conta, você concorda com os termos de uso e a política '
+          'de privacidade do Pauta.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          children: [
+            TextButton(
+              onPressed: () => openExternalLink(context, AppConfig.termsUrl),
+              child: const Text('Termos de uso'),
+            ),
+            TextButton(
+              onPressed: () => openExternalLink(context, AppConfig.privacyUrl),
+              child: const Text('Política de privacidade'),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.sm),
         TextButton(

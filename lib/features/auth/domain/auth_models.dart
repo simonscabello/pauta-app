@@ -101,3 +101,45 @@ class Session {
     );
   }
 }
+
+/// Uma equipe citada na prévia da exclusão da conta.
+class TeamRef {
+  const TeamRef({required this.teamId, required this.name});
+
+  final String teamId;
+  final String name;
+
+  factory TeamRef.fromJson(Map<String, dynamic> json) {
+    return TeamRef(
+      teamId: json['teamId'] as String,
+      name: json['name'] as String,
+    );
+  }
+}
+
+/// O que a exclusão da conta faria agora (`GET /users/me/deletion-preview`).
+///
+/// [blockedBy]: equipes de que a pessoa é dona e em que ainda há outro
+/// integrante com conta -- a posse precisa passar antes. [teamsDeleted]:
+/// equipes de que ela é dona e em que ninguém mais tem conta, e que vão junto.
+class AccountDeletionPreview {
+  const AccountDeletionPreview({
+    required this.blockedBy,
+    required this.teamsDeleted,
+  });
+
+  final List<TeamRef> blockedBy;
+  final List<TeamRef> teamsDeleted;
+
+  bool get isBlocked => blockedBy.isNotEmpty;
+
+  factory AccountDeletionPreview.fromJson(Map<String, dynamic> json) {
+    List<TeamRef> teams(String key) => ((json[key] as List<dynamic>?) ?? [])
+        .map((e) => TeamRef.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return AccountDeletionPreview(
+      blockedBy: teams('blockedBy'),
+      teamsDeleted: teams('teamsDeleted'),
+    );
+  }
+}

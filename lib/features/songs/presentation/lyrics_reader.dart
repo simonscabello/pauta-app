@@ -10,7 +10,7 @@ import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../events/domain/event_models.dart';
 import '../data/song_repository.dart';
-import 'song_resources.dart';
+import '../../../shared/widgets/open_link.dart';
 
 /// O tamanho da letra no modo leitura, guardado no aparelho.
 ///
@@ -211,7 +211,7 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
               IconButton(
                 tooltip: 'Abrir no site',
                 icon: const Icon(Icons.open_in_new_rounded),
-                onPressed: () => openResourceLink(context, atual.lyricsUrl!),
+                onPressed: () => openExternalLink(context, atual.lyricsUrl!),
               ),
           ],
         ),

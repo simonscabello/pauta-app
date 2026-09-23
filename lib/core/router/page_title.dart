@@ -52,6 +52,7 @@ String pageTitleFor(String path) {
     ['equipe', 'membros', 'editar'] => 'Editar integrante',
     ['perfil'] => 'Perfil',
     ['perfil', 'dados'] => 'Meus dados',
+    ['perfil', 'dados', 'excluir'] => 'Excluir conta',
     ['perfil', 'senha'] => 'Alterar senha',
     ['perfil', 'ajuda'] => 'Ajuda',
     _ => 'Pauta',

@@ -13,7 +13,10 @@
 :{$PORT:8080} {
 	root * /usr/share/caddy
 	encode zstd gzip
-	try_files {path} /index.html
+	# `{path}.html`: as páginas públicas (privacidade, termos, excluir-conta)
+	# também respondem sem a extensão. A SPA usa hash (#/agenda), então nenhuma
+	# rota do app chega aqui como caminho.
+	try_files {path} {path}.html /index.html
 	file_server
 
 	# HTML da casca e qualquer rota da SPA. Assets reais ficam de fora.

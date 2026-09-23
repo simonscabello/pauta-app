@@ -102,7 +102,9 @@ void main() {
   });
 
   group('CatalogCandidate', () {
-    test('lê o que o candidato traz sem receber a letra em si', () {
+    // `hasLyrics` saiu: a letra não viaja entre equipes, e um servidor
+    // antigo que ainda a mande é ignorado.
+    test('lê o que o candidato traz, sem a letra', () {
       final candidate = CatalogCandidate.fromJson({
         'sourceSongId': 'x1',
         'title': 'Consagração',
@@ -115,7 +117,7 @@ void main() {
         'hasSpotify': true,
       });
 
-      expect(candidate.hasLyrics, isTrue);
+      expect(candidate.hasChords, isTrue);
       expect(candidate.hasYoutube, isFalse);
       expect(candidate.originalKey, 'A');
     });
@@ -125,7 +127,7 @@ void main() {
         'sourceSongId': 'x1',
         'title': 'Alguma',
       });
-      expect(candidate.hasLyrics, isFalse);
+      expect(candidate.hasChords, isFalse);
       expect(candidate.artist, isNull);
     });
   });
