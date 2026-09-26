@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/date/civil_date.dart';
+import '../../../core/date/report_period.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
@@ -302,11 +303,18 @@ class TeamRepository {
     });
   }
 
-  Future<WorkloadReport> workload(String teamId, {int weeks = 8}) async {
+  Future<WorkloadReport> workload(
+    String teamId, {
+    required ReportPeriod period,
+    int? weekday,
+  }) async {
     return _guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
         '/teams/$teamId/reports/workload',
-        queryParameters: {'weeks': weeks},
+        queryParameters: {
+          ...period.toQuery(),
+          if (weekday != null) 'weekday': weekday,
+        },
       );
       return WorkloadReport.fromJson(response.data!);
     });
@@ -410,13 +418,17 @@ final teamProvider =
   return ref.watch(teamRepositoryProvider).find(teamId);
 });
 
-typedef WorkloadQuery = ({String teamId, int weeks});
+/// A participação de um período. A mesma chave serve à tela de participação e
+/// à aba "Por pessoa" do "Quem não pode": as duas leem a mesma resposta.
+typedef WorkloadQuery = ({String teamId, ReportPeriod period, int? weekday});
 
 final workloadProvider = FutureProvider.autoDispose
     .family<WorkloadReport, WorkloadQuery>((ref, query) {
-  return ref
-      .watch(teamRepositoryProvider)
-      .workload(query.teamId, weeks: query.weeks);
+  return ref.watch(teamRepositoryProvider).workload(
+        query.teamId,
+        period: query.period,
+        weekday: query.weekday,
+      );
 });
 
 /// Janela do rodízio: oito semanas, dois meses de domingos. Curta o bastante

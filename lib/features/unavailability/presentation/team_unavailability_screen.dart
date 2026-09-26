@@ -8,22 +8,28 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_month_grid.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
 import '../../team/data/team_repository.dart';
 import '../data/unavailability_repository.dart';
 import '../domain/unavailability_models.dart';
+import 'unavailability_summary_view.dart';
 
 /// O mês da equipe: quem avisou que não pode, e em que dia.
 ///
 /// A indisponibilidade já existia dos dois lados — o integrante marcava os dias
 /// e a escala mostrava o aviso —, mas só **dentro** de uma escala já criada. O
 /// líder que planeja o mês descobria a ausência tarde: depois de escalar. Aqui
-/// ele vê o mês antes de montar qualquer coisa, e cria a escala do dia a partir
-/// do próprio calendário.
+/// ele vê o mês antes de montar qualquer coisa.
+///
+/// Para quem lidera há uma segunda aba, **"Por pessoa"**
+/// ([UnavailabilitySummaryView]): quem mais avisou que não podia num período,
+/// e quem ficou livre sem ser chamado.
 class TeamUnavailabilityScreen extends ConsumerStatefulWidget {
   const TeamUnavailabilityScreen({super.key, required this.teamId});
 
@@ -34,9 +40,14 @@ class TeamUnavailabilityScreen extends ConsumerStatefulWidget {
       _TeamUnavailabilityScreenState();
 }
 
+/// As duas leituras: o mês (quem não pode em cada dia) e a pessoa (quem mais
+/// avisou, quem ficou livre sem ser chamado).
+enum _View { calendar, people }
+
 class _TeamUnavailabilityScreenState
     extends ConsumerState<TeamUnavailabilityScreen> {
   late DateTime _month = _monthOf(DateTime.now());
+  _View _view = _View.calendar;
 
   /// Nulo = a equipe inteira. Com alguém escolhido, o calendário responde
   /// "quando o João não pode?", que é a pergunta de quem já sabe de quem
@@ -58,12 +69,23 @@ class _TeamUnavailabilityScreenState
     );
     final unavailability = ref.watch(teamUnavailabilityProvider(key));
     final members = ref.watch(membersProvider(widget.teamId)).valueOrNull;
+    // "Por pessoa" cruza as ausências com as escalas, e isso é relatório:
+    // só quem lidera lê (a API responde 403 para o resto). O calendário
+    // continua de todos.
+    final canManage = ref
+            .watch(authControllerProvider)
+            .teams
+            .where((team) => team.teamId == widget.teamId)
+            .firstOrNull
+            ?.canManage ??
+        false;
+    final view = canManage ? _view : _View.calendar;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quem não pode'),
         actions: [
-          if (members != null && members.isNotEmpty)
+          if (view == _View.calendar && members != null && members.isNotEmpty)
             PopupMenuButton<String>(
               tooltip: 'Filtrar por pessoa',
               icon: Icon(
@@ -90,43 +112,77 @@ class _TeamUnavailabilityScreenState
         child: AppContentWidth.wide(
           child: Column(
             children: [
-              _MonthHeader(
-                month: _month,
-                onPrevious: () => _shiftMonth(-1),
-                onNext: () => _shiftMonth(1),
-              ),
-              Expanded(
-                child: unavailability.when(
-                  loading: () => const AppLoading(),
-                  error: (error, _) => AppErrorState(
-                    message: error is ApiException
-                        ? error.message
-                        : 'Não foi possível carregar o calendário.',
-                    onRetry: () =>
-                        ref.invalidate(teamUnavailabilityProvider(key)),
+              if (canManage)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    AppSpacing.md,
+                    AppSpacing.screenPadding,
+                    0,
                   ),
-                  data: (all) {
-                    final visible = _memberFilter == null
-                        ? all
-                        : all
-                            .where((item) => item.membershipId == _memberFilter)
-                            .toList();
-                    return _MonthBody(
-                      teamId: widget.teamId,
-                      month: _month,
-                      items: visible,
-                      filteredName: _memberFilter == null
-                          ? null
-                          : members
-                              ?.where((m) => m.id == _memberFilter)
-                              .firstOrNull
-                              ?.displayName,
-                      onRefresh: () async => ref
-                          .refresh(teamUnavailabilityProvider(key).future),
-                    );
-                  },
+                  child: AppChoiceBar<_View>(
+                    expanded: true,
+                    value: view,
+                    onChanged: (value) => setState(() => _view = value),
+                    options: const [
+                      AppChoice(
+                        value: _View.calendar,
+                        label: 'Calendário',
+                        icon: Icons.calendar_month_rounded,
+                      ),
+                      AppChoice(
+                        value: _View.people,
+                        label: 'Por pessoa',
+                        icon: Icons.people_alt_rounded,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              if (view == _View.people)
+                Expanded(
+                  child: UnavailabilitySummaryView(teamId: widget.teamId),
+                )
+              else ...[
+                _MonthHeader(
+                  month: _month,
+                  onPrevious: () => _shiftMonth(-1),
+                  onNext: () => _shiftMonth(1),
+                ),
+                Expanded(
+                  child: unavailability.when(
+                    loading: () => const AppLoading(),
+                    error: (error, _) => AppErrorState(
+                      message: error is ApiException
+                          ? error.message
+                          : 'Não foi possível carregar o calendário.',
+                      onRetry: () =>
+                          ref.invalidate(teamUnavailabilityProvider(key)),
+                    ),
+                    data: (all) {
+                      final visible = _memberFilter == null
+                          ? all
+                          : all
+                              .where(
+                                (item) => item.membershipId == _memberFilter,
+                              )
+                              .toList();
+                      return _MonthBody(
+                        teamId: widget.teamId,
+                        month: _month,
+                        items: visible,
+                        filteredName: _memberFilter == null
+                            ? null
+                            : members
+                                ?.where((m) => m.id == _memberFilter)
+                                .firstOrNull
+                                ?.displayName,
+                        onRefresh: () async =>
+                            ref.refresh(teamUnavailabilityProvider(key).future),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ],
           ),
         ),

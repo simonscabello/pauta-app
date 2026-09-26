@@ -99,13 +99,13 @@ class ManageTeamScreen extends ConsumerWidget {
                   AppGroupRow(
                     icon: Icons.event_busy_rounded,
                     title: 'Quem não pode',
-                    subtitle: 'O mês com as ausências avisadas',
+                    subtitle: 'O mês e quem mais avisou que não podia',
                     onTap: () => context.push('/equipe/indisponibilidade'),
                   ),
                   AppGroupRow(
                     icon: Icons.balance_rounded,
                     title: 'Participação',
-                    subtitle: 'Quantas vezes cada um foi escalado',
+                    subtitle: 'Quem mais serviu, e em que função',
                     onTap: () => context.push('/equipe/participacao'),
                   ),
                   // Uso e Análise viraram uma tela com duas abas: eram duas

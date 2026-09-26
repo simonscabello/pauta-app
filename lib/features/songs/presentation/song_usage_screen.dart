@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/date/report_period.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
@@ -10,6 +11,7 @@ import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/report_filters.dart';
 import '../data/song_repository.dart';
 import '../domain/song_usage.dart';
 
@@ -40,70 +42,48 @@ class SongUsageView extends ConsumerStatefulWidget {
 }
 
 class _SongUsageViewState extends ConsumerState<SongUsageView> {
-  int _months = 6;
+  ReportPeriod _period = const ReportPeriodMonths(6);
+  int? _weekday;
   _UsageOrder _order = _UsageOrder.mostPlayed;
+
+  /// A última resposta que chegou: os dias da semana do filtro saem dela, e
+  /// sem guardá-la o menu sumiria a cada troca de período.
+  List<ReportWeekday> _weekdays = const [];
 
   @override
   Widget build(BuildContext context) {
-    final query = (teamId: widget.teamId, months: _months);
+    final query = (teamId: widget.teamId, period: _period, weekday: _weekday);
     final report = ref.watch(songUsageProvider(query));
+    _weekdays = report.valueOrNull?.weekdays ?? _weekdays;
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.screenPadding,
-            AppSpacing.md,
-            AppSpacing.screenPadding - AppSpacing.sm,
-            AppSpacing.md,
-          ),
-          // O período é um menu de texto, e não outra barra de escolha: logo
-          // abaixo das abas Análise | Uso, duas barras iguais empilhadas
-          // tinham o mesmo peso, e o período parecia uma terceira aba.
-          child: Row(
-            children: [
-              PopupMenuButton<int>(
-                tooltip: 'Período',
-                initialValue: _months,
-                onSelected: (value) => setState(() => _months = value),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 3, child: Text('Últimos 3 meses')),
-                  PopupMenuItem(value: 6, child: Text('Últimos 6 meses')),
-                  PopupMenuItem(value: 12, child: Text('Últimos 12 meses')),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Últimos $_months meses',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      const Icon(Icons.expand_more_rounded, size: 20),
-                    ],
-                  ),
-                ),
+        ReportFilterBar(
+          filters: [
+            ReportPeriodMenu(
+              value: _period,
+              onChanged: (value) => setState(() => _period = value),
+            ),
+            ReportWeekdayMenu(
+              value: _weekday,
+              weekdays: _weekdays,
+              onChanged: (value) => setState(() => _weekday = value),
+            ),
+          ],
+          trailing: PopupMenuButton<_UsageOrder>(
+            tooltip: 'Ordenar',
+            icon: const Icon(Icons.swap_vert_rounded),
+            onSelected: (value) => setState(() => _order = value),
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                value: _UsageOrder.mostPlayed,
+                checked: _order == _UsageOrder.mostPlayed,
+                child: const Text('Mais cantadas'),
               ),
-              const Spacer(),
-              PopupMenuButton<_UsageOrder>(
-                tooltip: 'Ordenar',
-                icon: const Icon(Icons.swap_vert_rounded),
-                initialValue: _order,
-                onSelected: (value) => setState(() => _order = value),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: _UsageOrder.mostPlayed,
-                    child: Text('Mais cantadas'),
-                  ),
-                  PopupMenuItem(
-                    value: _UsageOrder.longestAgo,
-                    child: Text('Há mais tempo'),
-                  ),
-                ],
+              CheckedPopupMenuItem(
+                value: _UsageOrder.longestAgo,
+                checked: _order == _UsageOrder.longestAgo,
+                child: const Text('Há mais tempo'),
               ),
             ],
           ),
@@ -120,6 +100,10 @@ class _SongUsageViewState extends ConsumerState<SongUsageView> {
             data: (value) => _UsageBody(
               teamId: widget.teamId,
               report: value,
+              when: [
+                _period.phrase,
+                if (weekdayPhrase(_weekday) case final dia?) dia,
+              ].join(', '),
               order: _order,
               onRefresh: () => ref.refresh(songUsageProvider(query).future),
             ),
@@ -134,12 +118,17 @@ class _UsageBody extends StatelessWidget {
   const _UsageBody({
     required this.teamId,
     required this.report,
+    required this.when,
     required this.order,
     required this.onRefresh,
   });
 
   final String teamId;
   final SongUsageReport report;
+
+  /// "nos últimos 6 meses, às quintas" — o período escrito para a frase de
+  /// resumo.
+  final String when;
   final _UsageOrder order;
   final Future<void> Function() onRefresh;
 
@@ -200,7 +189,7 @@ class _UsageBody extends StatelessWidget {
                 [
                   '${songs.length} '
                       '${songs.length == 1 ? 'música cantada' : 'músicas cantadas'} '
-                      'em ${report.months} meses',
+                      '$when',
                   if (report.neverPlayedCount > 0)
                     '${report.neverPlayedCount} do repertório não entraram em '
                         'nenhuma escala do período',

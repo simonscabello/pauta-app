@@ -14,12 +14,18 @@ class AppMonthDay {
     this.marks = 0,
     this.markTone = AppTone.primary,
     this.enabled = true,
+    this.inRange = false,
     this.detail,
     this.icon,
   });
 
   /// Fundo cheio da marca.
   final bool selected;
+
+  /// Entre as duas pontas de um período escolhido: o fundo claro do dia
+  /// marcado, **sem** traço — o traço conta coisas, e aqui não há o que
+  /// contar. As pontas são [selected].
+  final bool inRange;
 
   /// Um ícone no lugar dos traços. No seletor de "dias em que não posso" o dia
   /// marcado leva um "×": fundo cheio contra fundo claro (dia de culto) era
@@ -167,16 +173,17 @@ class AppMonthGrid extends StatelessWidget {
     final state = describe(day);
     final isToday = dateKey(day) == dateKey(today);
     final marked = state.marks > 0;
+    final tinted = marked || state.inRange;
     final palette = AppStatusColors.of(context).resolve(state.markTone, scheme);
 
     final background = state.selected
         ? scheme.primary
-        : marked
+        : tinted
             ? palette.container
             : Colors.transparent;
     final foreground = state.selected
         ? scheme.onPrimary
-        : marked
+        : tinted
             ? palette.onContainer
             : scheme.onSurface;
 

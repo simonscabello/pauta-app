@@ -1,3 +1,5 @@
+import '../../../core/date/report_period.dart';
+
 /// Quantas vezes uma música foi cantada, quando foi a última e em que tons.
 class SongUsage {
   const SongUsage({
@@ -52,14 +54,16 @@ class SongUsage {
 
 class SongUsageReport {
   const SongUsageReport({
-    required this.months,
     required this.neverPlayedCount,
     required this.songs,
+    this.months,
+    this.weekdays = const [],
   });
 
   factory SongUsageReport.fromJson(Map<String, dynamic> json) {
     return SongUsageReport(
-      months: json['months'] as int? ?? 6,
+      months: json['months'] as int?,
+      weekdays: reportWeekdaysFromJson(json['weekdays']),
       neverPlayedCount: json['neverPlayedCount'] as int? ?? 0,
       songs: (json['songs'] as List<dynamic>? ?? const [])
           .map((item) => SongUsage.fromJson(item as Map<String, dynamic>))
@@ -67,7 +71,11 @@ class SongUsageReport {
     );
   }
 
-  final int months;
+  /// Nulo quando o período veio por datas.
+  final int? months;
+
+  /// Os dias da semana com escala publicada no período — as opções do filtro.
+  final List<ReportWeekday> weekdays;
 
   /// Quantas músicas do repertório ativo não entraram em nenhuma escala do
   /// período. Um número, e não uma lista: com os 581 hinos do Cantor Cristão

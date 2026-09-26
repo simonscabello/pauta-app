@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/date/report_period.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/moment_suggestion.dart';
@@ -91,11 +92,18 @@ class SongRepository {
   }
 
   /// Histórico de uso: o que a equipe cantou, quando e em que tom.
-  Future<SongUsageReport> usage(String teamId, {int months = 6}) async {
+  Future<SongUsageReport> usage(
+    String teamId, {
+    required ReportPeriod period,
+    int? weekday,
+  }) async {
     return _guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
         '/teams/$teamId/reports/songs',
-        queryParameters: {'months': months},
+        queryParameters: {
+          ...period.toQuery(),
+          if (weekday != null) 'weekday': weekday,
+        },
       );
       return SongUsageReport.fromJson(response.data!);
     });
@@ -413,13 +421,15 @@ final songProvider = FutureProvider.autoDispose
   return ref.watch(songRepositoryProvider).find(args.teamId, args.songId);
 });
 
-typedef SongUsageQuery = ({String teamId, int months});
+typedef SongUsageQuery = ({String teamId, ReportPeriod period, int? weekday});
 
 final songUsageProvider =
     FutureProvider.autoDispose.family<SongUsageReport, SongUsageQuery>(
-  (ref, query) => ref
-      .watch(songRepositoryProvider)
-      .usage(query.teamId, months: query.months),
+  (ref, query) => ref.watch(songRepositoryProvider).usage(
+        query.teamId,
+        period: query.period,
+        weekday: query.weekday,
+      ),
 );
 
 /// Histórico por música (id → histórico), para o seletor da escala e a tela
