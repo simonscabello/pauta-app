@@ -163,7 +163,7 @@ class _MyUnavailabilityScreenState
           context,
           reason.isEmpty
               ? 'Motivo apagado. O dia continua marcado.'
-              : 'Motivo atualizado. A equipe já vê.',
+              : 'Motivo atualizado. Quem lidera já vê.',
           tone: AppTone.success,
         );
       }

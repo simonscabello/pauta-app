@@ -358,6 +358,9 @@ class UnavailabilityReasonField extends StatelessWidget {
             decoration: const InputDecoration(
               labelText: 'Motivo (opcional)',
               hintText: 'Viagem, trabalho...',
+              // Dito onde se escreve: o motivo pode ser "cirurgia", e quem
+              // escreve precisa saber que o resto da equipe não lê.
+              helperText: 'Só quem lidera a equipe vê o motivo.',
               counterText: '',
             ),
           ),

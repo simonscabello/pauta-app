@@ -54,8 +54,9 @@ const helpFaq = <FaqEntry>[
         'enviar, e quem lidera fica sabendo para achar alguém no seu lugar.\n\n'
         'Para voltar a ficar disponível, toque no X ao lado do dia. Para mudar '
         'o motivo, toque no próprio dia.\n\n'
-        'Os líderes veem esses dias na hora de montar as escalas. Manter tudo '
-        'atualizado evita que você seja escalado num dia em que não pode.',
+        'Os líderes veem esses dias na hora de montar as escalas, e o motivo '
+        'fica só com eles. Manter tudo atualizado evita que você seja '
+        'escalado num dia em que não pode.',
   ),
   FaqEntry(
     question: 'Como acompanho os compromissos da equipe?',
