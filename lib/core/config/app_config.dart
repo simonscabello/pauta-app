@@ -15,6 +15,11 @@ class AppConfig {
   /// Prefixo das rotas de negocio. /health fica fora dele.
   static const String apiUrl = '$apiBaseUrl/api/v1';
 
+  /// O servidor MCP, que os assistentes de IA chamam com a chave da pessoa.
+  /// Fora do `/api/v1`, como no backend: o protocolo tem versao propria, e
+  /// `host/mcp` e o endereco que todo cliente espera.
+  static const String mcpUrl = '$apiBaseUrl/mcp';
+
   /// O site (a versao Web), onde moram as paginas publicas: politica de
   /// privacidade, termos de uso e o pedido de exclusao da conta. Sao HTML
   /// estatico em `web/`, servidos pelo Caddy antes da SPA.

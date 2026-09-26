@@ -146,6 +146,14 @@ class ProfileScreen extends ConsumerWidget {
                                 .valueOrNull ==
                             true)
                           const _BiometricRow(),
+                        // Em Segurança, e não em Conta: o que se faz aqui é
+                        // abrir e fechar portas para um programa de fora.
+                        AppGroupRow(
+                          icon: Icons.smart_toy_outlined,
+                          title: 'Assistentes de IA',
+                          subtitle: 'Claude e outros, só para consulta',
+                          onTap: () => context.push('/perfil/assistentes'),
+                        ),
                       ],
                     ),
 

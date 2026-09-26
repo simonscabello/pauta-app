@@ -54,6 +54,8 @@ String pageTitleFor(String path) {
     ['perfil', 'dados'] => 'Meus dados',
     ['perfil', 'dados', 'excluir'] => 'Excluir conta',
     ['perfil', 'senha'] => 'Alterar senha',
+    ['perfil', 'assistentes'] => 'Assistentes de IA',
+    ['perfil', 'assistentes', 'nova'] => 'Nova chave',
     ['perfil', 'ajuda'] => 'Ajuda',
     _ => 'Pauta',
   };

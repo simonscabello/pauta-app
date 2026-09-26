@@ -28,6 +28,18 @@ void main() {
     expect(find.text('Sair da conta'), findsOneWidget);
   });
 
+  testWidgets('os assistentes de IA ficam em Segurança, depois da senha',
+      (tester) async {
+    await _pumpPerfil(tester);
+
+    expect(find.text('Assistentes de IA'), findsOneWidget);
+    expect(find.text('Claude e outros, só para consulta'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Alterar senha')).dy,
+      lessThan(tester.getTopLeft(find.text('Assistentes de IA')).dy),
+    );
+  });
+
   testWidgets('a Ajuda fica no Perfil, junto do diagnóstico', (tester) async {
     await _pumpPerfil(tester);
 

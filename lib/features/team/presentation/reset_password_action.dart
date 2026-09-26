@@ -36,8 +36,11 @@ Future<void> resetMemberPassword(
   final confirmed = await showConfirmDialog(
     context,
     title: 'Redefinir a senha de ${member.displayName}?',
+    // "Conectados à conta", sem afirmar que existe algum: quem lidera não
+    // precisa saber se a pessoa usa assistente de IA.
     message: 'Vamos gerar uma senha temporária para você passar para '
-        '${member.displayName}. A senha atual deixa de funcionar, e no próximo '
+        '${member.displayName}. A senha atual deixa de funcionar, os '
+        'assistentes de IA conectados à conta perdem o acesso, e no próximo '
         'acesso o app pede uma nova.',
     confirmLabel: 'Redefinir',
   );

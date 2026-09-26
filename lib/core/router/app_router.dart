@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/ai_assistants/presentation/ai_assistants_screen.dart';
+import '../../features/ai_assistants/presentation/new_ai_key_screen.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/change_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
@@ -486,6 +488,20 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'senha',
                 builder: (_, __) => const ChangePasswordScreen(forced: false),
+              ),
+              // As chaves dos assistentes de IA (MCP). A chave criada aparece
+              // na própria tela de criar, e não numa rota: ela só existe no
+              // estado daquela tela. Sair sem copiar pergunta antes.
+              GoRoute(
+                path: 'assistentes',
+                builder: (_, __) => const AiAssistantsScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'nova',
+                    onExit: confirmLeaveIfUnsaved,
+                    builder: (_, __) => const NewAiKeyScreen(),
+                  ),
+                ],
               ),
               // Dentro do Perfil, que é onde a pessoa procura ajuda — e dentro
               // da casca, para a barra lateral continuar à vista no monitor.

@@ -119,6 +119,23 @@ const helpFaq = <FaqEntry>[
         'pelos líderes.',
   ),
   FaqEntry(
+    question: 'Como conecto um assistente de IA, como o Claude?',
+    answer: 'No **Perfil**, abra **Assistentes de IA** e toque em **Criar '
+        'chave**. Dê um nome, escolha a validade e confirme com a sua senha. '
+        'De preferência no computador: é lá que a chave vai ser colada, e ela '
+        'aparece uma vez só.\n\n'
+        '**Claude Code**: copie o comando que o Pauta mostra e cole no '
+        'terminal. Depois, é só perguntar, por exemplo, "Quais são as minhas '
+        'próximas escalas?".\n'
+        '**Cursor, VS Code e outros**: adicione um servidor MCP do tipo HTTP '
+        'com o endereço e o cabeçalho que o Pauta mostra.\n\n'
+        'O assistente só consulta o que você já vê no app, e não muda nada. O '
+        'Claude no navegador e no celular e o ChatGPT ainda não aceitam '
+        'chave.\n\n'
+        'Para desconectar, abra o menu da chave e toque em **Revogar chave**. '
+        'Trocar a senha desconecta todos os assistentes de uma vez.',
+  ),
+  FaqEntry(
     question: 'Como excluo minha conta?',
     answer: 'No **Perfil**, abra **Meus dados** e toque em **Excluir minha '
         'conta**, no fim da tela. O Pauta mostra o que acontece antes de '

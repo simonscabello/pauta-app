@@ -65,7 +65,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
         context.pop();
         showAppSnackBar(
           context,
-          'Senha alterada. Os outros aparelhos foram desconectados.',
+          'Senha alterada. Os outros aparelhos e os assistentes de IA foram '
+          'desconectados.',
           tone: AppTone.success,
         );
       }
@@ -89,7 +90,11 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
       subtitle: widget.forced
           ? 'Sua senha foi redefinida pelo líder da equipe. Escolha uma nova '
               'para continuar.'
-          : 'Trocar a senha desconecta o app nos outros aparelhos.',
+          // As chaves dos assistentes de IA caem junto
+          // (`revokeAllCredentialsForUser`): quem descobriu a senha pode ter
+          // aberto uma.
+          : 'Trocar a senha desconecta o app nos outros aparelhos e os '
+              'assistentes de IA que você conectou.',
       children: [
         Form(
           key: _formKey,

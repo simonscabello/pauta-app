@@ -34,10 +34,17 @@ class UnsavedChangesGuard extends StatefulWidget {
     super.key,
     required this.isDirty,
     required this.child,
+    this.confirmLeave = showDiscardChangesDialog,
   });
 
   final bool Function() isDirty;
   final Widget child;
+
+  /// A pergunta feita antes de sair; `true` sai. O padrão é "Sair sem
+  /// salvar?". Troca quando o que se perde não é uma edição — a chave de
+  /// assistente de IA, mostrada uma vez só —, e os três anteparos continuam os
+  /// mesmos: o `onExit` da rota usa a pergunta da tela que está alterada.
+  final Future<bool> Function(BuildContext context) confirmLeave;
 
   /// Alguma tela aberta tem alteração por salvar?
   static bool get hasUnsavedChanges =>
@@ -76,7 +83,7 @@ class _UnsavedChangesGuardState extends State<UnsavedChangesGuard> {
   Future<void> _onBlockedPop() async {
     // `canPop` é do último `build`, e um campo de texto muda sem reconstruir a
     // tela: quem digitou e apagou chega aqui sem nada a perder.
-    final leave = !_dirty || await showDiscardChangesDialog(context);
+    final leave = !_dirty || await widget.confirmLeave(context);
     if (!leave || !mounted) return;
     _discarded = true;
     Navigator.of(context).pop();
@@ -135,23 +142,34 @@ FutureOr<bool> confirmLeaveIfUnsaved(
   BuildContext context,
   GoRouterState state,
 ) async {
-  if (!UnsavedChangesGuard.hasUnsavedChanges) return true;
-  final leave = await showDiscardChangesDialog(context);
+  final dirty = _UnsavedChangesGuardState._active
+      .where((guard) => guard._dirty)
+      .firstOrNull;
+  if (dirty == null) return true;
+  final leave = await dirty.widget.confirmLeave(context);
   if (leave) _UnsavedChangesGuardState._discardAll();
   return leave;
 }
 
 /// "Sair sem salvar?" — **continuar é o botão cheio**: o toque apressado cai
 /// no que preserva o trabalho, e descartar exige ler.
-Future<bool> showDiscardChangesDialog(BuildContext context) async {
+///
+/// Os textos mudam para quem perde outra coisa que não uma edição (ver
+/// [UnsavedChangesGuard.confirmLeave]); a arrumação dos botões, não.
+Future<bool> showDiscardChangesDialog(
+  BuildContext context, {
+  String title = 'Sair sem salvar?',
+  String message =
+      'O que você mudou nesta tela ainda não foi salvo e vai se perder.',
+  String leaveLabel = 'Descartar alterações',
+  String stayLabel = 'Continuar editando',
+}) async {
   final scheme = Theme.of(context).colorScheme;
   final leave = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Sair sem salvar?'),
-      content: const Text(
-        'O que você mudou nesta tela ainda não foi salvo e vai se perder.',
-      ),
+      title: Text(title),
+      content: Text(message),
       actionsPadding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
         0,
@@ -162,12 +180,12 @@ Future<bool> showDiscardChangesDialog(BuildContext context) async {
         TextButton(
           style: TextButton.styleFrom(foregroundColor: scheme.error),
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('Descartar alterações'),
+          child: Text(leaveLabel),
         ),
         FilledButton(
           autofocus: true,
           onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('Continuar editando'),
+          child: Text(stayLabel),
         ),
       ],
     ),

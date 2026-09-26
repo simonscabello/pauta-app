@@ -201,8 +201,9 @@ class _WhatHappens extends StatelessWidget {
   const _WhatHappens();
 
   static const _items = [
-    'Sua conta, sua foto e seus dados pessoais são apagados, e os avisos '
-        'param de chegar em todos os aparelhos.',
+    'Sua conta, sua foto e seus dados pessoais são apagados. Os avisos param '
+        'de chegar em todos os aparelhos, e os assistentes de IA que você '
+        'conectou perdem o acesso.',
     'Você sai das próximas escalas. As que já aconteceram continuam na '
         'equipe, com o seu nome trocado por "Ex-integrante".',
     'Suas indisponibilidades e sugestões de música são apagadas.',
