@@ -24,7 +24,8 @@ const mcpTokenWarningDays = 7;
 /// está no computador.
 const newMcpTokenSuggestsComputer = !kIsWeb;
 
-/// O escopo que deixa a chave criar escalas em rascunho (e apagar rascunho),
+/// O escopo que deixa a chave criar escalas em rascunho, pôr as músicas nelas
+/// e apagar rascunho,
 /// o `MCP_WRITE_SCOPE` do backend. Toda chave lê; esta é a que também grava.
 const mcpWriteScope = 'mcp:write';
 
@@ -75,7 +76,8 @@ class McpToken {
   /// Como o servidor viu, na hora da resposta.
   final bool expired;
 
-  /// Também cria escalas em rascunho. O papel na equipe continua valendo:
+  /// Também cria escalas em rascunho e põe as músicas nelas. O papel na equipe
+  /// continua valendo:
   /// com esta chave, quem é integrante segue só lendo.
   final bool canWrite;
 

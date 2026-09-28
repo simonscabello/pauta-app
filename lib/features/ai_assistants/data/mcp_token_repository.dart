@@ -31,7 +31,8 @@ class McpTokenRepository {
   /// meses. Senha errada volta 403 `INVALID_PASSWORD` (e não 401, que o
   /// interceptor trataria como sessão vencida).
   ///
-  /// `allowWrite` pede o escopo de criar escalas em rascunho; sem ele a chave
+  /// `allowWrite` pede o escopo de criar escalas em rascunho e pôr as músicas
+  /// nelas; sem ele a chave
   /// só lê.
   Future<CreatedMcpToken> create({
     required String name,

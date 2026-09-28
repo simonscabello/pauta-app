@@ -278,8 +278,8 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
                   title: const Text('Também criar escalas'),
                   subtitle: const Text(
                     'Monta as escalas do mês a partir de uma imagem ou texto, '
-                    'sempre em rascunho. Publicar continua sendo no app, por '
-                    'você.',
+                    'sempre em rascunho, e põe as músicas nelas. Publicar '
+                    'continua sendo no app, por você.',
                   ),
                   value: _allowWrite,
                   onChanged: _submitting

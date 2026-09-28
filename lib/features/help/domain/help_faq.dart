@@ -131,7 +131,8 @@ const helpFaq = <FaqEntry>[
         'com o endereço e o cabeçalho que o Pauta mostra.\n\n'
         'O assistente consulta o que você já vê no app. Ele só grava alguma '
         'coisa se a chave for criada com **Também criar escalas** — opção de '
-        'quem lidera —, e mesmo assim só rascunhos. O Claude no navegador e no '
+        'quem lidera —, e mesmo assim só monta escalas em rascunho e põe as '
+        'músicas nelas. O Claude no navegador e no '
         'celular e o ChatGPT ainda não aceitam chave.\n\n'
         'Para desconectar, abra o menu da chave e toque em **Revogar chave**. '
         'Trocar a senha desconecta todos os assistentes de uma vez.',
@@ -198,6 +199,9 @@ const leaderHelpFaq = <FaqEntry>[
         'que não pode. Só cria depois que você confirmar, e **sempre como '
         'rascunho**: nada chega à equipe até você abrir a escala no app e '
         'tocar em **Publicar**.\n\n'
+        'Quando as músicas saírem, é só pedir: "Põe Estou Seguro nos dízimos '
+        'de domingo de manhã." Vale também para escala já publicada, e aí '
+        'quem está escalado recebe o aviso de que as músicas saíram.\n\n'
         'Pessoa ou música que ainda não está no Pauta precisa ser cadastrada '
         'no app antes. Se algo sair errado, peça para ele apagar o rascunho e '
         'refazer.',

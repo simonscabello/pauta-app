@@ -153,7 +153,7 @@ void main() {
       expect(find.text('Ler o que você já vê no app'), findsOneWidget);
       expect(
         find.text('Para quem lidera, se a chave permitir: montar as escalas '
-            'do mês em rascunho'),
+            'do mês em rascunho e pôr as músicas nelas'),
         findsOneWidget,
       );
       expect(

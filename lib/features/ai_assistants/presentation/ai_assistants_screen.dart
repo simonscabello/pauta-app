@@ -125,7 +125,8 @@ class AiAssistantsScreen extends ConsumerWidget {
       Text(
         'Cada chave deixa um assistente de IA consultar o Pauta por você. Ele '
         'lê o que você vê no app. Só as chaves marcadas com “Cria escalas” '
-        'gravam alguma coisa, e sempre em rascunho.',
+        'gravam alguma coisa: montam escalas em rascunho e põem as músicas '
+        'nelas.',
         style: theme.textTheme.bodyMedium?.copyWith(color: muted),
       ),
       const SizedBox(height: AppSpacing.xl),
@@ -236,7 +237,7 @@ class _WhatItCanDo extends StatelessWidget {
           const _Capability(
             allowed: true,
             text: 'Para quem lidera, se a chave permitir: montar as escalas '
-                'do mês em rascunho',
+                'do mês em rascunho e pôr as músicas nelas',
           ),
           const _Capability(
             allowed: false,
@@ -373,7 +374,8 @@ class _KeyRowState extends State<_KeyRow> {
                     icon: Icons.edit_calendar_outlined,
                     label: 'Cria escalas',
                     tone: AppTone.info,
-                    semanticsLabel: 'Esta chave também cria escalas em rascunho',
+                    semanticsLabel:
+                        'Esta chave também cria escalas e põe as músicas nelas',
                   ),
                 ],
               ],
