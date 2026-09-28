@@ -30,10 +30,14 @@ class McpTokenRepository {
   /// esquecido num aparelho não pode bastar para abrir uma credencial que dura
   /// meses. Senha errada volta 403 `INVALID_PASSWORD` (e não 401, que o
   /// interceptor trataria como sessão vencida).
+  ///
+  /// `allowWrite` pede o escopo de criar escalas em rascunho; sem ele a chave
+  /// só lê.
   Future<CreatedMcpToken> create({
     required String name,
     required String password,
     required int expiresInDays,
+    bool allowWrite = false,
   }) {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -42,6 +46,7 @@ class McpTokenRepository {
           'name': name,
           'password': password,
           'expiresInDays': expiresInDays,
+          if (allowWrite) 'allowWrite': true,
         },
       );
       return CreatedMcpToken.fromJson(response.data!);

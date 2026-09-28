@@ -13,6 +13,7 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/unsaved_changes_guard.dart';
+import '../../auth/application/auth_controller.dart';
 import '../data/mcp_token_repository.dart';
 import '../domain/mcp_token.dart';
 import 'ai_assistants_screen.dart';
@@ -55,6 +56,10 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
   final _password = TextEditingController();
 
   int _days = defaultMcpTokenValidityDays;
+
+  /// Também criar escalas em rascunho. Desligado por padrão: ler é o que
+  /// quase todo mundo quer, e gravar é uma escolha que se faz de propósito.
+  bool _allowWrite = false;
   bool _obscure = true;
   bool _submitting = false;
   String? _passwordError;
@@ -114,6 +119,7 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
             name: _name.text.trim(),
             password: _password.text,
             expiresInDays: _days,
+            allowWrite: _allowWrite && _leadsATeam(),
           );
       // A lista embaixo desta tela já volta mostrando a chave nova.
       container.invalidate(mcpTokensProvider);
@@ -135,6 +141,12 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
       });
     }
   }
+
+  /// Quem lidera **alguma** equipe. A chave é da pessoa, e não de uma equipe:
+  /// o que ela pode criar é conferido a cada chamada, pelo papel na equipe
+  /// da escala. Para quem só é integrante, a opção não teria efeito nenhum.
+  bool _leadsATeam() =>
+      ref.read(authControllerProvider).teams.any((team) => team.canManage);
 
   /// O 429 vem da biblioteca de limite, em inglês ("ThrottlerException: Too
   /// Many Requests"): são cinco tentativas por minuto nesta rota, porque ela
@@ -178,6 +190,8 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final now = ref.watch(aiAssistantsClockProvider)();
+    final leads =
+        ref.watch(authControllerProvider).teams.any((team) => team.canManage);
 
     return FormScaffold(
       appBar: AppBar(title: const Text('Nova chave')),
@@ -249,6 +263,31 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
+              if (leads) ...[
+                // A mesma cara do "Em afastamento" da ficha do integrante: o
+                // próprio tile pinta o fundo. Dentro de um `AppGroup`, o
+                // efeito do toque ficaria por baixo do fundo do grupo.
+                SwitchListTile.adaptive(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  tileColor: theme.colorScheme.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  title: const Text('Também criar escalas'),
+                  subtitle: const Text(
+                    'Monta as escalas do mês a partir de uma imagem ou texto, '
+                    'sempre em rascunho. Publicar continua sendo no app, por '
+                    'você.',
+                  ),
+                  value: _allowWrite,
+                  onChanged: _submitting
+                      ? null
+                      : (value) => setState(() => _allowWrite = value),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               TextFormField(
                 controller: _password,
                 enabled: !_submitting,
@@ -366,8 +405,12 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Depois, abra o Claude Code e pergunte: “Quais são as minhas '
-            'próximas escalas?”',
+            created.token.canWrite
+                ? 'Depois, abra o Claude Code, mande a imagem da escala do mês '
+                    'e peça: “Cadastre estas escalas no Pauta.” Ele confere '
+                    'cada nome com você antes de criar.'
+                : 'Depois, abra o Claude Code e pergunte: “Quais são as minhas '
+                    'próximas escalas?”',
             style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
         ] else ...[

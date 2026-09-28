@@ -13,6 +13,8 @@ import 'package:louvor_app/features/ai_assistants/data/mcp_token_repository.dart
 import 'package:louvor_app/features/ai_assistants/domain/mcp_token.dart';
 import 'package:louvor_app/features/ai_assistants/presentation/ai_assistants_screen.dart';
 import 'package:louvor_app/features/ai_assistants/presentation/new_ai_key_screen.dart';
+import 'package:louvor_app/features/auth/application/auth_controller.dart';
+import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/shared/widgets/form_scaffold.dart';
 import 'package:louvor_app/shared/widgets/unsaved_changes_guard.dart';
 
@@ -150,7 +152,12 @@ void main() {
       expect(find.text('O que o assistente pode fazer'), findsOneWidget);
       expect(find.text('Ler o que você já vê no app'), findsOneWidget);
       expect(
-        find.text('Criar, mudar ou apagar qualquer coisa'),
+        find.text('Para quem lidera, se a chave permitir: montar as escalas '
+            'do mês em rascunho'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Publicar escalas ou mudar o que a equipe já vê'),
         findsOneWidget,
       );
       expect(
@@ -163,7 +170,9 @@ void main() {
 
       // "Pode" e "Não pode" chegam ao leitor de tela por extenso.
       expect(
-        find.bySemanticsLabel('Não pode: Criar, mudar ou apagar qualquer coisa'),
+        find.bySemanticsLabel(
+          'Não pode: Publicar escalas ou mudar o que a equipe já vê',
+        ),
         findsOneWidget,
       );
       semantica.dispose();
@@ -183,6 +192,8 @@ void main() {
       expect(find.text('Claude no notebook'), findsOneWidget);
       expect(find.text('Termina em k3Fq · usada hoje'), findsOneWidget);
       expect(find.text('Vale até 25 de dezembro'), findsOneWidget);
+      // Só a chave que grava leva o selo.
+      expect(find.text('Cria escalas'), findsOneWidget);
 
       expect(find.text('Cursor no trabalho'), findsOneWidget);
       expect(
@@ -412,6 +423,66 @@ void main() {
       });
     });
 
+    testWidgets('quem lidera pode pedir também criar escalas, e o pedido leva '
+        'a escolha', (tester) async {
+      final repositorio = _Repositorio([]);
+      await _pump(
+        tester,
+        repositorio,
+        rota: '/perfil/assistentes/nova',
+        papel: 'LEADER',
+      );
+
+      // Desligado por padrão: gravar é uma escolha feita de propósito.
+      final interruptor = find.widgetWithText(
+        SwitchListTile,
+        'Também criar escalas',
+      );
+      expect(interruptor, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(interruptor).value, isFalse);
+
+      await tester.tap(interruptor);
+      await tester.pumpAndSettle();
+      await _preencher(tester, nome: 'Claude escalas', senha: 'senhaFinal789');
+      await tester.ensureVisible(find.text('Criar chave'));
+      await tester.tap(find.text('Criar chave'));
+      await tester.pumpAndSettle();
+
+      expect(repositorio.pedido, {
+        'name': 'Claude escalas',
+        'password': 'senhaFinal789',
+        'expiresInDays': 90,
+        'allowWrite': true,
+      });
+      // A dica do que pedir ao assistente muda com a chave.
+      expect(
+        find.textContaining('mande a imagem da escala do mês'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('integrante não vê a opção de criar escalas', (tester) async {
+      final repositorio = _Repositorio([]);
+      await _pump(
+        tester,
+        repositorio,
+        rota: '/perfil/assistentes/nova',
+        papel: 'MEMBER',
+      );
+
+      expect(find.text('Também criar escalas'), findsNothing);
+
+      await _preencher(tester, nome: 'Claude', senha: 'senhaFinal789');
+      await tester.tap(find.text('Criar chave'));
+      await tester.pumpAndSettle();
+
+      expect(repositorio.pedido!.containsKey('allowWrite'), isFalse);
+      expect(
+        find.textContaining('Quais são as minhas próximas escalas?'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('"Melhor fazer no computador" só fora da Web', (tester) async {
       await _pump(
         tester,
@@ -607,6 +678,7 @@ McpToken _token({
   DateTime? expiresAt,
   DateTime? lastUsedAt,
   bool expired = false,
+  bool canWrite = false,
 }) {
   return McpToken(
     id: id,
@@ -616,6 +688,7 @@ McpToken _token({
     expiresAt: expiresAt ?? DateTime(2026, 12, 25, 10),
     lastUsedAt: lastUsedAt,
     expired: expired,
+    canWrite: canWrite,
   );
 }
 
@@ -628,6 +701,7 @@ List<McpToken> _tresChaves() => [
         createdAt: DateTime(2026, 9, 20),
         lastUsedAt: DateTime(2026, 9, 26, 9, 30),
         expiresAt: DateTime(2026, 12, 25, 10),
+        canWrite: true,
       ),
       _token(
         id: 'igreja',
@@ -664,11 +738,13 @@ class _Repositorio extends McpTokenRepository {
     required String name,
     required String password,
     required int expiresInDays,
+    bool allowWrite = false,
   }) async {
     pedido = {
       'name': name,
       'password': password,
       'expiresInDays': expiresInDays,
+      if (allowWrite) 'allowWrite': true,
     };
     final falha = erro;
     if (falha != null) throw falha;
@@ -679,6 +755,7 @@ class _Repositorio extends McpTokenRepository {
       tokenHint: 'pauta_mcp_...k3Fq',
       createdAt: _agora,
       expiresAt: _agora.add(Duration(days: expiresInDays)),
+      canWrite: allowWrite,
     );
     chaves = [chave, ...chaves];
     return CreatedMcpToken(token: chave, secret: _segredo);
@@ -758,6 +835,7 @@ Future<GoRouter> _pump(
   Size size = const Size(400, 1800),
   double textScale = 1.0,
   bool sugerirComputador = false,
+  String? papel,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -804,6 +882,29 @@ Future<GoRouter> _pump(
       overrides: [
         mcpTokenRepositoryProvider.overrideWithValue(repositorio),
         aiAssistantsClockProvider.overrideWithValue(() => _agora),
+        if (papel != null)
+          authControllerProvider.overrideWith(
+            (ref) => _FakeAuthController(
+              ref,
+              AuthState.signedIn(
+                const AuthUser(
+                  id: 'u1',
+                  name: 'Samuel',
+                  email: 'samuel@teste.com',
+                  mustChangePassword: false,
+                ),
+                [
+                  TeamSummary(
+                    membershipId: 'm1',
+                    teamId: 't1',
+                    name: 'Ministério de Louvor',
+                    role: papel,
+                    displayName: 'Samuel',
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
       child: MaterialApp.router(
         theme: AppTheme.light,
@@ -819,4 +920,15 @@ Future<GoRouter> _pump(
   );
   await tester.pumpAndSettle();
   return router;
+}
+
+class _FakeAuthController extends AuthController {
+  _FakeAuthController(super.ref, this._initial);
+
+  final AuthState _initial;
+
+  @override
+  Future<void> bootstrap() async {
+    state = _initial;
+  }
 }

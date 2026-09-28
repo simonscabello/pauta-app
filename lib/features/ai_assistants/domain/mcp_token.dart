@@ -24,6 +24,10 @@ const mcpTokenWarningDays = 7;
 /// está no computador.
 const newMcpTokenSuggestsComputer = !kIsWeb;
 
+/// O escopo que deixa a chave criar escalas em rascunho (e apagar rascunho),
+/// o `MCP_WRITE_SCOPE` do backend. Toda chave lê; esta é a que também grava.
+const mcpWriteScope = 'mcp:write';
+
 /// Uma chave de assistente de IA, como `GET /users/me/mcp-tokens` devolve.
 ///
 /// **O valor inteiro não mora aqui.** A lista só traz a dica
@@ -38,6 +42,7 @@ class McpToken {
     required this.expiresAt,
     this.lastUsedAt,
     this.expired = false,
+    this.canWrite = false,
   });
 
   factory McpToken.fromJson(Map<String, dynamic> json) {
@@ -50,6 +55,8 @@ class McpToken {
       expiresAt: DateTime.parse(json['expiresAt'] as String),
       lastUsedAt: lastUsedAt == null ? null : DateTime.parse(lastUsedAt),
       expired: json['expired'] as bool? ?? false,
+      canWrite: (json['scopes'] as List<dynamic>? ?? const [])
+          .contains(mcpWriteScope),
     );
   }
 
@@ -67,6 +74,10 @@ class McpToken {
 
   /// Como o servidor viu, na hora da resposta.
   final bool expired;
+
+  /// Também cria escalas em rascunho. O papel na equipe continua valendo:
+  /// com esta chave, quem é integrante segue só lendo.
+  final bool canWrite;
 
   /// Os últimos caracteres, que a pessoa confere contra o que colou.
   String get ending {

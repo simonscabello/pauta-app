@@ -129,9 +129,10 @@ const helpFaq = <FaqEntry>[
         'próximas escalas?".\n'
         '**Cursor, VS Code e outros**: adicione um servidor MCP do tipo HTTP '
         'com o endereço e o cabeçalho que o Pauta mostra.\n\n'
-        'O assistente só consulta o que você já vê no app, e não muda nada. O '
-        'Claude no navegador e no celular e o ChatGPT ainda não aceitam '
-        'chave.\n\n'
+        'O assistente consulta o que você já vê no app. Ele só grava alguma '
+        'coisa se a chave for criada com **Também criar escalas** — opção de '
+        'quem lidera —, e mesmo assim só rascunhos. O Claude no navegador e no '
+        'celular e o ChatGPT ainda não aceitam chave.\n\n'
         'Para desconectar, abra o menu da chave e toque em **Revogar chave**. '
         'Trocar a senha desconecta todos os assistentes de uma vez.',
   ),
@@ -185,6 +186,21 @@ const leaderHelpFaq = <FaqEntry>[
     answer: 'Nas músicas da escala, monte o primeiro culto. No culto que '
         'ficou vazio aparece **Copiar de Manhã**: as músicas vêm na mesma '
         'ordem, com o momento e o tom. Depois ajuste o que mudar.',
+  ),
+  FaqEntry(
+    question: 'Posso cadastrar a escala do mês mandando uma imagem para a IA?',
+    answer: 'Pode, com um assistente de IA no computador, como o Claude Code. '
+        'No **Perfil**, abra **Assistentes de IA**, toque em **Criar chave** e '
+        'ligue **Também criar escalas**. Depois, mande ao assistente a imagem '
+        '(ou o texto) da escala do mês e peça para cadastrar.\n\n'
+        'Ele confere cada nome e cada função com a equipe e pergunta o que '
+        'não tiver certeza — apelidos, instrumento não informado, quem avisou '
+        'que não pode. Só cria depois que você confirmar, e **sempre como '
+        'rascunho**: nada chega à equipe até você abrir a escala no app e '
+        'tocar em **Publicar**.\n\n'
+        'Pessoa ou música que ainda não está no Pauta precisa ser cadastrada '
+        'no app antes. Se algo sair errado, peça para ele apagar o rascunho e '
+        'refazer.',
   ),
   FaqEntry(
     question: 'Alguém esqueceu a senha. Como ajudo?',
