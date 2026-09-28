@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -28,7 +29,13 @@ class _CreateTeamScreenState extends ConsumerState<CreateTeamScreen> {
     super.dispose();
   }
 
+  /// Depois de criar, **sai daqui**. A tela não navegava: recarregava a sessão
+  /// e ficava parada com o formulário de pé, e quem achou que nada tinha
+  /// acontecido tocou de novo — três equipes com o mesmo nome em produção.
   Future<void> _submit() async {
+    // Botão e campo já se travam no carregamento; isto é a trava do próprio
+    // `_submit`, para não depender de os dois continuarem assim.
+    if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -37,9 +44,15 @@ class _CreateTeamScreenState extends ConsumerState<CreateTeamScreen> {
     });
 
     try {
-      await ref.read(teamRepositoryProvider).create(name: _name.text.trim());
+      final team =
+          await ref.read(teamRepositoryProvider).create(name: _name.text.trim());
       // Recarrega a sessao para a nova equipe entrar no estado de auth.
       await ref.read(authControllerProvider.notifier).reloadTeams();
+      // Quem já servia em outra equipe cairia nela, e não na que acabou de
+      // criar.
+      await ref.read(activeTeamIdProvider.notifier).select(team.id);
+      if (!mounted) return;
+      context.go('/inicio');
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {

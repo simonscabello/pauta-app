@@ -7,6 +7,13 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.29.1 — 28/09/2026
+
+### Correções
+- Criar equipe agora leva ao Início logo depois de criar, já com a equipe
+  nova escolhida. Antes a tela ficava parada, e tocar de novo criava outra
+  equipe com o mesmo nome.
+
 ## 0.29.0 — 28/09/2026
 
 ### Melhorias
