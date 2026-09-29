@@ -15,6 +15,10 @@ do `pauta-api`.
   escala publicada, manda a escala para lá pelo número do Pauta — o mesmo
   texto do botão de compartilhar. Só aparece quando o envio está ligado.
 
+### Melhorias
+- A política de privacidade explica o envio da escala ao grupo do WhatsApp
+  pelo número do Pauta: só quando a liderança pede, e sem ler as conversas.
+
 ## 0.29.1 — 28/09/2026
 
 ### Correções
