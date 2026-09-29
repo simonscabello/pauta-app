@@ -290,16 +290,18 @@ class _SuggestionRow extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-        const SizedBox(height: AppSpacing.xs),
         // A justificativa aparece aqui, e não só na tela de sugestões: é o que
         // o líder lê para decidir, e ele está decidindo agora. Em duas linhas:
         // inteira, cada sugestão ocupava meio celular no topo da montagem.
-        Text(
-          s.reason,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall,
-        ),
+        if (s.hasReason) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            s.reason,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
         const SizedBox(height: AppSpacing.xs),
         Text(
           s.alsoSuggestedBy.isEmpty

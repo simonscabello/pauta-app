@@ -109,8 +109,11 @@ class SongSuggestion {
   /// Dia civil pedido, ou nulo para "sem data".
   final DateTime? targetDate;
 
-  /// Por que valeria a pena. Nunca vazio — o servidor exige.
+  /// Por que valeria a pena. Vazio quando quem sugeriu não disse: o motivo
+  /// é opcional desde 09/2026 (o servidor manda `null`).
   final String reason;
+
+  bool get hasReason => reason.trim().isNotEmpty;
 
   final SuggestionStatus status;
 

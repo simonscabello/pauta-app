@@ -49,7 +49,7 @@ class _SuggestionsFake extends SuggestionRepository {
   Future<SongSuggestion> create(
     String teamId, {
     required String title,
-    required String reason,
+    String? reason,
     String? songId,
     String? artist,
     String? lyricsUrl,
@@ -59,6 +59,7 @@ class _SuggestionsFake extends SuggestionRepository {
   }) async {
     enviado = {
       'title': title,
+      'reason': reason,
       'songId': songId,
       'lyricsUrl': lyricsUrl,
       'spotifyUrl': spotifyUrl,
@@ -225,5 +226,41 @@ void main() {
       sugestoes.enviado?['lyricsUrl'],
       'https://www.cifraclub.com.br/deus-e-deus/',
     );
+  });
+
+  testWidgets('o motivo é opcional: sem ele a sugestão sai', (tester) async {
+    const song = Song(id: 's1', title: 'Deus é Deus');
+    final sugestoes = await _montar(tester, songs: _SongsFake(), song: song);
+
+    await enviar(tester);
+
+    expect(sugestoes.enviado?['songId'], 's1');
+    expect(sugestoes.enviado?['reason'], isNull);
+  });
+
+  testWidgets('a frase pronta escreve no campo e sai com a sugestão',
+      (tester) async {
+    const song = Song(id: 's1', title: 'Deus é Deus');
+    final sugestoes = await _montar(tester, songs: _SongsFake(), song: song);
+    TextEditingController? motivo() => tester
+        .widget<TextField>(find.byKey(const ValueKey('sugestao-motivo')))
+        .controller;
+
+    await tester.ensureVisible(find.text('Letra bíblica'));
+    await tester.tap(find.text('Letra bíblica'));
+    await tester.pumpAndSettle();
+    expect(motivo()?.text, 'Letra bíblica');
+
+    await tester.tap(find.text('Música animada'));
+    await tester.pumpAndSettle();
+    expect(motivo()?.text, 'Letra bíblica. Música animada');
+
+    // Tocar de novo tira a frase, e só ela.
+    await tester.tap(find.text('Letra bíblica'));
+    await tester.pumpAndSettle();
+    expect(motivo()?.text, 'Música animada');
+
+    await enviar(tester);
+    expect(sugestoes.enviado?['reason'], 'Música animada');
   });
 }

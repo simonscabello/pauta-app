@@ -654,9 +654,11 @@ class _Body extends StatelessWidget {
         ],
 
         const SizedBox(height: AppSpacing.xl),
-        const SectionHeader(
-          title: 'Por que essa música',
-          padding: EdgeInsets.only(bottom: AppSpacing.sm),
+        SectionHeader(
+          // Sem motivo, o cartão fica só com a assinatura, e o título não
+          // promete o que não tem.
+          title: s.hasReason ? 'Por que essa música' : 'Quem sugeriu',
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
         ),
         AppCard(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -666,11 +668,13 @@ class _Body extends StatelessWidget {
               // Inteiro, e sem cortar: é o conteúdo da sugestão, e é o que
               // torna a recusa uma resposta a um argumento em vez de resposta
               // ao gosto de alguém.
-              Text(
-                s.reason,
-                style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-              ),
-              const SizedBox(height: AppSpacing.lg),
+              if (s.hasReason) ...[
+                Text(
+                  s.reason,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               Row(
                 children: [
                   AppAvatar(

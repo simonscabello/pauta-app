@@ -7,6 +7,16 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.31.0 — 29/09/2026
+
+### Melhorias
+- Sugerir uma música ficou mais rápido: o motivo agora é opcional. Acima do
+  campo há frases prontas — "Letra bíblica", "Música animada", "Boa para
+  adoração", "Fácil de aprender", "A igreja já conhece" — que um toque
+  escreve no campo e outro toque tira. Dá para completar à mão.
+- Sugestão enviada sem motivo aparece sem linha em branco na lista, na
+  montagem das músicas da escala e na tela da sugestão.
+
 ## 0.30.0 — 28/09/2026
 
 ### Novidades

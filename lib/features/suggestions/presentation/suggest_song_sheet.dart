@@ -16,6 +16,7 @@ import '../../events/domain/event_models.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../data/suggestion_repository.dart';
+import '../domain/reason_phrases.dart';
 
 /// Abre a folha de sugerir e devolve `true` se alguma coisa foi enviada.
 Future<bool> showSuggestSongSheet(
@@ -94,15 +95,6 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
 
   bool _sending = false;
   String? _error;
-
-  /// O erro da justificativa mora **no campo**, com a borda de erro. Ele
-  /// aparecia no pé da folha, abaixo dos links, longe de onde a pessoa tinha
-  /// de escrever — e sem dizer quanto faltava.
-  String? _reasonError;
-
-  /// Mínimo espelhado do servidor: obrigatório sem mínimo vira ".". Validar
-  /// aqui poupa a ida de rede só para receber o mesmo "não".
-  static const _minReason = 10;
 
   @override
   void initState() {
@@ -213,13 +205,6 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
       setState(() => _error = 'Diga qual é a música.');
       return;
     }
-    if (reason.length < _minReason) {
-      setState(() {
-        _reasonError = 'Escreva pelo menos $_minReason letras sobre por que '
-            'essa música valeria.';
-      });
-      return;
-    }
 
     setState(() {
       _sending = true;
@@ -230,7 +215,7 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
       await ref.read(suggestionRepositoryProvider).create(
             widget.teamId,
             title: _titulo,
-            reason: reason,
+            reason: reason.isEmpty ? null : reason,
             songId: _song?.id,
             artist: _artista,
             lyricsUrl: _lyricsController.text.trim(),
@@ -629,36 +614,65 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
     final label = _date == null
         ? 'Por que vale a pena a equipe aprender essa música?'
         : 'Por que essa música nesse domingo?';
+    final frases = [
+      ...reasonPhrases,
+      if (_date != null) ...datedReasonPhrases,
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: theme.textTheme.titleSmall),
+        const SizedBox(height: 2),
+        Text(
+          'Opcional. Toque numa frase ou escreva do seu jeito.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: AppSpacing.sm),
+        // O motivo deixou de ser obrigatório: a cobrança fazia a sugestão não
+        // chegar. As frases são o meio-termo -- um toque ainda entrega ao
+        // líder um argumento, e não só um título.
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final frase in frases)
+              FilterChip(
+                label: Text(frase),
+                selected:
+                    containsReasonPhrase(_reasonController.text, frase),
+                onSelected: (_) => _alternarFrase(frase),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
         TextField(
           key: const ValueKey('sugestao-motivo'),
           controller: _reasonController,
           maxLines: 4,
           maxLength: 500,
           textCapitalization: TextCapitalization.sentences,
-          onChanged: (texto) => setState(() {
-            // Some assim que deixa de valer: o erro não fica acusando o que
-            // já foi corrigido.
-            if (texto.trim().length >= _minReason) _reasonError = null;
-          }),
-          decoration: InputDecoration(
+          // Os chips acima leem o texto: escrever a frase à mão também os
+          // marca.
+          onChanged: (_) => setState(() {}),
+          decoration: const InputDecoration(
             hintText: 'A igreja já canta essa nos cultos de oração...',
-            // Obrigatório: é o que o líder lê para decidir, e é o que faz uma
-            // recusa ser resposta a um argumento. O mínimo vai escrito: o
-            // contador dizia "3/500", que fala do teto e não do piso.
-            helperText: 'Obrigatório, com pelo menos $_minReason letras',
-            helperMaxLines: 2,
-            errorText: _reasonError,
-            errorMaxLines: 2,
           ),
         ),
       ],
     );
+  }
+
+  void _alternarFrase(String frase) {
+    final texto = toggleReasonPhrase(_reasonController.text, frase);
+    setState(() {
+      _reasonController.value = TextEditingValue(
+        text: texto,
+        selection: TextSelection.collapsed(offset: texto.length),
+      );
+    });
   }
 
   Widget _rotulo(ThemeData theme, String texto) => Padding(

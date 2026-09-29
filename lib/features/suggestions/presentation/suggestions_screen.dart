@@ -270,15 +270,17 @@ class SuggestionRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    s.reason,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                  if (s.hasReason) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      s.reason,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [

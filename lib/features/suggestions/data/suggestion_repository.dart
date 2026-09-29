@@ -62,7 +62,7 @@ class SuggestionRepository {
   Future<SongSuggestion> create(
     String teamId, {
     required String title,
-    required String reason,
+    String? reason,
     String? songId,
     String? artist,
     String? lyricsUrl,
@@ -75,7 +75,7 @@ class SuggestionRepository {
         '/teams/$teamId/song-suggestions',
         data: {
           'title': title,
-          'reason': reason,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
           if (songId != null) 'songId': songId,
           if (artist != null && artist.isNotEmpty) 'artist': artist,
           if (lyricsUrl != null && lyricsUrl.isNotEmpty) 'lyricsUrl': lyricsUrl,
