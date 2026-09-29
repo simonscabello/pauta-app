@@ -108,16 +108,24 @@ class _PendingLocation {
   }
 }
 
-/// Faz o go_router reavaliar o redirect sempre que o estado de auth muda.
-class _AuthRefreshNotifier extends ChangeNotifier {
-  _AuthRefreshNotifier(Ref ref) {
-    _subscription = ref.listen<AuthState>(
-      authControllerProvider,
+/// Faz o go_router reavaliar as rotas quando muda o que elas leem.
+///
+/// **Não a cada mudança de auth.** O redirect lê o `status`, e
+/// `_withActiveTeam`/`_withRouteTeam` leem a conta e as equipes. Nome, e-mail,
+/// nascimento, gênero e foto não entram: o aviso faz o go_router reaplicar o
+/// endereço, e esse trabalho termina **depois** de um `pop` feito em seguida —
+/// era por isso que "Salvar" em "Meus dados" mostrava "Dados atualizados." e
+/// a tela continuava aberta (`test/router_refresh_test.dart`).
+@visibleForTesting
+class AuthRefreshNotifier extends ChangeNotifier {
+  AuthRefreshNotifier(Ref ref) {
+    _subscription = ref.listen<String>(
+      authControllerProvider.select(routeRelevantAuthKey),
       (_, __) => notifyListeners(),
     );
   }
 
-  late final ProviderSubscription<AuthState> _subscription;
+  late final ProviderSubscription<String> _subscription;
 
   @override
   void dispose() {
@@ -126,8 +134,19 @@ class _AuthRefreshNotifier extends ChangeNotifier {
   }
 }
 
+/// O que do estado de auth decide rotas: o status, a conta e, em cada equipe,
+/// o vínculo e o papel. O nome da equipe e o apelido ficam de fora — mudam sem
+/// mudar para onde se pode ir.
+@visibleForTesting
+String routeRelevantAuthKey(AuthState auth) => [
+      auth.status.name,
+      auth.user?.id ?? '',
+      for (final team in auth.teams)
+        '${team.teamId}:${team.membershipId}:${team.role}',
+    ].join('|');
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final refresh = _AuthRefreshNotifier(ref);
+  final refresh = AuthRefreshNotifier(ref);
   ref.onDispose(refresh.dispose);
   final pending = _PendingLocation();
 

@@ -7,6 +7,13 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.32.1 — 29/09/2026
+
+### Correções
+- Em Perfil › Meus dados, "Salvar" mostrava "Dados atualizados." e a tela
+  continuava aberta. Agora ela fecha depois de salvar — inclusive quando se
+  chega nela pelo "Complete seu perfil" da apresentação.
+
 ## 0.32.0 — 29/09/2026
 
 ### Novidades
