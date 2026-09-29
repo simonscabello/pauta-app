@@ -60,16 +60,16 @@ class MemberTourContext {
   final bool pushSupported;
 }
 
-/// O tour dos integrantes, na ordem em que a pessoa usa o app numa semana.
+/// O tour do primeiro acesso, na ordem em que a pessoa usa o app numa semana.
+/// É o mesmo para todos os papéis: quem lidera também precisa achar a própria
+/// escala, a disponibilidade e o repertório.
 ///
-/// **Oito paradas, uma ideia cada.** Não é manual: ensina onde as coisas
+/// **Seis paradas, uma ideia cada.** Não é manual: ensina onde as coisas
 /// ficam e para que servem, e o resto a pessoa descobre tocando. Os textos
 /// seguem a regra dos avisos — curtos, sem termo técnico, e dizendo o que a
-/// pessoa faz, não como o app funciona.
-///
-/// **Disponibilidade tem duas paradas**, e é a única: é o que o integrante
-/// *faz* no app além de ler, é o que tem prazo, e a Home mostra só a porta —
-/// a segunda parada mostra o botão lá dentro.
+/// pessoa faz, não como o app funciona. Depois delas, "Complete seu perfil"
+/// (a foto e a data de nascimento) é uma fase do `TourController`, e não uma
+/// parada: não destaca nada, pede algo.
 List<TourStep> memberTourSteps(MemberTourContext context) {
   final nextId = context.nextScheduleId;
 

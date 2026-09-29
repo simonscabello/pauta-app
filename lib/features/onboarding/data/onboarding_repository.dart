@@ -131,7 +131,8 @@ Future<void> recordOnboardingOutcome(
   }
 }
 
-/// Se as boas-vindas dos integrantes devem aparecer para quem está na conta.
+/// Se as boas-vindas do primeiro acesso devem aparecer para quem está na
+/// conta — qualquer papel.
 ///
 /// Observa só o **id** do usuário: trocar de conta no mesmo aparelho refaz a
 /// pergunta; mudar o nome ou a foto, não. Antes de perguntar ao servidor,

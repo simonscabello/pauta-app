@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// A regra de oferta e o caminho do tour, sem widget nenhum.
 ///
 /// O que quebraria calado: a versão nova não reaparecer para quem viu a
-/// anterior, "Agora não" não contar como resposta, e a parada das músicas
+/// anterior, pular não contar como resposta, e a parada das músicas
 /// apontar para uma escala que não é da pessoa.
 void main() {
   group('quando oferecer', () {

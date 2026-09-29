@@ -10,6 +10,31 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../auth/application/auth_controller.dart';
 
+/// Abre a câmera ou a galeria já com os limites do envio. Nulo quando a
+/// pessoa desistiu. É o mesmo caminho da foto do Perfil e do "Complete seu
+/// perfil" do tour.
+Future<XFile?> pickAvatarImage(ImageSource source) {
+  return ImagePicker().pickImage(
+    source: source,
+    maxWidth: 1024,
+    maxHeight: 1024,
+    imageQuality: 85,
+  );
+}
+
+/// Envia a imagem escolhida como foto de perfil.
+///
+/// Bytes, e nao `picked.path`: no navegador o caminho e uma URL `blob:` e
+/// `dart:io` nao existe para abri-la. `readAsBytes` e a unica leitura que o
+/// `XFile` oferece nas duas plataformas.
+Future<void> uploadAvatarImage(WidgetRef ref, XFile picked) async {
+  final bytes = await picked.readAsBytes();
+  await ref.read(authControllerProvider.notifier).updateAvatar(
+        bytes: bytes,
+        filename: picked.name,
+      );
+}
+
 /// Foto de perfil com o gesto de troca embutido.
 ///
 /// O arquivo sai do celular ja reduzido (1024px, qualidade 85): uma foto de
@@ -29,25 +54,9 @@ class _ProfilePhotoState extends ConsumerState<ProfilePhoto> {
   bool _busy = false;
 
   Future<void> _pick(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(
-      source: source,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 85,
-    );
-
+    final picked = await pickAvatarImage(source);
     if (picked == null) return;
-    // Bytes, e nao `picked.path`: no navegador o caminho e uma URL `blob:` e
-    // `dart:io` nao existe para abri-la. `readAsBytes` e a unica leitura que o
-    // `XFile` oferece nas duas plataformas.
-    final bytes = await picked.readAsBytes();
-    await _run(
-      () => ref.read(authControllerProvider.notifier).updateAvatar(
-            bytes: bytes,
-            filename: picked.name,
-          ),
-      done: 'Foto atualizada.',
-    );
+    await _run(() => uploadAvatarImage(ref, picked), done: 'Foto atualizada.');
   }
 
   Future<void> _remove() {
@@ -57,7 +66,10 @@ class _ProfilePhotoState extends ConsumerState<ProfilePhoto> {
     );
   }
 
-  Future<void> _run(Future<void> Function() action, {required String done}) async {
+  Future<void> _run(
+    Future<void> Function() action, {
+    required String done,
+  }) async {
     setState(() => _busy = true);
     try {
       await action();

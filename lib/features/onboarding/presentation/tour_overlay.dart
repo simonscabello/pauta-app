@@ -1,20 +1,26 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_elevation.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_brand_mark.dart';
 import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../auth/application/auth_controller.dart';
+import '../../profile/presentation/profile_photo.dart';
 import '../application/tour_controller.dart';
 import '../domain/member_tour.dart';
 import 'tour_target.dart';
@@ -32,8 +38,13 @@ class OnboardingTourHost extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final active =
-        ref.watch(tourControllerProvider.select((tour) => tour.isActive));
+    // Em pausa (a pessoa foi preencher "Meus dados") o tour continua ativo,
+    // mas não desenha nada: a tela de lá precisa dos toques e das folhas.
+    final active = ref.watch(
+      tourControllerProvider.select(
+        (tour) => tour.isActive && tour.phase != TourPhase.paused,
+      ),
+    );
 
     return Stack(
       children: [
@@ -193,13 +204,8 @@ class _TourLayerState extends ConsumerState<_TourLayer>
     }
   }
 
-  Future<void> _decline() async {
-    _showHelpHint();
-    await ref.read(tourControllerProvider.notifier).declineWelcome();
-  }
-
-  /// Quem disse "agora não" precisa saber onde achar depois — senão o "agora"
-  /// vira "nunca".
+  /// Quem pulou precisa saber onde achar depois — senão o "depois" vira
+  /// "nunca".
   void _showHelpHint() {
     showAppSnackBar(
       context,
@@ -225,15 +231,18 @@ class _TourLayerState extends ConsumerState<_TourLayer>
     final controller = ref.read(tourControllerProvider.notifier);
     final key = event.logicalKey;
 
+    // Esc nas boas-vindas não faz nada: o primeiro acesso passa pelo tour.
     if (key == LogicalKeyboardKey.escape) {
-      if (tour.phase == TourPhase.welcome) {
-        _decline();
-      } else if (tour.phase == TourPhase.touring) {
+      if (tour.phase == TourPhase.touring) {
         _skip();
+      } else if (tour.phase == TourPhase.profile) {
+        controller.continueFromProfile();
       }
       return KeyEventResult.handled;
     }
-    if (tour.phase == TourPhase.touring || tour.phase == TourPhase.finished) {
+    if (tour.phase == TourPhase.touring ||
+        tour.phase == TourPhase.profile ||
+        tour.phase == TourPhase.finished) {
       if (key == LogicalKeyboardKey.arrowRight &&
           tour.phase == TourPhase.touring) {
         controller.next();
@@ -268,11 +277,12 @@ class _TourLayerState extends ConsumerState<_TourLayer>
       TourPhase.idle => const SizedBox.shrink(),
       TourPhase.welcome => _WelcomeCard(
           onStart: () => ref.read(tourControllerProvider.notifier).start(),
-          onDecline: _decline,
         ),
-      TourPhase.preparing => const SizedBox.shrink(),
+      TourPhase.preparing || TourPhase.paused => const SizedBox.shrink(),
+      // Esperando a tela nova montar o alvo: um indicador, e não o escuro
+      // vazio — três segundos de tela preta parecem app travado.
       TourPhase.touring => waitingTarget
-          ? const SizedBox.shrink()
+          ? const _WaitingIndicator()
           : _StepCard(
               key: ValueKey(tour.index),
               step: step!,
@@ -284,6 +294,12 @@ class _TourLayerState extends ConsumerState<_TourLayer>
                   : ref.read(tourControllerProvider.notifier).back,
               onSkip: _skip,
             ),
+      TourPhase.profile => _ProfileCard(
+          onEditData: ref.read(tourControllerProvider.notifier).editProfileData,
+          onContinue:
+              ref.read(tourControllerProvider.notifier).continueFromProfile,
+          onBack: ref.read(tourControllerProvider.notifier).back,
+        ),
       TourPhase.finished => _FinishedCard(
           onStart: _finish,
           onBack: ref.read(tourControllerProvider.notifier).back,
@@ -476,11 +492,15 @@ class _TourCard extends StatelessWidget {
   }
 }
 
+/// As boas-vindas do primeiro acesso.
+///
+/// **Sem "Agora não".** Com ele, quase todo mundo dizia não e nunca mais via o
+/// tour — que é curto justamente para caber no primeiro acesso. Quem quiser
+/// sair no meio tem o "Pular" de cada parada.
 class _WelcomeCard extends StatelessWidget {
-  const _WelcomeCard({required this.onStart, required this.onDecline});
+  const _WelcomeCard({required this.onStart});
 
   final VoidCallback onStart;
-  final VoidCallback onDecline;
 
   @override
   Widget build(BuildContext context) {
@@ -527,11 +547,6 @@ class _WelcomeCard extends StatelessWidget {
               autofocus: true,
               onPressed: onStart,
               child: const Text('Conhecer o Pauta'),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            TextButton(
-              onPressed: onDecline,
-              child: const Text('Agora não'),
             ),
           ],
         ),
@@ -618,6 +633,212 @@ class _StepCard extends StatelessWidget {
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Esperando a tela da parada montar o alvo.
+class _WaitingIndicator extends StatelessWidget {
+  const _WaitingIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      heightFactor: 1,
+      child: SizedBox(
+        width: 28,
+        height: 28,
+        child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// "Complete seu perfil": a foto e os dados, antes do final.
+///
+/// **A foto é escolhida aqui mesmo**: o seletor de imagem é do sistema, e não
+/// uma tela do app — abre por cima de tudo, inclusive desta camada. Os dados
+/// não: a data de nascimento abre um calendário, que precisa do Navigator
+/// embaixo do escuro. Por isso "Preencher agora" pausa o tour, abre "Meus
+/// dados" e o tour volta sozinho quando a pessoa sai de lá.
+///
+/// O telefone não está aqui: ele é da equipe, e quem o cadastra é a liderança.
+class _ProfileCard extends ConsumerStatefulWidget {
+  const _ProfileCard({
+    required this.onEditData,
+    required this.onContinue,
+    required this.onBack,
+  });
+
+  final VoidCallback onEditData;
+  final VoidCallback onContinue;
+  final VoidCallback onBack;
+
+  @override
+  ConsumerState<_ProfileCard> createState() => _ProfileCardState();
+}
+
+class _ProfileCardState extends ConsumerState<_ProfileCard> {
+  bool _busy = false;
+  String? _error;
+
+  /// A câmera só no aplicativo: no navegador o seletor de arquivo do próprio
+  /// celular já oferece a câmera.
+  static bool get _offersCamera =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  Future<void> _choose(ImageSource source) async {
+    setState(() => _error = null);
+    try {
+      final picked = await pickAvatarImage(source);
+      if (picked == null || !mounted) return;
+      setState(() => _busy = true);
+      await uploadAvatarImage(ref, picked);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Não foi possível usar esta imagem.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final success = AppStatusColors.of(context).success;
+    final user = ref.watch(authControllerProvider).user;
+    if (user == null) return const SizedBox.shrink();
+
+    final hasPhoto = user.avatarUrl != null;
+    final hasData = user.birthDate != null;
+
+    Widget done(String text) => Row(
+          children: [
+            Icon(
+              Icons.check_circle_rounded,
+              size: 20,
+              color: success.foreground,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+          ],
+        );
+
+    return Semantics(
+      scopesRoute: true,
+      namesRoute: true,
+      explicitChildNodes: true,
+      label: 'Complete seu perfil',
+      child: _TourCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
+            Text('Complete seu perfil', style: theme.textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Com a sua foto, a equipe te reconhece na escala. A data de '
+              'nascimento faz a equipe lembrar do seu aniversário — ela vê só '
+              'o dia e o mês.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AppAvatar(
+                      name: user.name,
+                      imageUrl: user.avatarUrl,
+                      radius: 28,
+                    ),
+                    if (_busy)
+                      const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: hasPhoto && !_busy
+                      ? done('Foto cadastrada')
+                      : Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            FilledButton.tonal(
+                              style: AppButtonStyles.compact,
+                              onPressed: _busy
+                                  ? null
+                                  : () => _choose(ImageSource.gallery),
+                              child: const Text('Escolher foto'),
+                            ),
+                            if (_offersCamera)
+                              TextButton(
+                                style: AppButtonStyles.compactText,
+                                onPressed: _busy
+                                    ? null
+                                    : () => _choose(ImageSource.camera),
+                                child: const Text('Tirar foto'),
+                              ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                _error!,
+                style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            if (hasData)
+              done('Data de nascimento cadastrada')
+            else
+              // Texto e botão empilhados: lado a lado não cabem num celular
+              // estreito, e o botão cortado é o que se toca errado.
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Data de nascimento e gênero',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  FilledButton.tonal(
+                    style: AppButtonStyles.compact,
+                    onPressed: _busy ? null : widget.onEditData,
+                    child: const Text('Preencher agora'),
+                  ),
+                ],
+              ),
+            const SizedBox(height: AppSpacing.xl),
+            // Empilhados, como no "Tudo pronto!": "Deixar para depois" e
+            // "Voltar" lado a lado não cabem em 320px.
+            FilledButton(
+              autofocus: true,
+              onPressed: _busy ? null : widget.onContinue,
+              child: Text(
+                hasPhoto || hasData ? 'Continuar' : 'Deixar para depois',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextButton(onPressed: widget.onBack, child: const Text('Voltar')),
           ],
         ),
       ),

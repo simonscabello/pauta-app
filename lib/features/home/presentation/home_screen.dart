@@ -111,13 +111,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         auth.teams.first;
     final events = ref.watch(eventsProvider((teamId, 'upcoming')));
 
-    // As boas-vindas são dos integrantes: quem lidera tem treinamento próprio
-    // neste primeiro momento. O papel é o da equipe **ativa**, como o resto
-    // da tela.
-    final offersOnboarding = team.role == 'MEMBER';
-    final onboardingDue = offersOnboarding
-        ? ref.watch(memberOnboardingDueProvider)
-        : const AsyncValue.data(false);
+    // As boas-vindas são de todo mundo, liderança inclusive: o tour mostra o
+    // app que os dois papéis usam, e quem lidera também chega sem saber onde
+    // fica a disponibilidade ou a letra da escala.
+    final onboardingDue = ref.watch(memberOnboardingDueProvider);
     final tourActive =
         ref.watch(tourControllerProvider.select((tour) => tour.isActive));
     if (onboardingDue.valueOrNull == true && !tourActive) {
@@ -403,9 +400,15 @@ class _HomeBody extends StatelessWidget {
                   ? null
                   : _HomeNotices(notices: summary.notices);
 
+              // Rolagem que monta tudo, e não `ListView`: a lista preguiçosa só
+              // constrói o que está perto da tela, e no celular os atalhos
+              // ficavam fora do alcance — o tour procurava "Minha
+              // disponibilidade" por três segundos no escuro e desistia sem
+              // destaque. São meia dúzia de blocos; montar todos não custa nada.
               return RefreshIndicator(
                 onRefresh: onRefresh,
-                child: ListView(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(
                     AppSpacing.screenPadding,
                     0,
@@ -414,70 +417,73 @@ class _HomeBody extends StatelessWidget {
                     // Sem ele (monitor), o rodapé volta ao normal.
                     twoColumns ? AppSpacing.xxl : AppSpacing.fabClearance,
                   ),
-                  children: [
-                    if (twoColumns)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                hero,
-                                if (notices != null) ...[
-                                  const SizedBox(height: AppSpacing.xl),
-                                  notices,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (twoColumns)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  hero,
+                                  if (notices != null) ...[
+                                    const SizedBox(height: AppSpacing.xl),
+                                    notices,
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.lg),
-                          Expanded(
-                            flex: 2,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (week != null) ...[
-                                  week,
-                                  const SizedBox(height: AppSpacing.xl),
+                            const SizedBox(width: AppSpacing.lg),
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (week != null) ...[
+                                    week,
+                                    const SizedBox(height: AppSpacing.xl),
+                                  ],
+                                  quickAccess,
                                 ],
-                                quickAccess,
-                              ],
+                              ),
                             ),
-                          ),
+                          ],
+                        )
+                      else ...[
+                        hero,
+                        if (notices != null) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          notices,
                         ],
-                      )
-                    else ...[
-                      hero,
-                      if (notices != null) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        notices,
-                      ],
-                      if (week != null) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        week,
-                      ],
-                      const SizedBox(height: AppSpacing.xl),
-                      quickAccess,
-                    ],
-                    // **Um evento, e não uma lista.** A Home acabou de deixar
-                    // de repetir a agenda; repetir de novo, agora com os
-                    // eventos, seria o mesmo erro com outra roupa. O que ela
-                    // responde aqui é "tem alguma coisa da equipe chegando?",
-                    // e isso tem uma resposta só.
-                    if (nextTeamEvent case final evento?) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      AppGroup(
-                        title: 'Próximo evento',
-                        dividerIndent: AppGroup.textIndent,
-                        // Sem o selo "Evento": o título do grupo já diz.
-                        children: [
-                          TeamEventTile(event: evento, showBadge: false),
+                        if (week != null) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          week,
                         ],
-                      ),
+                        const SizedBox(height: AppSpacing.xl),
+                        quickAccess,
+                      ],
+                      // **Um evento, e não uma lista.** A Home acabou de deixar
+                      // de repetir a agenda; repetir de novo, agora com os
+                      // eventos, seria o mesmo erro com outra roupa. O que ela
+                      // responde aqui é "tem alguma coisa da equipe chegando?",
+                      // e isso tem uma resposta só.
+                      if (nextTeamEvent case final evento?) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        AppGroup(
+                          title: 'Próximo evento',
+                          dividerIndent: AppGroup.textIndent,
+                          // Sem o selo "Evento": o título do grupo já diz.
+                          children: [
+                            TeamEventTile(event: evento, showBadge: false),
+                          ],
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               );
             },

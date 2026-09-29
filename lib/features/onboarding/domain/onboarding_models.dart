@@ -27,10 +27,12 @@ class OnboardingFlow {
 
 /// As apresentações que o app conhece hoje.
 ///
-/// Só a dos integrantes existe: quem lidera tem treinamento próprio neste
-/// primeiro momento. Um tour de líder, ou o de uma funcionalidade nova, entra
-/// aqui como outra constante — o servidor aceita qualquer assunto no formato
-/// certo, sem precisar ser publicado antes.
+/// Uma só, a do primeiro acesso, que vale para todos os papéis — o nome
+/// `member_onboarding` ficou da época em que era só dos integrantes, e trocá-lo
+/// faria todo mundo que já respondeu receber o tour de novo. Um tour de líder,
+/// ou o de uma funcionalidade nova, entra aqui como outra constante — o
+/// servidor aceita qualquer assunto no formato certo, sem precisar ser
+/// publicado antes.
 abstract final class OnboardingFlows {
   static const member = OnboardingFlow('member_onboarding', 1);
 }
@@ -73,7 +75,7 @@ class OnboardingRecord {
 
 /// Se o app deve oferecer [flow] a esta pessoa agora.
 ///
-/// **Qualquer resposta encerra a oferta**, inclusive "Agora não": quem disse
+/// **Qualquer resposta encerra a oferta**, inclusive pular no meio: quem pulou
 /// não quer ser perguntado a cada abertura, e a Ajuda continua mostrando o
 /// tour para quem mudar de ideia. [pendingLocally] é a resposta que o aparelho
 /// ainda não conseguiu entregar ao servidor — ela vale do mesmo jeito.

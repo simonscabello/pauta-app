@@ -7,6 +7,22 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.32.0 — 29/09/2026
+
+### Novidades
+- No fim da apresentação do Pauta, "Complete seu perfil": escolher a foto ali
+  mesmo e ir preencher a data de nascimento e o gênero. Só aparece para quem
+  ainda não tem foto ou data de nascimento, e dá para deixar para depois.
+
+### Melhorias
+- A apresentação do primeiro acesso passou a ser para todos, inclusive quem
+  lidera a equipe, e começa sem o "Agora não". Dentro dela, "Pular" continua
+  valendo, e ela segue em Perfil › Ajuda.
+
+### Correções
+- Na parada "Informe sua disponibilidade", a tela ficava escura por alguns
+  segundos e o texto aparecia sem destacar nada. Agora o atalho é destacado.
+
 ## 0.31.0 — 29/09/2026
 
 ### Melhorias
