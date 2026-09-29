@@ -6,6 +6,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../whatsapp/data/whatsapp_repository.dart';
 import '../data/team_repository.dart';
 
 /// Tudo o que só o dono e os líderes fazem, num lugar só.
@@ -42,6 +43,10 @@ class ManageTeamScreen extends ConsumerWidget {
         .where((t) => t.teamId == teamId)
         .firstOrNull
         ?.name;
+    // A linha só existe com o envio pelo WhatsApp ligado no servidor. Enquanto
+    // carrega, ou se a consulta falhar, ela não aparece -- nenhuma outra linha
+    // muda de lugar por causa dela, porque é a última do grupo.
+    final whatsApp = ref.watch(teamWhatsAppProvider(teamId)).valueOrNull;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Gerenciar equipe')),
@@ -90,6 +95,15 @@ class ManageTeamScreen extends ConsumerWidget {
                     subtitle: 'Códigos para as pessoas entrarem na equipe',
                     onTap: () => context.push('/equipe/convites'),
                   ),
+                  if (whatsApp != null && whatsApp.available)
+                    AppGroupRow(
+                      icon: Icons.chat_outlined,
+                      title: 'Grupo do WhatsApp',
+                      subtitle: whatsApp.group != null
+                          ? 'Vinculado: ${whatsApp.group!.label}'
+                          : 'Mandar a escala para o grupo pelo Pauta',
+                      onTap: () => context.push('/equipe/whatsapp'),
+                    ),
                 ],
               ),
               const SizedBox(height: AppSpacing.xl),

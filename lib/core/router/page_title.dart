@@ -42,6 +42,7 @@ String pageTitleFor(String path) {
     ['equipe', 'sugestoes'] => 'Sugestões',
     ['equipe', 'sugestoes', _] => 'Sugestão',
     ['equipe', 'convites'] => 'Convites',
+    ['equipe', 'whatsapp'] => 'Grupo do WhatsApp',
     ['equipe', 'cultos'] => 'Cultos da igreja',
     ['equipe', 'gerenciar'] => 'Gerenciar equipe',
     ['equipe', 'funcoes'] => 'Funções',

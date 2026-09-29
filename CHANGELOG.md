@@ -7,6 +7,14 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.30.0 — 28/09/2026
+
+### Novidades
+- Grupo do WhatsApp: em Gerenciar equipe, quem lidera vincula o grupo do
+  louvor colando um código nele. Depois, "Enviar para o grupo", na tela da
+  escala publicada, manda a escala para lá pelo número do Pauta — o mesmo
+  texto do botão de compartilhar. Só aparece quando o envio está ligado.
+
 ## 0.29.1 — 28/09/2026
 
 ### Correções

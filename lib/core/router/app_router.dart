@@ -55,6 +55,7 @@ import '../../features/team/presentation/workload_report_screen.dart';
 import '../../shared/widgets/unsaved_changes_guard.dart';
 import 'page_title.dart';
 import '../../features/unavailability/presentation/team_unavailability_screen.dart';
+import '../../features/whatsapp/presentation/whatsapp_group_screen.dart';
 
 /// `AAAA-MM-DD` da barra de endereço. Inválida ou ausente vira nulo: a tela
 /// cai no seu próprio padrão em vez de abrir num dia que ninguém escolheu.
@@ -259,6 +260,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/equipe/convites',
             builder: (_, __) =>
                 _withActiveTeam(ref, (id) => InvitesScreen(teamId: id)),
+          ),
+          GoRoute(
+            path: '/equipe/whatsapp',
+            builder: (_, __) => _withActiveTeam(
+              ref,
+              (id) => WhatsAppGroupScreen(teamId: id),
+            ),
           ),
           GoRoute(
             path: '/equipe/cultos',

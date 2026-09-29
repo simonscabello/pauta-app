@@ -33,6 +33,8 @@ import '../domain/event_models.dart';
 import '../domain/schedule_share_text.dart';
 import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../../unavailability/domain/unavailability_models.dart';
+import '../../whatsapp/data/whatsapp_repository.dart';
+import '../../whatsapp/presentation/send_to_group_action.dart';
 import 'duplicate_event_dialog.dart';
 import 'event_song_sheet.dart';
 
@@ -65,11 +67,31 @@ class EventDetailScreen extends ConsumerWidget {
         final myTeam = teams.where((t) => t.teamId == event.teamId).firstOrNull;
         final myMembershipId = myTeam?.membershipId;
         final canManage = myTeam?.canManage ?? false;
+        // "Enviar para o grupo" só existe com o envio pelo WhatsApp ligado no
+        // servidor e um grupo vinculado à equipe da escala. Só quem lidera
+        // consulta: o servidor responde 403 ao integrante.
+        final whatsAppGroup = canManage && !event.isDraft
+            ? ref
+                .watch(teamWhatsAppProvider(event.teamId))
+                .valueOrNull
+                ?.group
+            : null;
 
         return Scaffold(
           appBar: AppBar(
             title: const Text('Escala'),
             actions: [
+              if (whatsAppGroup != null)
+                IconButton(
+                  tooltip: 'Enviar para o grupo do WhatsApp',
+                  onPressed: () => sendScheduleToGroup(
+                    context,
+                    ref,
+                    event,
+                    whatsAppGroup,
+                  ),
+                  icon: const Icon(Icons.send_rounded),
+                ),
               if (!event.isDraft)
                 IconButton(
                   tooltip: 'Compartilhar escala',
