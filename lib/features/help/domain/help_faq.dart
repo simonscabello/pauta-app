@@ -202,9 +202,12 @@ const leaderHelpFaq = <FaqEntry>[
         'Quando as músicas saírem, é só pedir: "Põe Estou Seguro nos dízimos '
         'de domingo de manhã." Vale também para escala já publicada, e aí '
         'quem está escalado recebe o aviso de que as músicas saíram.\n\n'
-        'Pessoa ou música que ainda não está no Pauta precisa ser cadastrada '
-        'no app antes. Se algo sair errado, peça para ele apagar o rascunho e '
-        'refazer.',
+        'Quem não é da equipe — alguém de outro ministério que vai dirigir o '
+        'culto ou cuidar do data show, ou um convidado de outra igreja — ele '
+        'pergunta antes e, com a sua confirmação, cadastra como **de fora da '
+        'equipe**, sem conta no app. Música que ainda não está no repertório '
+        'precisa ser cadastrada no app antes. Se algo sair errado, peça para '
+        'ele apagar o rascunho e refazer.',
   ),
   FaqEntry(
     question: 'Alguém esqueceu a senha. Como ajudo?',

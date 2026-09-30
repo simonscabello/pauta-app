@@ -7,6 +7,20 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.33.0 — 30/09/2026
+
+### Melhorias
+- Na escalação, "Convidar alguém de fora" virou "Adicionar alguém de fora da
+  equipe", e o selo "Convidado" virou "Fora da equipe": vale para quem é de
+  outro ministério da igreja, e não só para quem vem de outra igreja.
+- A Ajuda explica que o assistente de IA cadastra, com a sua confirmação,
+  quem não é da equipe ao montar a escala do mês.
+
+### Correções
+- O aviso "Escala publicada" com o botão "Compartilhar" ficava na tela até
+  alguém tocar nele. Agora ele some sozinho depois de alguns segundos e tem
+  um X para fechar — o mesmo vale para "Desfazer" e "Ver música".
+
 ## 0.32.1 — 29/09/2026
 
 ### Correções

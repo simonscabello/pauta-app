@@ -215,8 +215,9 @@ class TeamRepository {
     });
   }
 
-  /// Convidado: entra na escala e no texto compartilhado, mas não vira
-  /// integrante nem recebe convite.
+  /// Alguém de fora da equipe (outro ministério ou outra igreja): entra na
+  /// escala e no texto compartilhado, mas não vira integrante nem recebe
+  /// convite.
   Future<Member> addGuest(String teamId, String displayName) {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(

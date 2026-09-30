@@ -60,7 +60,8 @@ class Member {
   /// false = cadastrado pelo líder, ainda sem conta no app.
   final bool hasAccount;
 
-  /// Músico de fora, convidado para uma ocasião. Não é integrante da equipe.
+  /// De fora da equipe: de outro ministério da igreja ou convidado de outra
+  /// igreja. Não tem conta e não é integrante; só entra nas escalas.
   final bool isGuest;
   final List<Position> positions;
   final String? phone;

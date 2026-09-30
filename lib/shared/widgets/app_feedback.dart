@@ -36,8 +36,21 @@ void showAppSnackBar(
       SnackBar(
         backgroundColor: palette.container,
         // Erro fica mais tempo: costuma trazer o motivo, e o motivo é uma
-        // frase inteira.
-        duration: Duration(seconds: tone == AppTone.danger ? 6 : 4),
+        // frase inteira. Com ação, mais ainda: é preciso achar o botão.
+        duration: Duration(
+          seconds: action != null
+              ? 8
+              : tone == AppTone.danger
+                  ? 6
+                  : 4,
+        ),
+        // Desde o Flutter 3.29 um aviso com ação não some sozinho
+        // (`persist` vale `action != null`): o "Escala publicada ·
+        // Compartilhar" ficava na tela até alguém tocar nele. Aqui todo aviso
+        // some, e o que tem ação ganha o X para quem não quer esperar.
+        persist: false,
+        showCloseIcon: action != null,
+        closeIconColor: palette.onContainer,
         // Numa janela larga a barra atravessava o monitor inteiro para dizer
         // duas palavras, longe de onde o olho estava.
         width: AppBreakpoints.of(context).isWide ? 520 : null,

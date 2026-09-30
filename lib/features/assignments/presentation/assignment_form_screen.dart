@@ -1642,7 +1642,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                   TextButton.icon(
                     onPressed: _addingGuest ? null : _promptGuest,
                     icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                    label: const Text('Convidar alguém de fora'),
+                    label: const Text('Adicionar alguém de fora da equipe'),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   SizedBox(
@@ -1852,15 +1852,17 @@ class _GuestBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const AppBadge(
-      label: 'Convidado',
+      label: 'Fora da equipe',
       tone: AppTone.info,
-      semanticsLabel: 'Convidado de fora: não tem conta no app e recebe a '
-          'escala pelo texto compartilhado',
+      semanticsLabel: 'De fora da equipe: de outro ministério ou de outra '
+          'igreja, não tem conta no app e recebe a escala pelo texto '
+          'compartilhado',
     );
   }
 }
 
-/// Chamar alguém de fora para esta escala.
+/// Pôr na escala alguém de fora da equipe: de outro ministério da igreja
+/// (quem dirige o culto, o data show de um domingo) ou de outra igreja.
 class _GuestSheet extends StatefulWidget {
   const _GuestSheet();
 
@@ -1893,11 +1895,15 @@ class _GuestSheetState extends State<_GuestSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Convidar alguém de fora', style: theme.textTheme.titleLarge),
+            Text(
+              'Adicionar alguém de fora da equipe',
+              style: theme.textTheme.titleLarge,
+            ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Músico convidado não tem conta no app. Ele entra na escala e '
-              'recebe os detalhes pelo texto compartilhado.',
+              'Alguém de outro ministério da igreja ou convidado de outra '
+              'igreja. Não precisa de conta no app: entra na escala e recebe '
+              'os detalhes pelo texto compartilhado.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

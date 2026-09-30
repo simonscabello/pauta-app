@@ -701,7 +701,8 @@ class _RoleField extends StatelessWidget {
       _ when member.isOwner =>
         'O papel do dono não se altera. Só o próprio dono passa a posse.',
       _ when member.isGuest =>
-        'Convidado toca numa ocasião e não é integrante da equipe.',
+        'Quem é de fora da equipe (outro ministério ou outra igreja) não é '
+            'integrante: só entra nas escalas.',
       _ when actor != null && actor!.membershipId == member.id =>
         'Ninguém muda o próprio papel. Peça a quem criou a equipe.',
       _ => null,
