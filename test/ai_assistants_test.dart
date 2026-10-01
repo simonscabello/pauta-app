@@ -152,12 +152,13 @@ void main() {
       expect(find.text('O que o assistente pode fazer'), findsOneWidget);
       expect(find.text('Ler o que você já vê no app'), findsOneWidget);
       expect(
-        find.text('Para quem lidera, se a chave permitir: montar as escalas '
-            'do mês em rascunho e pôr as músicas nelas'),
+        find.text('Para quem lidera, se a chave permitir: montar, editar e '
+            'publicar as escalas do mês e pôr as músicas nelas, sempre a '
+            'seu pedido'),
         findsOneWidget,
       );
       expect(
-        find.text('Publicar escalas ou mudar o que a equipe já vê'),
+        find.text('Apagar uma escala publicada ou mudar o dia de uma escala'),
         findsOneWidget,
       );
       expect(
@@ -171,7 +172,7 @@ void main() {
       // "Pode" e "Não pode" chegam ao leitor de tela por extenso.
       expect(
         find.bySemanticsLabel(
-          'Não pode: Publicar escalas ou mudar o que a equipe já vê',
+          'Não pode: Apagar uma escala publicada ou mudar o dia de uma escala',
         ),
         findsOneWidget,
       );

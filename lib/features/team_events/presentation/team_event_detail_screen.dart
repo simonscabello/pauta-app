@@ -7,7 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_detail_header.dart';
-import '../../../shared/widgets/app_facts_strip.dart';
+import '../../../shared/widgets/app_fact_list.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -153,7 +153,7 @@ class _Corpo extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        AppFactsStrip(
+        AppFactList(
           facts: [
             AppFact(
               icon: Icons.event_rounded,
@@ -162,13 +162,11 @@ class _Corpo extends StatelessWidget {
               hint: capitalizeWeekday(
                 formatEventWeekdayName(event.startsAt, event.timezone),
               ),
-              wrapValue: true,
             ),
             AppFact(
               icon: Icons.schedule_rounded,
               label: 'Horário',
               value: teamEventHours(event),
-              wrapValue: true,
             ),
           ],
         ),

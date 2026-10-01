@@ -15,7 +15,7 @@ import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_detail_header.dart';
-import '../../../shared/widgets/app_facts_strip.dart';
+import '../../../shared/widgets/app_fact_list.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -421,7 +421,7 @@ class _EventDetailBody extends StatelessWidget {
               // **O repertório vem antes da equipe.** É o que traz o músico a
               // esta tela — a cifra, o tom, a ordem —, e atrás da manchete e
               // da lista de nomes ele começava fora da tela. "Onde eu entro"
-              // já está respondido na faixa de fatos do topo.
+              // já está respondido na lista de fatos do topo.
               TourTarget(
                 id: TourTargetIds.eventSongs,
                 child: _SongsSection(event: event, canManage: canManage),
@@ -475,7 +475,7 @@ class _HistoryLink extends StatelessWidget {
 /// manchete da agenda, que deixou de existir quando a agenda virou calendário.
 ///
 /// A data é o título; o nome especial ("Páscoa") e o local ficam embaixo; e a
-/// faixa de fatos responde, na ordem, **quando é o culto, quando é o ensaio e
+/// lista de fatos responde, na ordem, **quando é o culto, quando é o ensaio e
 /// onde você entra** — a frase "Domingo 09h, você, guitarra, ensaio sábado 19h"
 /// que é a razão de o app existir. Sem você na escala, a coluna não existe.
 class _EventHeader extends StatelessWidget {
@@ -519,7 +519,7 @@ class _EventHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        AppFactsStrip(
+        AppFactList(
           facts: [
             if (services.length <= 1)
               AppFact(
@@ -536,7 +536,7 @@ class _EventHeader extends StatelessWidget {
                 label: 'Cultos',
                 // Uma linha por culto, com a hora alinhada: é a pergunta de
                 // quem abre a escala, e comparar 08:30 com 19:00 é de relance.
-                // Cada linha encolhe em vez de quebrar: nenhum culto some.
+                // Cada culto na própria linha, alinhados à direita.
                 value: [
                   for (final service in services)
                     '${service.label} '
@@ -549,7 +549,6 @@ class _EventHeader extends StatelessWidget {
               value: rehearsalAt == null
                   ? 'Sem ensaio'
                   : formatRehearsalTime(rehearsalAt, event.startsAt, timezone),
-              wrapValue: true,
             ),
             if (youPositions.isNotEmpty)
               AppFact(
@@ -557,10 +556,6 @@ class _EventHeader extends StatelessWidget {
                 label: 'Sua função',
                 value: youPositions.join(' · '),
                 highlight: true,
-                wrapValue: true,
-                // "Ministra · Vocal · Violão" numa coluna de celular precisa
-                // de três linhas; com duas, a última função saía cortada.
-                maxLines: 3,
               ),
           ],
         ),

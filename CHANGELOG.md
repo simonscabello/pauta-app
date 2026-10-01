@@ -7,6 +7,18 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.34.0 — 01/10/2026
+
+### Melhorias
+- O topo da escala mostra cultos, ensaio e sua função um embaixo do outro,
+  com o horário à direita. Nada mais quebra em duas linhas nem encolhe:
+  "Vocal · Teclado" e "Culto da Terceira Idade" aparecem inteiros. O mesmo
+  vale para tom, tipo e andamento na tela da música e para data e horário
+  dos eventos da equipe.
+- A tela Assistentes de IA e a Ajuda contam que o assistente de quem lidera
+  também edita e publica escalas, sempre a pedido, com os mesmos avisos do
+  app.
+
 ## 0.33.0 — 30/09/2026
 
 ### Melhorias

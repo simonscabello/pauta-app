@@ -9,7 +9,7 @@ import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_detail_header.dart';
-import '../../../shared/widgets/app_facts_strip.dart';
+import '../../../shared/widgets/app_fact_list.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -370,18 +370,15 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Tom, tipo e andamento, numa faixa só ([AppFactsStrip]) — **só os que
+/// Tom, tipo e andamento, numa lista só ([AppFactList]) — **só os que
 /// existem**.
 ///
 /// O tom da equipe vem na cor da marca quando existe; sem ele, o da gravação
 /// entra com o próprio nome ("Tom da gravação"), em cinza — são coisas
-/// diferentes. A faixa já mostrou "Tom — · Tipo — · Andamento —": três
+/// diferentes. A lista já mostrou "Tom — · Tipo — · Andamento —": três
 /// travessões no lugar mais nobre da tela, dizendo ao integrante o que a
 /// equipe ainda não cadastrou. O que falta preencher é cobrado na Análise do
 /// repertório, e não aqui.
-///
-/// Os ícones são medidos contra o vocabulário inteiro, e não contra os valores
-/// desta música: senão "Calma" teria ícones e "Moderada" não.
 class _Facts extends StatelessWidget {
   const _Facts({required this.song});
 
@@ -402,28 +399,24 @@ class _Facts extends StatelessWidget {
           value: hasKey ? song.defaultKey!.trim() : song.originalKey!.trim(),
           // Anotação antiga ("G (capo 2)") quebra em duas linhas em vez de
           // encolher até ninguém ler. Tom da lista sempre cabe.
-          wrapValue: true,
           highlight: hasKey,
-          probeValues: const ['C#m'],
         ),
       if (hasKind)
         AppFact(
           icon: Icons.library_music_outlined,
           label: 'Tipo',
           value: kindLabel(song.kind),
-          probeValues: ['HYMN', 'SONG'].map(kindLabel).toList(),
         ),
       if (hasPace || song.bpm != null)
         AppFact(
           icon: Icons.speed_rounded,
           label: 'Andamento',
           value: hasPace ? paceLabel(song.pace) : '${song.bpm} bpm',
-          probeValues: ['CALM', 'MODERATE', 'UPBEAT'].map(paceLabel).toList(),
         ),
     ];
 
     if (facts.isEmpty) return const SizedBox.shrink();
-    return AppFactsStrip(facts: facts);
+    return AppFactList(facts: facts);
   }
 }
 

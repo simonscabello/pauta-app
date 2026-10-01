@@ -7,7 +7,7 @@ import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_detail_header.dart';
-import '../../../shared/widgets/app_facts_strip.dart';
+import '../../../shared/widgets/app_fact_list.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/presentation/lyrics_reader.dart';
@@ -27,7 +27,7 @@ import '../domain/event_models.dart';
 ///
 /// **A mesma linguagem da tela da música.** A folha respondia à mesma pergunta
 /// com outro desenho: links em etiquetas (só os que existiam), artista em texto
-/// comum, tom num cartão grande. Agora é o cabeçalho, a faixa de fatos e os
+/// comum, tom num cartão grande. Agora é o cabeçalho, a lista de fatos e os
 /// quatro recursos da tela da música — numa versão compacta, e com o tom
 /// **desta escala** no lugar do tom da equipe.
 ///
@@ -124,7 +124,7 @@ class _EventSongSheet extends ConsumerWidget {
           // três vezes que ninguém preencheu nada, e o travessão no tom
           // parecia "toque em qualquer um".
           if (temTom || song.momentText != null || song.hymnal != null)
-            AppFactsStrip(
+            AppFactList(
               facts: [
                 if (temTom)
                   AppFact(
@@ -132,7 +132,6 @@ class _EventSongSheet extends ConsumerWidget {
                     label: song.hasCustomKey ? 'Tom nesta escala' : 'Tom',
                     value: song.key!,
                     highlight: true,
-                    wrapValue: true,
                     hint: song.hasCustomKey &&
                             (song.defaultKey?.isNotEmpty ?? false)
                         ? 'equipe: ${song.defaultKey}'
@@ -143,7 +142,6 @@ class _EventSongSheet extends ConsumerWidget {
                     icon: Icons.flag_outlined,
                     label: 'Momento',
                     value: song.momentText!,
-                    wrapValue: true,
                   ),
                 if (song.hymnal != null)
                   AppFact(
