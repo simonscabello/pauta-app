@@ -6,8 +6,8 @@
 >
 > ```
 > sistemas/        ← simonscabello/pauta     (AGENTS.md, docs/)
-> ├─ app/          ← simonscabello/pauta-app (este repositório)
-> └─ backend/      ← simonscabello/pauta-api
+> ├─ pauta-app/    ← simonscabello/pauta-app (este repositório)
+> └─ pauta-api/    ← simonscabello/pauta-api
 > ```
 >
 > **Leia `../AGENTS.md` antes de escrever código.** Se ele não existir, este
