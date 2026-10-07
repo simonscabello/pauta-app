@@ -5,7 +5,9 @@ import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/core/storage/shared_preferences_provider.dart';
 import 'package:louvor_app/core/theme/theme_mode_controller.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
+import 'package:louvor_app/features/auth/application/biometric_service.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
+import 'package:louvor_app/features/auth/domain/biometric_texts.dart';
 import 'package:louvor_app/features/profile/presentation/profile_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,6 +57,35 @@ void main() {
     );
   });
 
+  testWidgets('ligar a biometria com o celular bloqueado por tentativas diz isso',
+      (tester) async {
+    await _pumpPerfil(
+      tester,
+      biometricResult: BiometricConfirmation.lockedOut,
+    );
+
+    await tester.tap(find.text(BiometricTexts.profileTitle));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text(BiometricTexts.profileLockedOut), findsOneWidget);
+    expect(find.text(BiometricTexts.profileNotConfirmed), findsNothing);
+  });
+
+  testWidgets('digital não confirmada no Perfil mantém a frase de antes',
+      (tester) async {
+    await _pumpPerfil(
+      tester,
+      biometricResult: BiometricConfirmation.notConfirmed,
+    );
+
+    await tester.tap(find.text(BiometricTexts.profileTitle));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text(BiometricTexts.profileNotConfirmed), findsOneWidget);
+  });
+
   /// O seletor Claro/Escuro/Sistema era um `SegmentedButton`, e num celular
   /// estreito ele quebrava o rótulo em duas linhas dentro do segmento. O que
   /// se protege agora é o contrário disso: as três opções continuam inteiras e
@@ -101,6 +132,7 @@ Future<void> _pumpPerfil(
   WidgetTester tester, {
   Size size = const Size(800, 1200),
   double textScale = 1.0,
+  BiometricConfirmation? biometricResult,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -114,9 +146,12 @@ Future<void> _pumpPerfil(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        if (biometricResult != null)
+          biometricsAvailableProvider.overrideWith((ref) async => true),
         authControllerProvider.overrideWith(
           (ref) => FakeAuthController(
             ref,
+            biometricResult: biometricResult,
             AuthState.signedIn(
               const AuthUser(
                 id: '1',
@@ -153,9 +188,19 @@ Future<void> _pumpPerfil(
 }
 
 class FakeAuthController extends AuthController {
-  FakeAuthController(super.ref, this._initial);
+  FakeAuthController(super.ref, this._initial, {this.biometricResult});
 
   final AuthState _initial;
+  final BiometricConfirmation? biometricResult;
+
+  @override
+  Future<bool> get biometricsAvailable async => biometricResult != null;
+
+  @override
+  Future<bool> get biometricsEnabled async => false;
+
+  @override
+  Future<BiometricConfirmation> enableBiometrics() async => biometricResult!;
 
   @override
   Future<void> bootstrap() async {

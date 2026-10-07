@@ -224,7 +224,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(
         path: '/desbloquear',
-        builder: (_, __) => const UnlockScreen(),
+        // Sem transição: o desbloqueio é a splash continuando (o mesmo
+        // `SplashFrame`), e a animação de página moveria a marca justo na
+        // troca que ela existe para esconder.
+        pageBuilder: (_, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: const UnlockScreen(),
+        ),
       ),
       GoRoute(path: '/cadastro', builder: (_, __) => const RegisterScreen()),
       GoRoute(

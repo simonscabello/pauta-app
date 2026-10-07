@@ -13,7 +13,9 @@ import '../data/auth_repository.dart';
 import '../domain/auth_models.dart';
 import 'biometric_service.dart';
 
-enum BiometricUnlock { success, cancelled, offline, expired }
+/// `lockedOut`: o Android recusou a biometria por excesso de tentativas. A
+/// trava e a sessão continuam guardadas, como no cancelamento.
+enum BiometricUnlock { success, cancelled, lockedOut, offline, expired }
 
 enum AuthStatus {
   /// Ainda verificando se ha sessao salva -- estado da splash.
@@ -115,7 +117,11 @@ class AuthController extends StateNotifier<AuthState> {
     final previous = await _storage.readRefreshToken();
     if (previous != null) await _repository.logout(previous);
     final biometricUserId = await _storage.readBiometricUserId();
-    if (biometricUserId != null && biometricUserId != session.user.id) {
+    if (biometricUserId != null &&
+        (biometricUserId != session.user.id || !await _biometrics.available)) {
+      // Outra conta, ou o celular perdeu a biometria (digitais removidas):
+      // sem isto toda abertura parava na trava e caía no login, e a linha do
+      // Perfil que a desligaria nem aparece sem biometria.
       await _storage.disableBiometrics();
     }
     if (onAuthenticated != null) await onAuthenticated(session.user);
@@ -128,17 +134,18 @@ class AuthController extends StateNotifier<AuthState> {
       state.user != null &&
       await _storage.readBiometricUserId() == state.user!.id;
 
-  Future<bool> enableBiometrics() async {
+  Future<BiometricConfirmation> enableBiometrics() async {
     final user = state.user;
-    if (user == null || !await _biometrics.confirm()) return false;
-    await _storage.enableBiometrics(user.id);
-    return true;
+    if (user == null) return BiometricConfirmation.notConfirmed;
+    return enableBiometricsFor(user);
   }
 
-  Future<bool> enableBiometricsFor(AuthUser user) async {
-    if (!await _biometrics.confirm()) return false;
-    await _storage.enableBiometrics(user.id);
-    return true;
+  Future<BiometricConfirmation> enableBiometricsFor(AuthUser user) async {
+    final result = await _biometrics.confirm();
+    if (result == BiometricConfirmation.confirmed) {
+      await _storage.enableBiometrics(user.id);
+    }
+    return result;
   }
 
   Future<void> disableBiometrics() => _storage.disableBiometrics();
@@ -160,7 +167,14 @@ class AuthController extends StateNotifier<AuthState> {
   /// senha disponivel. Sem rede tambem: a sessao continua valida para a
   /// proxima tentativa. So a recusa do servidor (ou outra conta) a descarta.
   Future<BiometricUnlock> unlockWithBiometrics() async {
-    if (!await _biometrics.confirm()) return BiometricUnlock.cancelled;
+    switch (await _biometrics.confirm()) {
+      case BiometricConfirmation.confirmed:
+        break;
+      case BiometricConfirmation.notConfirmed:
+        return BiometricUnlock.cancelled;
+      case BiometricConfirmation.lockedOut:
+        return BiometricUnlock.lockedOut;
+    }
     try {
       final old = await _storage.readRefreshToken();
       if (old == null) throw StateError('Sessao ausente');

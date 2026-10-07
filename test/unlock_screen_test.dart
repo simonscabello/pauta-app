@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/core/router/app_router.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
+import 'package:louvor_app/features/auth/domain/biometric_texts.dart';
 
 /// Com a sessão guardada e a biometria ligada, o fundo do pedido de digital é
 /// a tela de desbloqueio, e não o formulário de login -- que fazia parecer que
@@ -50,6 +51,18 @@ void main() {
       find.textContaining('Não foi possível conectar ao servidor'),
       findsOneWidget,
     );
+    expect(find.widgetWithText(TextFormField, 'E-mail'), findsNothing);
+  });
+
+  testWidgets('bloqueio por tentativas explica e mantém as duas saídas',
+      (tester) async {
+    final auth = await _pumpApp(tester, BiometricUnlock.lockedOut);
+
+    expect(find.text(BiometricTexts.unlockLockedOut), findsOneWidget);
+    expect(find.text(BiometricTexts.unlockButton), findsOneWidget);
+    expect(find.text(BiometricTexts.usePassword), findsOneWidget);
+    // Continua no desbloqueio: a sessão não foi descartada.
+    expect(auth.state.status, AuthStatus.locked);
     expect(find.widgetWithText(TextFormField, 'E-mail'), findsNothing);
   });
 

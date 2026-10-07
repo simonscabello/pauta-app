@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 import '../domain/auth_models.dart';
+import '../domain/biometric_texts.dart';
 import 'forgot_password_sheet.dart';
 
 /// Um aviso para a próxima abertura do login — hoje, só "sua sessão expirou",
@@ -63,10 +64,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _error = switch (result) {
           BiometricUnlock.success => null,
           BiometricUnlock.cancelled => null,
-          BiometricUnlock.offline =>
-            'Não foi possível conectar ao servidor. Tente de novo ou entre com e-mail e senha.',
-          BiometricUnlock.expired =>
-            'Sua sessão expirou. Entre com seu e-mail e senha.',
+          BiometricUnlock.lockedOut => BiometricTexts.unlockLockedOut,
+          BiometricUnlock.offline => BiometricTexts.unlockOffline,
+          BiometricUnlock.expired => BiometricTexts.sessionExpired,
         };
       });
     }
@@ -81,22 +81,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Entrar mais rápido da próxima vez?'),
-        content: const Text(
-          'Use a biometria do seu aparelho para acessar o Pauta sem precisar digitar sua senha.',
-        ),
+        title: const Text(BiometricTexts.offerTitle),
+        content: const Text(BiometricTexts.offerBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Agora não'),
+            child: const Text(BiometricTexts.offerDecline),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Usar biometria'),
+            child: const Text(BiometricTexts.offerAccept),
           ),
         ],
       ),
     );
+    // Não confirmada ou bloqueada por tentativas conta como recusa: a pessoa
+    // segue para o app e liga depois pelo Perfil.
     if (accepted == true) await auth.enableBiometricsFor(user);
   }
 
@@ -207,7 +207,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           TextButton.icon(
             onPressed: _unlocking ? null : _unlock,
             icon: const Icon(Icons.fingerprint, size: 19),
-            label: const Text('Entrar com biometria'),
+            label: const Text(BiometricTexts.unlockButton),
           ),
         const SizedBox(height: AppSpacing.sm),
         TextButton(

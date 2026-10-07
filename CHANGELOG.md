@@ -7,6 +7,23 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.35.1 — 07/10/2026
+
+### Melhorias
+- O pedido de digital aparece em português ("Confirme que é você",
+  "Cancelar"), e o rosto reconhecido entra direto, sem o toque extra em
+  "Confirmar".
+- A marca do Pauta não se mexe mais na passagem da abertura para o pedido de
+  digital.
+
+### Correções
+- Depois de várias digitais erradas, a tela de desbloqueio e o Perfil dizem
+  "Muitas tentativas" em vez de não fazer nada.
+- Quem tirou as digitais do celular depois de ligar a biometria deixava de
+  conseguir abrir o app direto: agora, entrando com a senha, a biometria se
+  desliga e as próximas aberturas vão direto ao app.
+- A linha "Entrar com biometria" do Perfil volta a mostrar o efeito do toque.
+
 ## 0.35.0 — 07/10/2026
 
 ### Novidades

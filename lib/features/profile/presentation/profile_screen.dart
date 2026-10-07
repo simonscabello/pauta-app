@@ -19,6 +19,7 @@ import '../../../shared/widgets/team_picker.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/application/biometric_service.dart';
 import '../../auth/domain/auth_models.dart';
+import '../../auth/domain/biometric_texts.dart';
 import '../../team/data/team_repository.dart';
 import '../../onboarding/domain/member_tour.dart';
 import '../../onboarding/presentation/tour_target.dart';
@@ -262,9 +263,16 @@ class _BiometricRowState extends ConsumerState<_BiometricRow> {
     setState(() => _busy = true);
     final auth = ref.read(authControllerProvider.notifier);
     if (value) {
-      final enabled = await auth.enableBiometrics();
-      if (mounted && !enabled) {
-        showAppSnackBar(context, 'Biometria não confirmada. Tente novamente.');
+      final result = await auth.enableBiometrics();
+      if (mounted) {
+        switch (result) {
+          case BiometricConfirmation.confirmed:
+            break;
+          case BiometricConfirmation.notConfirmed:
+            showAppSnackBar(context, BiometricTexts.profileNotConfirmed);
+          case BiometricConfirmation.lockedOut:
+            showAppSnackBar(context, BiometricTexts.profileLockedOut);
+        }
       }
     } else {
       await auth.disableBiometrics();
@@ -278,12 +286,17 @@ class _BiometricRowState extends ConsumerState<_BiometricRow> {
   @override
   Widget build(BuildContext context) {
     if (!_available) return const SizedBox.shrink();
-    return SwitchListTile.adaptive(
-      secondary: const Icon(Icons.fingerprint),
-      title: const Text('Entrar com biometria'),
-      subtitle: const Text('Segurança deste aparelho'),
-      value: _enabled,
-      onChanged: _busy ? null : _toggle,
+    // Material próprio: o fundo do `AppGroup` cobria o efeito do toque, e o
+    // Flutter acusa isso (o primeiro teste que tocou na linha achou).
+    return Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile.adaptive(
+        secondary: const Icon(Icons.fingerprint),
+        title: const Text(BiometricTexts.profileTitle),
+        subtitle: const Text(BiometricTexts.profileSubtitle),
+        value: _enabled,
+        onChanged: _busy ? null : _toggle,
+      ),
     );
   }
 }
