@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:louvor_app/features/copilots/data/copilot_repository.dart';
+import 'package:louvor_app/features/copilots/domain/copilot_models.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/setlist_form_screen.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
@@ -60,6 +62,8 @@ void main() {
 
     return ProviderScope(
       overrides: [
+        // E pergunta se a equipe tem o Copiloto de Repertório.
+        aiFeaturesProvider.overrideWith((ref, teamId) async => AiFeatures.none),
         eventSuggestionsProvider('e1')
             .overrideWith((ref) => const EventSuggestions(date: '2026-08-16')),
         // A montagem pede o histórico das músicas ao abrir.

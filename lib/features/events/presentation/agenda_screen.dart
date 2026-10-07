@@ -20,6 +20,7 @@ import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../../shared/widgets/greeting_header.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../copilots/data/copilot_repository.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/domain/service_template.dart';
 import '../../team/presentation/team_onboarding.dart';
@@ -300,8 +301,23 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       selected.isBefore(today) ? today : selected,
       gradeDaEquipe,
     );
-    void create() =>
-        _openCreateMenu(context, selected, today, scheduleDay: scheduleDay);
+    // O Copiloto de Escalas entra no mesmo menu, só para a liderança das
+    // equipes em que o Pauta Admin o ligou. O mês é o que o calendário mostra
+    // (nunca um que já passou).
+    final copilot = team.canManage &&
+        ref.watch(aiFeaturesProvider(teamId)).valueOrNull?.scheduleCopilot ==
+            true;
+    final thisMonth = DateTime(today.year, today.month);
+    final visibleMonth = _month ?? thisMonth;
+    final copilotMonth =
+        visibleMonth.isBefore(thisMonth) ? thisMonth : visibleMonth;
+    void create() => _openCreateMenu(
+          context,
+          selected,
+          today,
+          scheduleDay: scheduleDay,
+          copilotMonth: copilot ? copilotMonth : null,
+        );
 
     // Largura da **janela**, e não a da lista: onde o botão de criar mora é
     // decisão sobre o formato da tela (polegar × mouse), e é a mesma decisão
@@ -673,7 +689,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
 }
 
 /// O que se cria pelo botão **Nova**.
-enum _NewKind { schedule, event }
+enum _NewKind { schedule, event, month }
 
 /// O único ponto de partida da agenda: "quero marcar alguma coisa neste dia".
 ///
@@ -706,6 +722,7 @@ Future<void> _openCreateMenu(
   DateTime selected,
   DateTime today, {
   required DateTime scheduleDay,
+  DateTime? copilotMonth,
 }) async {
   final escalaEmOutroDia = dateKey(scheduleDay) != dateKey(selected);
   final choice = await showAdaptiveSheet<_NewKind>(
@@ -763,6 +780,22 @@ Future<void> _openCreateMenu(
                 subtitle: 'Reunião, ensaio extra, confraternização',
                 onTap: () => Navigator.pop(sheetContext, _NewKind.event),
               ),
+              if (copilotMonth != null) ...[
+                Divider(
+                  color: scheme.outlineVariant,
+                  height: 1,
+                  indent: AppSpacing.xl,
+                  endIndent: AppSpacing.xl,
+                ),
+                _CreateOption(
+                  icon: Icons.auto_awesome_rounded,
+                  title: 'Montar o mês com o copiloto',
+                  subtitle: 'Todas as escalas de '
+                      "${DateFormat("MMMM 'de' y", 'pt_BR').format(copilotMonth)} "
+                      'de uma vez, como rascunho',
+                  onTap: () => Navigator.pop(sheetContext, _NewKind.month),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
             ],
           ),
@@ -778,6 +811,11 @@ Future<void> _openCreateMenu(
       context.push('/agenda/novo?data=${dateKey(scheduleDay)}');
     case _NewKind.event:
       context.push('/eventos/novo?data=$dia');
+    case _NewKind.month:
+      final m = copilotMonth!;
+      context.push(
+        '/agenda/copiloto?mes=${m.year}-${m.month.toString().padLeft(2, '0')}',
+      );
   }
 }
 

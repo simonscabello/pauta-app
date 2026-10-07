@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../copilots/data/copilot_repository.dart';
+import '../../copilots/presentation/repertoire_copilot_sheet.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -197,6 +199,33 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     });
   }
 
+  /// Copiloto de Repertório: músicas do acervo da equipe a partir do tema da
+  /// mensagem. As escolhidas entram neste culto, com o momento sugerido que o
+  /// líder viu antes de tocar em "Usar estas" -- e só ficam quando ele salva.
+  Future<void> _suggestWithAi(EventService culto) async {
+    final songs = await showRepertoireCopilot(
+      context,
+      eventId: widget.eventId,
+      service: culto,
+    );
+    if (songs == null || songs.isEmpty || !mounted) return;
+    final ja = _lista(culto.id).map((s) => s.songId).toSet();
+    final novas = songs.where((s) => !ja.contains(s.song.id)).toList();
+    setState(() {
+      for (final item in novas) {
+        _lista(culto.id).add(_novoItem(culto, item.song, moment: item.moment));
+      }
+    });
+    showAppSnackBar(
+      context,
+      novas.length == 1
+          ? '1 música entrou em ${culto.label}. Salve para guardar.'
+          : '${novas.length} músicas entraram em ${culto.label}. Salve para '
+              'guardar.',
+      tone: AppTone.success,
+    );
+  }
+
   /// Cadastro completo (catálogo de outras equipes + Spotify) sem sair da
   /// escala em montagem.
   ///
@@ -382,6 +411,14 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
+    // A equipe da escala, e não a ativa (armadilha 10). Culto "definido na
+    // hora" não tem repertório a sugerir.
+    final suggestWithAi = !event.isRepertoireOnTheFly &&
+        ref
+                .watch(aiFeaturesProvider(event.teamId))
+                .valueOrNull
+                ?.repertoireCopilot ==
+            true;
 
     return Scaffold(
       // "Salvar" saiu da barra do topo e virou o botão de baixo, do tamanho da
@@ -479,6 +516,8 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
                         copyFrom: _fonteDeCopia(culto),
                         onCopy: (fonte) => _copiar(de: fonte, para: culto),
                         onAdd: () => _addSongs(culto),
+                        onSuggestAi:
+                            suggestWithAi ? () => _suggestWithAi(culto) : null,
                         onEdit: (index) => _editItem(culto.id, index),
                         onRemove: (index) =>
                             setState(() => _lista(culto.id).removeAt(index)),
@@ -516,6 +555,7 @@ class _ServiceSetlist extends StatelessWidget {
     required this.onReorder,
     this.copyFrom,
     this.onCopy,
+    this.onSuggestAi,
   });
 
   final EventService culto;
@@ -527,6 +567,9 @@ class _ServiceSetlist extends StatelessWidget {
   final EventService? copyFrom;
   final ValueChanged<EventService>? onCopy;
   final VoidCallback onAdd;
+
+  /// Copiloto de Repertório. Nulo quando a equipe não tem o recurso.
+  final VoidCallback? onSuggestAi;
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onRemove;
   final void Function(int oldIndex, int newIndex) onReorder;
@@ -640,17 +683,25 @@ class _ServiceSetlist extends StatelessWidget {
               ),
             ),
           const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: saving ? null : onAdd,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(
-                songs.isEmpty
-                    ? 'Escolher músicas'
-                    : 'Acrescentar em ${culto.label}',
+          Wrap(
+            spacing: AppSpacing.xs,
+            children: [
+              TextButton.icon(
+                onPressed: saving ? null : onAdd,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: Text(
+                  songs.isEmpty
+                      ? 'Escolher músicas'
+                      : 'Acrescentar em ${culto.label}',
+                ),
               ),
-            ),
+              if (onSuggestAi != null)
+                TextButton.icon(
+                  onPressed: saving ? null : onSuggestAi,
+                  icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                  label: const Text('Sugerir com IA'),
+                ),
+            ],
           ),
         ],
       ),

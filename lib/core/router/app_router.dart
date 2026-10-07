@@ -14,6 +14,7 @@ import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/auth/presentation/unlock_screen.dart';
 import '../../features/assignments/presentation/assignment_form_screen.dart';
 import '../../features/events/presentation/agenda_screen.dart';
+import '../../features/copilots/presentation/schedule_copilot_screen.dart';
 import '../../features/events/presentation/event_detail_screen.dart';
 import '../../features/events/presentation/event_history_screen.dart';
 import '../../features/events/presentation/event_form_screen.dart';
@@ -59,6 +60,21 @@ import '../../features/whatsapp/presentation/whatsapp_group_screen.dart';
 
 /// `AAAA-MM-DD` da barra de endereço. Inválida ou ausente vira nulo: a tela
 /// cai no seu próprio padrão em vez de abrir num dia que ninguém escolheu.
+/// `?mes=AAAA-MM` -> o primeiro dia do mês. Sem ou inválido, o mês atual.
+DateTime _parseMonth(String? value) {
+  final parts = value?.split('-').map(int.tryParse).toList();
+  if (parts != null &&
+      parts.length == 2 &&
+      parts[0] != null &&
+      parts[1] != null &&
+      parts[1]! >= 1 &&
+      parts[1]! <= 12) {
+    return DateTime(parts[0]!, parts[1]!);
+  }
+  final now = DateTime.now();
+  return DateTime(now.year, now.month);
+}
+
 DateTime? _parseDate(String? value) {
   if (value == null) return null;
   return DateTime.tryParse(value);
@@ -435,6 +451,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                 onExit: confirmLeaveIfUnsaved,
                 builder: (_, state) => EventFormScreen(
                   initialDate: _parseDate(state.uri.queryParameters['data']),
+                ),
+              ),
+              // Copiloto de Escalas: o mês inteiro de uma vez. Antes de
+              // `:eventId`, senão "copiloto" seria lido como id de escala.
+              GoRoute(
+                path: 'copiloto',
+                builder: (_, state) => _withActiveTeam(
+                  ref,
+                  (id) => ScheduleCopilotScreen(
+                    teamId: id,
+                    initialMonth: _parseMonth(state.uri.queryParameters['mes']),
+                  ),
                 ),
               ),
               GoRoute(
