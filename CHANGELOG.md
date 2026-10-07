@@ -7,6 +7,17 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.35.0 — 07/10/2026
+
+### Novidades
+- Montar o mês com o copiloto (menu "Nova" da agenda): a escala de todos os
+  dias do mês de uma vez, com o porquê de cada escolha, o equilíbrio de
+  quem serve quantas vezes, trocas, travas e "salvar como rascunho". Só para
+  quem lidera, nas equipes em que o recurso está ligado.
+- Sugerir com IA, na montagem das músicas de cada culto: escreva o tema da
+  mensagem e receba músicas do repertório da equipe, com o motivo de cada
+  uma e o aviso de quando foi cantada há pouco.
+
 ## 0.34.0 — 01/10/2026
 
 ### Melhorias

@@ -61,7 +61,7 @@
     <div class="wrap">
       <a href="./">Pauta</a>
       <h1>Política de privacidade</h1>
-      <p>Última atualização: 29 de setembro de 2026</p>
+      <p>Última atualização: 7 de outubro de 2026</p>
     </div>
   </header>
 
@@ -98,6 +98,7 @@
             <tr><td>Sugestões de música, justificativas e recados</td><td>Levar as suas ideias a quem escolhe o repertório.</td></tr>
             <tr><td>Anotações da liderança sobre integrantes</td><td>Ajudar a liderança a organizar a equipe (por exemplo, "chega depois das 9h").</td></tr>
             <tr><td>Identificador do aparelho para notificações</td><td>Enviar avisos de escala, ensaio e repertório ao seu celular. Só existe se você permitir notificações.</td></tr>
+            <tr><td>Pedidos aos recursos de inteligência artificial do Pauta (quem lidera)</td><td>Montar a proposta de escalas de um mês e sugerir músicas para um culto: o tema e o contexto escritos por quem lidera, os ajustes pedidos, a proposta gerada e o que foi salvo ou usado. Ver as seções 3, 6 e 7.</td></tr>
             <tr><td>Dados técnicos de uso</td><td>Registros de acesso (data, rota acessada, resultado e identificadores internos da conta e da equipe) para segurança e para corrigir erros. Não registramos o conteúdo do que você envia nem a sua senha.</td></tr>
           </tbody>
         </table>
@@ -112,6 +113,7 @@
         <li><strong>Outras equipes</strong> não veem nenhum dado seu. O que uma equipe pode encontrar de outra é apenas o cadastro de músicas (título, artista, links e hinário), sem nada que identifique pessoas.</li>
         <li>Quando alguém compartilha a escala pelo WhatsApp, o texto leva o primeiro nome de quem está escalado. A partir daí, a mensagem segue as regras do WhatsApp.</li>
         <li>Quem lidera a equipe pode vincular o grupo do WhatsApp da equipe ao Pauta, adicionando a ele o número do Pauta. A partir daí, a escala publicada pode ser enviada a esse grupo pelo número do Pauta, com o mesmo texto do compartilhamento. O envio só acontece quando alguém da liderança pede, no aplicativo. O Pauta não lê as conversas do grupo: das mensagens que chegam ao número, só procura o código de vínculo e não as usa para mais nada. Do grupo, guardamos apenas o identificador e o nome. A liderança pode desfazer o vínculo a qualquer momento.</li>
+        <li>Nas equipes em que os <strong>recursos de inteligência artificial do Pauta</strong> estão ligados, só quem lidera os usa. O <strong>Copiloto de Escalas</strong> monta a proposta do mês no próprio servidor do Pauta, a partir das funções, da disponibilidade e da participação da equipe, e não envia dados a nenhum serviço de IA. O <strong>Copiloto de Repertório</strong> envia a um serviço de IA (seção 6) o tema e o contexto que quem lidera escreveu, a data e o nome do culto, e, das músicas do repertório da equipe que podem servir, o título, o artista, os temas, um trecho curto da letra e quando a equipe as cantou. Não vão nomes, e-mails, telefones nem qualquer outro dado de integrantes. Por isso, não escreva dados pessoais no tema ou no contexto. As propostas e sugestões só viram escala ou repertório quando quem lidera as salva no app.</li>
         <li>Quem conecta um assistente de inteligência artificial ao Pauta (como o Claude) permite que ele consulte, em nome dessa pessoa, o que ela já vê no app, sem e-mail, telefone e ano de nascimento de ninguém. A partir daí, esses dados seguem as regras do serviço de IA que a pessoa escolheu. A conexão só permite leitura — exceto quando quem lidera a equipe a cria com a opção de montar escalas: aí o assistente também cria, edita e publica escalas e escolhe as músicas delas, sempre a pedido de quem lidera; ao publicar ou mudar uma escala publicada, quem está nela recebe o aviso no app, como quando a mudança é feita no próprio app. A conexão pode ser desfeita a qualquer momento.</li>
       </ul>
     </section>
@@ -138,11 +140,14 @@
       <ul>
         <li><strong>Railway</strong> (hospedagem do servidor e do banco de dados).</li>
         <li><strong>Google Firebase Cloud Messaging</strong> (entrega das notificações no Android).</li>
+        <li><strong>OpenAI</strong> (o serviço de IA do Copiloto de Repertório, só nas equipes em que ele está ligado).</li>
       </ul>
       <p>Esses fornecedores podem manter servidores fora do Brasil. Nesses casos a transferência internacional segue o art. 33 da LGPD, com fornecedores que adotam garantias de proteção compatíveis.</p>
       <h3>Busca de músicas</h3>
       <p>Para ajudar a cadastrar músicas, o servidor consulta o Spotify, o YouTube, o CifraClub e o Letras.mus.br. Essas consultas levam apenas o título e o artista da música, nunca dados de pessoas.</p>
       <p>O Pauta usa os Serviços de API do YouTube para encontrar o vídeo de uma música. Ao usar esse recurso, aplicam-se os <a href="https://www.youtube.com/t/terms" rel="noopener">Termos de Serviço do YouTube</a> e a <a href="https://policies.google.com/privacy" rel="noopener">Política de Privacidade do Google</a>.</p>
+      <h3>Recursos de inteligência artificial</h3>
+      <p>O Copiloto de Repertório envia à OpenAI apenas o que a seção 3 descreve, sem dados de integrantes, e pede que a requisição não seja guardada para consulta posterior. O tratamento segue a <a href="https://openai.com/policies/privacy-policy" rel="noopener">Política de Privacidade da OpenAI</a> e as regras dela para uso por API. O serviço de IA pode mudar; se mudar, esta seção muda junto.</p>
       <h3>Envio da escala ao grupo do WhatsApp</h3>
       <p>Quando a equipe usa o envio ao grupo (seção 3), o texto da escala passa pelo WhatsApp, da Meta, e dali em diante segue a <a href="https://www.whatsapp.com/legal/privacy-policy" rel="noopener">Política de Privacidade do WhatsApp</a>.</p>
       <p>Também podemos compartilhar dados quando uma autoridade competente exigir, nos termos da lei.</p>
@@ -154,6 +159,7 @@
         <li><strong>Dados da conta</strong>: enquanto a conta existir. Ao excluí-la, são apagados na hora.</li>
         <li><strong>Escalas que já aconteceram</strong>: continuam com a equipe, porque fazem parte da história dela, mas o seu nome é trocado por "Ex-integrante" quando você exclui a conta. Frases antigas do histórico de alterações de uma escala ("Fulano entrou no Baixo") são guardadas como foram escritas e não são reescritas.</li>
         <li><strong>Sessões</strong>: o acesso guardado no aparelho expira em até 60 dias sem uso.</li>
+        <li><strong>Uso dos recursos de IA</strong>: o que foi pedido e proposto (tema, contexto, ajustes, propostas de escala com identificadores internos, músicas sugeridas) e o consumo de cada chamada ao serviço de IA ficam guardados enquanto a equipe existir, para conferir o funcionamento e o custo. Quando você exclui a conta, esses registros deixam de apontar para você.</li>
         <li><strong>Registros técnicos</strong>: pelo prazo de retenção do provedor de hospedagem, atualmente de até <mark class="todo">[PRAZO DOS LOGS]</mark> dias.</li>
         <li><strong>Cópias de segurança</strong> do banco de dados podem conter dados já excluídos por até <mark class="todo">[PRAZO DOS BACKUPS]</mark> dias, até serem substituídas.</li>
       </ul>
