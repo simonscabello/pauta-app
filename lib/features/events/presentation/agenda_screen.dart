@@ -328,11 +328,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     // O Copiloto de Escalas entra no mesmo menu, só para a liderança das
     // equipes em que o Pauta Admin o ligou. O mês é o que o calendário mostra
     // (nunca um que já passou).
-    // O copiloto ainda monta uma escala por dia: na equipe que escala por
-    // culto ele criaria o domingo com os quatro cultos dentro (o servidor
-    // recusa, com 409). Some do menu até saber montar por culto.
     final copilot = team.canManage &&
-        !team.schedulesPerService &&
         ref.watch(aiFeaturesProvider(teamId)).valueOrNull?.scheduleCopilot ==
             true;
     final thisMonth = DateTime(today.year, today.month);

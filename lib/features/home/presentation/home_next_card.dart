@@ -48,9 +48,13 @@ class MyNextScheduleCard extends StatelessWidget {
     required this.positions,
     this.following,
     this.daysAway,
+    this.sameDay = const [],
   });
 
   final Event event;
+
+  /// As outras escalas suas no mesmo dia (equipe que escala por culto).
+  final List<({Event event, List<String> roles})> sameDay;
 
   /// Dias civis até a escala (0 hoje, 1 amanhã). Vira o começo da sobrancelha
   /// — "HOJE · MINHA PRÓXIMA ESCALA" — no lugar do aviso que repetia a
@@ -148,6 +152,10 @@ class MyNextScheduleCard extends StatelessWidget {
                 _Fact(icon: Icons.music_note_rounded, label: songs),
             ],
           ),
+          if (sameDay.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _AlsoThisDay(entries: sameDay),
+          ],
           if (following != null) ...[
             const SizedBox(height: AppSpacing.lg),
             _AfterThis(event: following!),
@@ -435,6 +443,46 @@ class NoScheduleCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// "Também neste dia: Culto das 18h · Vocal" — as outras escalas suas no mesmo
+/// dia da manchete, uma por linha. Na equipe que escala por culto, quem serve
+/// em dois cultos do domingo vê o domingo inteiro num lugar só.
+class _AlsoThisDay extends StatelessWidget {
+  const _AlsoThisDay({required this.entries});
+
+  final List<({Event event, List<String> roles})> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: AppColors.onHeroVariant,
+        );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 1),
+          child: Icon(
+            Icons.add_circle_outline_rounded,
+            size: 16,
+            color: AppColors.onHeroVariant,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            [
+              'Também neste dia:',
+              for (final entry in entries)
+                [entry.event.servicesSummary, ...entry.roles].join(' · '),
+            ].join('\n'),
+            style: style,
+          ),
+        ),
+      ],
     );
   }
 }

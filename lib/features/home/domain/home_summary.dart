@@ -135,7 +135,15 @@ class HomeSummary {
     required this.notices,
     required this.hasSchedules,
     this.teamWeek = const [],
+    this.mySameDay = const [],
   });
+
+  /// As **outras** escalas suas no mesmo dia de [myNext], com o que você faz
+  /// em cada uma. Na equipe que escala por culto, quem toca às 8h e às 18h
+  /// está em duas escalas do domingo: a manchete é a das 8h, e a das 18h
+  /// entra nela ("Também neste dia: Culto das 18h · Vocal"), em vez de virar
+  /// o "E depois" de um domingo que é o mesmo.
+  final List<({Event event, List<String> roles})> mySameDay;
 
   /// (liderança) As escalas da equipe nos próximos sete dias, rascunhos
   /// incluídos, na ordem da data — menos a da manchete ([myNext]).
@@ -197,6 +205,18 @@ class HomeSummary {
         if (event.positionsForMembership(membershipId).isNotEmpty) event,
     ];
     final myNext = minhas.firstOrNull;
+    bool mesmoDia(Event e) =>
+        myNext != null &&
+        isSameLocalDay(
+          e.startsAt,
+          myNext.startsAt,
+          myNext.timezone.isEmpty ? 'America/Sao_Paulo' : myNext.timezone,
+        );
+    final doMesmoDia = [
+      for (final e in minhas.skip(1))
+        if (mesmoDia(e)) (event: e, roles: e.personalRolesFor(membershipId)),
+    ];
+    final depois = minhas.skip(1).where((e) => !mesmoDia(e)).firstOrNull;
 
     return HomeSummary(
       myNext: myNext,
@@ -204,7 +224,8 @@ class HomeSummary {
       myPositions: myNext?.personalRolesFor(membershipId) ?? const [],
       // A segunda em que eu entro, e não a segunda da equipe: a manchete abriu
       // o fio de "quando eu toco", e "e depois?" continua o mesmo fio.
-      myFollowing: minhas.length > 1 ? minhas[1] : null,
+      myFollowing: depois,
+      mySameDay: doMesmoDia,
       hasSchedules: events.isNotEmpty,
       notices: _notices(
         events,
@@ -212,13 +233,15 @@ class HomeSummary {
         now: now,
         headlineId: myNext?.id,
       ),
-      // Sem a escala da manchete: o mesmo compromisso em dois blocos vizinhos
-      // é a regra que a agenda também segue ("duas listas, nunca o mesmo
+      // Sem a escala da manchete (nem as do mesmo dia que ela já mostra em
+      // "Também neste dia"): o mesmo compromisso em dois blocos vizinhos é a
+      // regra que a agenda também segue ("duas listas, nunca o mesmo
       // compromisso nas duas").
       teamWeek: canManage
           ? [
               for (final event in events)
                 if (event.id != myNext?.id &&
+                    !doMesmoDia.any((e) => e.event.id == event.id) &&
                     daysUntilEvent(event, now) < 7 &&
                     daysUntilEvent(event, now) >= 0)
                   event,

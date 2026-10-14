@@ -389,6 +389,7 @@ class _HomeBody extends StatelessWidget {
               positions: summary.myPositions,
               following: summary.myFollowing,
               daysAway: summary.myNextDaysAway,
+              sameDay: summary.mySameDay,
             ),
     );
 
@@ -566,14 +567,21 @@ class _HomeNotices extends StatelessWidget {
         ? 'America/Sao_Paulo'
         : event.timezone;
 
+    // "dom 18/10" — e, na equipe que escala por culto, "dom 18/10 · Noite
+    // 19:00": o domingo tem várias escalas, e o aviso diz de qual fala.
+    String quando(Event e) {
+      final data = formatEventShortDate(e.startsAt, timezone);
+      return e.serviceTag == null ? data : '$data · ${e.serviceTag}';
+    }
+
     return switch (notice.kind) {
       HomeNoticeKind.unavailableAssigned => (
           icon: Icons.event_busy_rounded,
           title: notice.count > 1
               ? '${notice.person!.displayName} e mais ${notice.count - 1} não '
-                  'podem ${formatEventShortDate(event!.startsAt, timezone)}'
+                  'podem ${quando(event!)}'
               : '${notice.person!.displayName} não pode '
-                  '${formatEventShortDate(event!.startsAt, timezone)}',
+                  '${quando(event!)}',
           message: [
             if (event.rolesPhraseFor(notice.person!.membershipId)
                 case final funcoes?)
@@ -591,13 +599,13 @@ class _HomeNotices extends StatelessWidget {
       HomeNoticeKind.setlistMissing => (
           icon: Icons.queue_music_rounded,
           title: 'Músicas a definir',
-          message: '${formatEventShortDate(event!.startsAt, timezone)} '
+          message: '${quando(event!)} '
               'já foi publicada e a equipe espera o repertório para ensaiar.',
         ),
       HomeNoticeKind.unstaffedSchedule => (
           icon: Icons.person_add_alt_1_rounded,
           title: 'Ninguém escalado ainda',
-          message: '${formatEventShortDate(event!.startsAt, timezone)} '
+          message: '${quando(event!)} '
               'está sem equipe.',
         ),
     };

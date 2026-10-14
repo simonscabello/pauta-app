@@ -416,7 +416,7 @@ class _ScheduleCopilotScreenState extends ConsumerState<ScheduleCopilotScreen> {
               for (final day in days)
                 AppGroupRow(
                   title: _dayTitle(day.dateKey),
-                  subtitle: [day.title, day.services.join(' · ')]
+                  subtitle: [day.title, _servicesLine(day.dateKey, day.services)]
                       .whereType<String>()
                       .where((s) => s.isNotEmpty)
                       .join(' · '),
@@ -639,12 +639,23 @@ class _ScheduleCopilotScreenState extends ConsumerState<ScheduleCopilotScreen> {
   }
 }
 
-/// "Domingo, 8 de novembro".
+/// Os cultos da linha. Na unidade que é um culto (equipe que escala por
+/// culto), a hora já está no título: fica só o nome ("Manhã"), e não "Manhã
+/// 10:30" embaixo de "Domingo, 1 de novembro, 10:30".
+String _servicesLine(String dateKey, List<CopilotService> services) =>
+    dateKey.length > 10
+        ? services.map((s) => s.label).join(' · ')
+        : services.join(' · ');
+
+/// "Domingo, 8 de novembro" — e, na equipe que escala por culto, em que a
+/// unidade da proposta é o culto (`2026-11-08T08:00`), "Domingo, 8 de
+/// novembro, 08:00".
 String _dayTitle(String key) {
-  final date = parseDateKey(key);
+  final date = parseDateKey(key.length > 10 ? key.substring(0, 10) : key);
   if (date == null) return key;
   final text = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(date);
-  return text[0].toUpperCase() + text.substring(1);
+  final hora = key.length > 11 ? ', ${key.substring(11)}' : '';
+  return text[0].toUpperCase() + text.substring(1) + hora;
 }
 
 // -----------------------------------------------------------------------------
@@ -800,7 +811,7 @@ class _DayCard extends StatelessWidget {
                       style: theme.textTheme.titleMedium,
                     ),
                     Text(
-                      [day.title, day.services.join(' · ')]
+                      [day.title, _servicesLine(day.dateKey, day.services)]
                           .whereType<String>()
                           .where((s) => s.isNotEmpty)
                           .join(' · '),

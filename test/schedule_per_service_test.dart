@@ -6,6 +6,7 @@ import 'package:louvor_app/features/events/domain/next_service_date.dart';
 import 'package:louvor_app/features/events/domain/open_date.dart';
 import 'package:louvor_app/features/events/domain/schedule_share_text.dart';
 import 'package:louvor_app/features/events/presentation/event_schedule_facts.dart';
+import 'package:louvor_app/features/home/domain/home_summary.dart';
 import 'package:louvor_app/features/team/domain/service_template.dart';
 import 'package:louvor_app/features/unavailability/domain/schedule_conflicts.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
@@ -217,5 +218,63 @@ void main() {
         'Culto das 8h',
       );
     });
+  });
+
+  test('a Home junta as escalas suas do mesmo dia na manchete', () {
+    Map<String, dynamic> grupo(String position, String name) => {
+          'positionId': position,
+          'positionName': name,
+          'positionCategory': 'VOCAL',
+          'sortOrder': 0,
+          'members': [
+            {
+              'id': 'a-$position',
+              'membershipId': 'm1',
+              'displayName': 'Ana',
+              'note': null,
+              'isRegisteredForPosition': true,
+            },
+          ],
+        };
+    final oito =
+        _escala('Culto das 8h', '11:00', assignments: [grupo('p1', 'Vocal')]);
+    final dezoito = _escala(
+      'Culto das 18h',
+      '21:00',
+      assignments: [grupo('p2', 'Violão')],
+    );
+    final semanaQueVem = Event.fromJson({
+      'id': 'proxima',
+      'teamId': 't1',
+      'startsAt': '2026-09-13T11:00:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': _fuso,
+      'scheduleMode': 'SERVICE',
+      'assignments': [grupo('p1', 'Vocal')],
+      'songs': const [],
+    });
+
+    final resumo = HomeSummary.of(
+      [oito, dezoito, semanaQueVem],
+      membershipId: 'm1',
+      canManage: false,
+      now: _quarta,
+    );
+
+    expect(resumo.myNext?.id, oito.id);
+    expect(resumo.mySameDay.map((e) => e.event.id), [dezoito.id]);
+    expect(resumo.mySameDay.single.roles, ['Violão']);
+    // "E depois" é o próximo dia, e não a das 18h do mesmo domingo.
+    expect(resumo.myFollowing?.id, 'proxima');
+
+    // Para quem lidera, "Esta semana na equipe" não repete a das 18h, que a
+    // manchete já mostra.
+    final lider = HomeSummary.of(
+      [oito, dezoito, semanaQueVem],
+      membershipId: 'm1',
+      canManage: true,
+      now: _quarta,
+    );
+    expect(lider.teamWeek.map((e) => e.id), isNot(contains(dezoito.id)));
   });
 }
