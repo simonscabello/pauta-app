@@ -409,7 +409,8 @@ class _DaySheet extends ConsumerWidget {
       for (final scope in ['upcoming', 'past'])
         ...?ref.watch(eventsProvider((teamId, scope))).valueOrNull?.data,
     ];
-    final existente = escalas.where((event) {
+    // Todas as do dia: na equipe que escala por culto, o domingo tem várias.
+    final existentes = escalas.where((event) {
       final local = eventLocalTime(
         event.startsAt,
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone,
@@ -417,7 +418,8 @@ class _DaySheet extends ConsumerWidget {
       return local.year == day.year &&
           local.month == day.month &&
           local.day == day.day;
-    }).firstOrNull;
+    }).toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
     final scheme = theme.colorScheme;
 
     return SafeArea(
@@ -462,7 +464,7 @@ class _DaySheet extends ConsumerWidget {
             // criar escala a partir de uma ausência era estranho: quem abre o
             // dia veio consultar, não montar. Se já existe escala, o atalho
             // para ela fica — é a pergunta seguinte natural (quem está nela).
-            if (existente != null) ...[
+            for (final existente in existentes) ...[
               const SizedBox(height: AppSpacing.md),
               FilledButton.tonalIcon(
                 onPressed: () {
@@ -470,7 +472,11 @@ class _DaySheet extends ConsumerWidget {
                   context.push('/agenda/${existente.id}');
                 },
                 icon: const Icon(Icons.event_note_rounded, size: 18),
-                label: const Text('Ver escala'),
+                label: Text(
+                  existentes.length == 1
+                      ? 'Ver escala'
+                      : 'Ver ${existente.servicesSummary}',
+                ),
               ),
             ],
           ],

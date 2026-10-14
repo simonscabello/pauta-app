@@ -109,8 +109,10 @@ void main() {
       expect(url.queryParameters['details'], contains('Noite'));
     });
 
-    test('o arquivo leva a data no nome', () {
-      expect(scheduleIcsFileName(_event()), 'escala-2026-10-18.ics');
+    test('o arquivo leva a data e a hora, no fuso da equipe', () {
+      // Duas escalas no mesmo domingo (equipe por culto) não podem sair com o
+      // mesmo nome. 12:00 UTC é 09:00 em São Paulo.
+      expect(scheduleIcsFileName(_event()), 'escala-2026-10-18-0900.ics');
     });
   });
 }

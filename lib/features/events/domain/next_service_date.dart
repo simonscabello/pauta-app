@@ -1,6 +1,7 @@
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../team/domain/service_template.dart';
+import 'event_models.dart';
 
 /// Até onde vale procurar uma data com culto na grade.
 ///
@@ -59,5 +60,81 @@ DateTime? nextScheduledDate({
     return DateTime(date.year, date.month, date.day);
   }
 
+  return null;
+}
+
+/// Os instantes dos cultos que já têm escala — o que a equipe que escala por
+/// culto conta como "já montado". O servidor faz a mesma conta ao gerar pela
+/// grade (pelo culto da grade ou pelo horário); aqui, sem o id da grade na
+/// escala, vale o horário, que cobre os dois casos.
+Set<int> scheduledServiceInstants(List<Event> events) => {
+      for (final event in events)
+        for (final service in event.displayServices)
+          service.startsAt.toUtc().millisecondsSinceEpoch,
+    };
+
+/// O instante de um culto da grade numa data, no fuso da equipe.
+DateTime templateInstant(
+  ServiceTemplate template,
+  DateTime date,
+  tz.Location location,
+) =>
+    tz.TZDateTime(
+      location,
+      date.year,
+      date.month,
+      date.day,
+      template.hour,
+      template.minute,
+    ).toUtc();
+
+/// Os cultos da grade numa data que ainda não têm escala, por horário.
+List<ServiceTemplate> openTemplatesOn({
+  required DateTime date,
+  required List<ServiceTemplate> templates,
+  required Set<int> scheduled,
+  required String timezone,
+}) {
+  final location = tz.getLocation(timezone);
+  return templates
+      .where((t) => t.isActive && t.matchesDate(date))
+      .where(
+        (t) => !scheduled.contains(
+          templateInstant(t, date, location).millisecondsSinceEpoch,
+        ),
+      )
+      .toList()
+    ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+}
+
+/// O próximo **culto** da grade que ainda não tem escala — o que o formulário
+/// propõe na equipe que escala por culto. Com a das 8h montada, a próxima
+/// sugestão é a das 10h30 do mesmo domingo, e não o domingo seguinte.
+///
+/// O culto de hoje que já começou não conta. Nulo quando a grade está vazia
+/// ou tudo na janela já tem escala.
+({DateTime date, ServiceTemplate template})? nextOpenService({
+  required List<ServiceTemplate> templates,
+  required List<Event> events,
+  required String timezone,
+  required DateTime now,
+  int weeks = nextServiceDateWeeks,
+}) {
+  final location = tz.getLocation(timezone);
+  final today = tz.TZDateTime.from(now, location);
+  final scheduled = scheduledServiceInstants(events);
+
+  for (var offset = 0; offset < weeks * 7; offset += 1) {
+    final date = DateTime.utc(today.year, today.month, today.day + offset);
+    for (final template in openTemplatesOn(
+      date: date,
+      templates: templates,
+      scheduled: scheduled,
+      timezone: timezone,
+    )) {
+      if (!templateInstant(template, date, location).isAfter(now)) continue;
+      return (date: DateTime(date.year, date.month, date.day), template: template);
+    }
+  }
   return null;
 }

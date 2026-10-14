@@ -466,6 +466,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 onExit: confirmLeaveIfUnsaved,
                 builder: (_, state) => EventFormScreen(
                   initialDate: _parseDate(state.uri.queryParameters['data']),
+                  initialTemplateId: state.uri.queryParameters['culto'],
                 ),
               ),
               // Copiloto de Escalas: o mês inteiro de uma vez. Antes de

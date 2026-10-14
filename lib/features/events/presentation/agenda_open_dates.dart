@@ -35,8 +35,12 @@ class _AgendaOpenDatesState extends ConsumerState<AgendaOpenDates> {
     final confirmed = await showConfirmDialog(
       context,
       title: count == 1 ? 'Criar 1 rascunho?' : 'Criar $count rascunhos?',
-      message: 'Cada data vira uma escala em rascunho, com os cultos da grade '
-          'já marcados. A equipe só vê depois que você publicar.',
+      // Por culto, cada linha é um culto, e não um dia.
+      message: widget.dates.any((date) => date.templateId != null)
+          ? 'Cada culto vira uma escala em rascunho, com a sua equipe. A '
+              'equipe só vê depois que você publicar.'
+          : 'Cada data vira uma escala em rascunho, com os cultos da grade '
+              'já marcados. A equipe só vê depois que você publicar.',
       confirmLabel: 'Criar',
     );
     if (!confirmed || !mounted) return;

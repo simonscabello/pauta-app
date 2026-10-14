@@ -9,8 +9,9 @@ typedef ScheduledDay = ({Event event, List<String> roles});
 ///
 /// Existe para o aviso antes de marcar "não posso": quem avisa num domingo em
 /// que já está na escala precisa saber que o recado vai chegar a quem lidera,
-/// em vez de achar que marcar o dia resolveu a troca. Com dois cultos no mesmo
-/// dia, vale a primeira escala.
+/// em vez de achar que marcar o dia resolveu a troca. Com duas escalas no
+/// mesmo dia (a equipe que escala por culto), as funções das duas se juntam
+/// no recado — o dia é um só para quem não pode — e a escala é a primeira.
 Map<DateTime, ScheduledDay> scheduledDaysFor(
   Iterable<Event> events,
   String? membershipId,
@@ -25,7 +26,17 @@ Map<DateTime, ScheduledDay> scheduledDaysFor(
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final local = eventLocalTime(event.startsAt, timezone);
     final day = DateTime(local.year, local.month, local.day);
-    days.putIfAbsent(day, () => (event: event, roles: roles));
+    final anterior = days[day];
+    days[day] = anterior == null
+        ? (event: event, roles: roles)
+        : (
+            event: anterior.event,
+            roles: [
+              ...anterior.roles,
+              for (final role in roles)
+                if (!anterior.roles.contains(role)) role,
+            ],
+          );
   }
   return days;
 }

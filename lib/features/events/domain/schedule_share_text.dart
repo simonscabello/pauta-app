@@ -34,7 +34,11 @@ String buildScheduleShareText(Event event) {
       event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
   final buffer = StringBuffer();
 
-  buffer.writeln(_bold(_shareDate(event.startsAt, timezone)));
+  // Na equipe que escala por culto, o culto vai junto da data: as quatro
+  // mensagens do domingo começariam todas com o mesmo "*Domingo 13/09*".
+  final tag = event.serviceTag;
+  final date = _shareDate(event.startsAt, timezone);
+  buffer.writeln(_bold(tag == null ? date : '$date · $tag'));
   // O título só existe em culto especial ("Páscoa", "Ceia"), e aí entra logo
   // abaixo da data: é o que transforma "Domingo 13/09" numa data com ocasião.
   if (event.hasTitle) {

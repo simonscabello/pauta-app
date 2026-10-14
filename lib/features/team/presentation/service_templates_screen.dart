@@ -18,16 +18,24 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../../../shared/widgets/app_primary_action.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/service_template.dart';
 
-/// A grade de cultos da igreja.
+/// A grade de cultos da igreja, e como a equipe escala nela.
 ///
 /// Existe para o líder não digitar rótulo e horário a cada escala. Ele cadastra
 /// aqui uma vez ("Domingo 08:30 Manhã", "Domingo 19:00 Noite", "Quinta 19:30")
 /// e, na tela de nova escala, escolhe só a data -- os cultos daquele dia da
 /// semana já vêm marcados.
+///
+/// **"Como vocês escalam" mora aqui**, no topo: é a pergunta que decide o que a
+/// grade vira. Por dia (o padrão), o domingo de manhã e noite é uma escala, com
+/// a mesma equipe. Por culto, cada culto é uma escala própria -- a igreja de
+/// quatro cultos no domingo, em que equipe, músicas, ensaio e ministrante
+/// mudam de um para o outro. É só o padrão: juntar ou separar cultos numa
+/// escala continua possível.
 class ServiceTemplatesScreen extends ConsumerWidget {
   const ServiceTemplatesScreen({super.key, required this.teamId});
 
@@ -249,9 +257,14 @@ class _TemplateList extends ConsumerWidget {
         AppSpacing.fabClearance,
       ),
       children: [
+        _ScheduleModeChoice(teamId: teamId),
+        const SizedBox(height: AppSpacing.xl),
         Text(
-          'Os horários que se repetem toda semana. Ao criar uma escala, você '
-          'escolhe a data e os cultos do dia já vêm marcados.',
+          ref.watch(schedulesPerServiceProvider(teamId))
+              ? 'Os horários que se repetem toda semana. Cada culto vira uma '
+                  'escala, com a sua equipe.'
+              : 'Os horários que se repetem toda semana. Ao criar uma escala, '
+                  'você escolhe a data e os cultos do dia já vêm marcados.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
@@ -658,6 +671,83 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Como vocês escalam": uma escala por dia ou uma por culto.
+class _ScheduleModeChoice extends ConsumerStatefulWidget {
+  const _ScheduleModeChoice({required this.teamId});
+
+  final String teamId;
+
+  @override
+  ConsumerState<_ScheduleModeChoice> createState() =>
+      _ScheduleModeChoiceState();
+}
+
+class _ScheduleModeChoiceState extends ConsumerState<_ScheduleModeChoice> {
+  bool _saving = false;
+
+  Future<void> _change(bool perService) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(teamRepositoryProvider).update(
+            widget.teamId,
+            scheduleMode: perService ? 'SERVICE' : 'DAY',
+          );
+      // O modo vem da sessão: recarregar as equipes é o que faz o resto do
+      // app (formulário, agenda, avisos) passar a escalar do jeito novo.
+      await ref.read(authControllerProvider.notifier).reloadTeams();
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        perService
+            ? 'Agora cada culto é uma escala, com a sua equipe.'
+            : 'Agora a escala é do dia, com os cultos dentro.',
+        tone: AppTone.success,
+      );
+    } on ApiException catch (error) {
+      if (mounted) showAppSnackBar(context, error.message, tone: AppTone.danger);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final perService = ref.watch(schedulesPerServiceProvider(widget.teamId));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Como vocês escalam', style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.sm),
+        AppChoiceBar<bool>(
+          expanded: true,
+          value: perService,
+          onChanged: _change,
+          options: const [
+            AppChoice(value: false, label: 'Uma por dia'),
+            AppChoice(value: true, label: 'Uma por culto'),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          perService
+              ? 'Cada culto tem a sua escala: equipe, músicas, ensaio e quem '
+                  'ministra. Para repetir a equipe em outro culto, use '
+                  '"Copiar de" ao escalar.'
+              : 'Os cultos do mesmo dia ficam numa escala só, com a mesma '
+                  'equipe — manhã e noite do domingo, por exemplo.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

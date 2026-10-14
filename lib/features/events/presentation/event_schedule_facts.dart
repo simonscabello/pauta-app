@@ -55,12 +55,13 @@ class ScheduleFacts {
   static ScheduleFacts of(Event event, String timezone) {
     final services = event.displayServices;
 
-    final times = services.length == 1
+    // Na equipe que escala por culto, o nome do culto volta com um culto só:
+    // o domingo tem quatro escalas, e "08:00" sozinho não diz qual é.
+    final times = services.length == 1 && event.serviceTag == null
         ? formatEventTime(services.first.startsAt, timezone)
         : [
             for (final service in services)
-              '${service.label} '
-                  '${formatEventTime(service.startsAt, timezone)}',
+              serviceNameAndTime(service.label, service.startsAt, timezone),
           ].join(' · ');
 
     final rehearsalAt = event.rehearsalAt;

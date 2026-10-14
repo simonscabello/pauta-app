@@ -165,12 +165,16 @@ class Team {
     required this.id,
     required this.name,
     required this.timezone,
+    this.scheduleMode = 'DAY',
     this.memberCount = 0,
   });
 
   final String id;
   final String name;
   final String timezone;
+
+  /// Uma escala por dia (`DAY`) ou por culto (`SERVICE`).
+  final String scheduleMode;
   final int memberCount;
 
   factory Team.fromJson(Map<String, dynamic> json) {
@@ -178,6 +182,7 @@ class Team {
       id: json['id'] as String,
       name: json['name'] as String,
       timezone: json['timezone'] as String? ?? 'America/Sao_Paulo',
+      scheduleMode: json['scheduleMode'] as String? ?? 'DAY',
       memberCount: json['memberCount'] as int? ?? 0,
     );
   }

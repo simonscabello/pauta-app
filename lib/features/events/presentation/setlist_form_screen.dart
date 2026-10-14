@@ -625,7 +625,7 @@ class _ServiceSetlist extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  '${culto.label} ${formatEventTime(culto.startsAt, timezone)}',
+                  serviceNameAndTime(culto.label, culto.startsAt, timezone),
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),

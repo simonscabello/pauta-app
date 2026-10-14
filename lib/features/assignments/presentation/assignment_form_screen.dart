@@ -25,6 +25,7 @@ import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../../events/data/event_repository.dart';
+import '../../events/domain/event_datetime.dart';
 import '../../events/domain/event_models.dart';
 import '../../events/presentation/schedule_changed_dialog.dart';
 import '../../team/data/team_repository.dart';
@@ -240,6 +241,82 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     return 'Falta escolher: $lista.';
   }
 
+  /// As outras escalas do mesmo dia que já têm equipe — de onde dá para
+  /// copiar. É o caso da igreja que escala por culto e em que a mesma equipe
+  /// serve em dois cultos: monta a das 8h e copia para a das 10h30, ajustando
+  /// o que mudar. Vale também para quem escala por dia e montou dois
+  /// cultos em escalas separadas.
+  List<Event> _irmasComEquipe(Event event) {
+    final proximas = ref
+            .watch(eventsProvider((event.teamId, 'upcoming')))
+            .valueOrNull
+            ?.data ??
+        const <Event>[];
+    return [
+      for (final outra in proximas)
+        if (outra.id != event.id &&
+            isSameLocalDay(outra.startsAt, event.startsAt, event.timezone) &&
+            outra.assignments.any((g) => g.members.isNotEmpty))
+          outra,
+    ]..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
+
+  /// Substitui a escalação desta tela pela de [origem]: funções e quem
+  /// ministra. Os recados ficam de fora — "chegar às 7h30" é do culto de lá.
+  /// Nada é gravado: a pessoa confere, ajusta e salva.
+  Future<void> _copiarDe(Event origem) async {
+    final temAlguem = _assignedIds.isNotEmpty || _ministerId != null;
+    if (temAlguem) {
+      final ok = await showConfirmDialog(
+        context,
+        title: 'Trocar a escalação?',
+        message: 'A equipe desta escala dá lugar à de '
+            '${origem.servicesSummary}. Nada é salvo até você tocar em '
+            'Salvar.',
+        confirmLabel: 'Copiar a equipe',
+      );
+      if (!ok || !mounted) return;
+    }
+    setState(() {
+      _selected.clear();
+      _notes.clear();
+      for (final group in origem.assignments) {
+        _selected[group.positionId] = {
+          for (final member in group.members) member.membershipId,
+        };
+      }
+      _ministerId = origem.minister?.membershipId;
+    });
+    if (mounted) {
+      showAppSnackBar(
+        context,
+        'Equipe de ${origem.servicesSummary} copiada. Confira e salve.',
+        tone: AppTone.success,
+      );
+    }
+  }
+
+  Widget? _copiarDeOutroCulto(Event event) {
+    final irmas = _irmasComEquipe(event);
+    if (irmas.isEmpty) return null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.xs,
+        children: [
+          for (final irma in irmas)
+            OutlinedButton.icon(
+              style: AppButtonStyles.compact,
+              onPressed: () => _copiarDe(irma),
+              icon: const Icon(Icons.content_copy_rounded, size: 18),
+              label: Text('Copiar de ${irma.servicesSummary}'),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// O aviso de quem precisa sair, no topo da escalação.
   Widget? _substituirNotice(Event event) {
     final id = widget.replaceMembershipId;
@@ -391,7 +468,13 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       final conflicts = updated.warnings.sameDayConflicts;
       if (conflicts.isNotEmpty) {
         final names = conflicts.map((c) => c.displayName).toSet().join(', ');
-        warnings.add('$names também está em outra escala no mesmo dia.');
+        // Por culto, o servidor só acusa o mesmo horário: servir às 8h e às
+        // 18h é o normal ali.
+        warnings.add(
+          updated.scheduleMode == 'SERVICE'
+              ? '$names também está em outra escala no mesmo horário.'
+              : '$names também está em outra escala no mesmo dia.',
+        );
       }
 
       final proximoPasso = nextStepAfterAssignments(
@@ -681,6 +764,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 children: [
                   Text(event.dateAndTitle, style: theme.textTheme.titleLarge),
                   const SizedBox(height: AppSpacing.lg),
+                  if (_copiarDeOutroCulto(event) case final copiar?) copiar,
                   if (_substituirNotice(event) case final aviso?) aviso,
                   Expanded(
                     child: Row(
@@ -756,6 +840,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
           children: [
             Text(event.dateAndTitle, style: theme.textTheme.titleLarge),
             const SizedBox(height: AppSpacing.lg),
+            if (_copiarDeOutroCulto(event) case final copiar?) copiar,
             if (_substituirNotice(event) case final aviso?) aviso,
             if (_error != null) FormErrorBanner(message: _error!),
             AppCard(

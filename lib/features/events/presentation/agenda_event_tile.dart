@@ -233,7 +233,7 @@ class OpenDateTile extends StatelessWidget {
     final times = Text(
       [
         for (final service in date.services)
-          '${service.label} ${formatEventTime(service.startsAt, timezone)}',
+          serviceNameAndTime(service.label, service.startsAt, timezone),
       ].join('  ·  '),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
@@ -244,7 +244,7 @@ class OpenDateTile extends StatelessWidget {
     );
 
     return AppPressable(
-      onTap: () => context.push('/agenda/novo?data=${date.dateParam}'),
+      onTap: () => context.push(date.newScheduleRoute),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,

@@ -400,6 +400,7 @@ class Event {
     required this.status,
     this.repertoireMode = RepertoireMode.planned,
     required this.timezone,
+    this.scheduleMode = 'DAY',
     required this.assignments,
     required this.songs,
     this.services = const [],
@@ -422,6 +423,7 @@ class Event {
       status: json['status'] as String,
       repertoireMode: RepertoireMode.fromJson(json['repertoireMode']),
       timezone: json['timezone'] as String? ?? 'America/Sao_Paulo',
+      scheduleMode: json['scheduleMode'] as String? ?? 'DAY',
       assignments: (json['assignments'] as List<dynamic>? ?? const [])
           .map((e) {
             if (e is! Map<String, dynamic>) {
@@ -480,6 +482,10 @@ class Event {
   /// O repertório desta escala sai no culto, e não antes.
   bool get isRepertoireOnTheFly => repertoireMode == RepertoireMode.onTheFly;
   final String timezone;
+
+  /// Como a equipe escala: `DAY` (a escala é o dia, com os cultos dentro) ou
+  /// `SERVICE` (cada culto é uma escala). Ausente em cache antigo: por dia.
+  final String scheduleMode;
   final List<AssignmentGroup> assignments;
 
   /// Repertório desta escala, na ordem em que será tocado. Vem preenchido no
@@ -501,16 +507,38 @@ class Event {
 
   bool get hasTitle => title != null && title!.isNotEmpty;
 
+  String get _tz => timezone.isEmpty ? 'America/Sao_Paulo' : timezone;
+
+  /// "Manhã 08:00", ou "Manhã 08:00 e Noite 19:00" — os cultos desta escala
+  /// pelo nome e pela hora. É como uma escala se distingue da outra do mesmo
+  /// dia ("Copiar de Manhã 08:00").
+  String get servicesSummary {
+    final cultos = [
+      for (final service in displayServices)
+        serviceNameAndTime(service.label, service.startsAt, _tz),
+    ];
+    if (cultos.length <= 1) return cultos.join();
+    return '${cultos.sublist(0, cultos.length - 1).join(', ')} e ${cultos.last}';
+  }
+
+  /// O culto, quando ele é o que distingue a escala: na equipe que escala
+  /// **por culto**, a escala de um culto só ("Culto das 8h 08:00"). Lá o
+  /// domingo tem quatro escalas, e só a data não diz de qual se fala. Nulo na
+  /// equipe por dia, em que a data basta — e o "Manhã 08:00 · Noite 19:00" já
+  /// aparece na linha dos horários.
+  String? get serviceTag {
+    if (scheduleMode != 'SERVICE' || displayServices.length != 1) return null;
+    return servicesSummary;
+  }
+
   /// Como se referir a esta escala num texto corrido (diálogos, avisos).
   ///
   /// Sem título, a data por extenso: "a escala de domingo, 9 de agosto" lê
   /// melhor do que um identificador vazio.
   String describe() {
     if (hasTitle) return title!;
-    return formatEventWeekdayDate(
-      startsAt,
-      timezone.isEmpty ? 'America/Sao_Paulo' : timezone,
-    );
+    final date = formatEventWeekdayDate(startsAt, _tz);
+    return serviceTag == null ? date : '$date, $serviceTag';
   }
 
   /// "Domingo, 4 de outubro · Páscoa" — **sempre com a data**.
@@ -519,11 +547,9 @@ class Event {
   /// [describe], a escala com título mostrava só o título, e quem escalava não
   /// via de que domingo se tratava; o repertório não mostrava nem um nem outro.
   String get dateAndTitle {
-    final date = formatEventWeekdayDate(
-      startsAt,
-      timezone.isEmpty ? 'America/Sao_Paulo' : timezone,
-    );
-    return hasTitle ? '$date · $title' : date;
+    final date = formatEventWeekdayDate(startsAt, _tz);
+    final tag = serviceTag;
+    return [date, if (tag != null) tag, if (hasTitle) title!].join(' · ');
   }
 
   /// Os cultos para exibir.

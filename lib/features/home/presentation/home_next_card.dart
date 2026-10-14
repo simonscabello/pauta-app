@@ -223,7 +223,10 @@ class _AfterThis extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Text(
-            'E depois: ${formatEventWeekdayDate(event.startsAt, timezone)}',
+            // Por culto, a seguinte pode ser no mesmo domingo: a hora é o que
+            // a separa da manchete.
+            'E depois: ${formatEventWeekdayDate(event.startsAt, timezone)}'
+            '${event.serviceTag == null ? '' : ' · ${event.serviceTag}'}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: AppColors.onHeroVariant,
             ),

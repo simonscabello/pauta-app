@@ -2,6 +2,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../team/domain/service_template.dart';
 import 'event_models.dart';
+import 'next_service_date.dart';
 
 /// A janela de planejamento da agenda: quatro semanas.
 ///
@@ -35,7 +36,12 @@ class OpenDate {
     required this.startsAt,
     required this.services,
     required this.timezone,
+    this.templateId,
   });
+
+  /// O culto da grade, quando a linha é **um culto** (equipe que escala por
+  /// culto) e não o dia inteiro. Vai para o formulário como `?culto=`.
+  final String? templateId;
 
   /// O culto mais cedo do dia — o mesmo critério que a escala usa para se
   /// ordenar na agenda, para que as datas em aberto e as escalas reais possam
@@ -49,6 +55,11 @@ class OpenDate {
   /// A data no formato que `/agenda/novo?data=` espera.
   String get dateParam =>
       _dateKey(tz.TZDateTime.from(startsAt, tz.getLocation(timezone)));
+
+  /// O endereço do formulário de nova escala para esta linha.
+  String get newScheduleRoute => templateId == null
+      ? '/agenda/novo?data=$dateParam'
+      : '/agenda/novo?data=$dateParam&culto=$templateId';
 }
 
 /// As datas da grade que ainda não têm escala, da mais próxima à mais distante.
@@ -71,12 +82,41 @@ List<OpenDate> openDates({
   required String timezone,
   required DateTime now,
   int weeks = openDatesWeeks,
+  bool perService = false,
 }) {
   final active = templates.where((template) => template.isActive).toList();
   if (active.isEmpty) return const [];
 
   final location = tz.getLocation(timezone);
   final today = tz.TZDateTime.from(now, location);
+
+  // Na equipe que escala por culto, a linha em aberto é o **culto**: o
+  // domingo com a das 8h montada ainda mostra a das 10h30. Mesma regra do
+  // servidor ao gerar (`EventsService.generate`).
+  if (perService) {
+    final scheduled = scheduledServiceInstants(events);
+    final abertos = <OpenDate>[];
+    for (var offset = 0; offset < weeks * 7; offset += 1) {
+      final date = DateTime.utc(today.year, today.month, today.day + offset);
+      for (final template in openTemplatesOn(
+        date: date,
+        templates: active,
+        scheduled: scheduled,
+        timezone: timezone,
+      )) {
+        final startsAt = templateInstant(template, date, location);
+        abertos.add(
+          OpenDate(
+            startsAt: startsAt,
+            services: [OpenDateService(label: template.label, startsAt: startsAt)],
+            timezone: timezone,
+            templateId: template.id,
+          ),
+        );
+      }
+    }
+    return abertos;
+  }
 
   // As datas que já têm escala, no calendário da equipe. Um domingo com culto
   // de manhã e de noite ocupa o dia inteiro com **uma** escala, então a chave

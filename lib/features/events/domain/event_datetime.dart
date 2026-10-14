@@ -171,3 +171,27 @@ String eventMonthKey(DateTime utc, String timezone) {
   final localTime = eventLocalTime(utc, timezone);
   return '${localTime.year}-${localTime.month.toString().padLeft(2, '0')}';
 }
+
+/// "Manhã 08:00" — o culto pelo nome e pela hora, **sem repetir a hora** quando
+/// o nome já a diz ("Culto das 8h", "Culto 10h30", "Vigília 22:00"). Na
+/// equipe que escala por culto é comum o nome ser a própria hora, e "Culto das
+/// 8h 08:00" dizia a mesma coisa duas vezes.
+String serviceNameAndTime(String label, DateTime utc, String timezone) {
+  final time = formatEventTime(utc, timezone);
+  return labelStatesTime(label, eventLocalTime(utc, timezone))
+      ? label
+      : '$label $time';
+}
+
+/// O nome do culto já traz esta hora? "8h", "08h", "8:00", "08:00", "10h30",
+/// "10:30" — e, com minuto zero, também "8h00". Um número qualquer ("Culto 2")
+/// não conta: só a hora certa do culto.
+bool labelStatesTime(String label, DateTime local) {
+  final h = local.hour;
+  final m = local.minute.toString().padLeft(2, '0');
+  final hora = '0?$h';
+  final pattern = local.minute == 0
+      ? RegExp('(^|[^0-9])$hora(h(00)?|:00)(?![0-9])', caseSensitive: false)
+      : RegExp('(^|[^0-9])$hora(h|:)$m(?![0-9])', caseSensitive: false);
+  return pattern.hasMatch(label);
+}

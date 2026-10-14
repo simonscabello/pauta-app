@@ -61,6 +61,7 @@ class TeamSummary {
     required this.name,
     required this.role,
     required this.displayName,
+    this.scheduleMode = 'DAY',
   });
 
   final String membershipId;
@@ -69,7 +70,14 @@ class TeamSummary {
   final String role;
   final String displayName;
 
+  /// "Como vocês escalam": `DAY` (uma escala por dia, com os cultos dentro)
+  /// ou `SERVICE` (uma escala por culto). Ausente no servidor de antes da
+  /// configuração, e vale por dia.
+  final String scheduleMode;
+
   bool get canManage => role == 'OWNER' || role == 'LEADER';
+
+  bool get schedulesPerService => scheduleMode == 'SERVICE';
 
   factory TeamSummary.fromJson(Map<String, dynamic> json) {
     return TeamSummary(
@@ -78,6 +86,7 @@ class TeamSummary {
       name: json['name'] as String,
       role: json['role'] as String,
       displayName: json['displayName'] as String,
+      scheduleMode: json['scheduleMode'] as String? ?? 'DAY',
     );
   }
 }

@@ -69,7 +69,12 @@ enum _RehearsalDay {
 }
 
 class EventFormScreen extends ConsumerStatefulWidget {
-  const EventFormScreen({super.key, this.eventId, this.initialDate});
+  const EventFormScreen({
+    super.key,
+    this.eventId,
+    this.initialDate,
+    this.initialTemplateId,
+  });
 
   final String? eventId;
 
@@ -81,6 +86,10 @@ class EventFormScreen extends ConsumerStatefulWidget {
   /// Nulo é "ninguém decidiu ainda": aí a grade da equipe decide, em
   /// [nextScheduledDate].
   final DateTime? initialDate;
+
+  /// O culto da grade já escolhido (a linha em aberto da agenda, na equipe
+  /// que escala por culto). A escala nasce só com ele.
+  final String? initialTemplateId;
 
   @override
   ConsumerState<EventFormScreen> createState() => _EventFormScreenState();
@@ -205,9 +214,23 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
   /// tinha de ir ao calendário consertar o palpite do app. Chegando de uma
   /// tela que já decidiu a data ([EventFormScreen.initialDate]), a grade não
   /// opina — ali a escolha já foi feita.
-  void _seedFromTemplates(List<ServiceTemplate> templates, String timezone) {
+  ///
+  /// **Na equipe que escala por culto, a escala nasce com um culto só**: o
+  /// escolhido na agenda, ou o próximo da grade que ainda não tem escala — com
+  /// a das 8h montada, a das 10h30 do mesmo domingo. "Adicionar culto"
+  /// continua ali para juntar dois numa escala, quando a equipe é a mesma.
+  void _seedFromTemplates(
+    List<ServiceTemplate> templates,
+    String timezone, {
+    List<Event>? events,
+  }) {
     if (_seededFromTemplates) return;
     _seededFromTemplates = true;
+
+    if (events != null) {
+      _seedOneService(templates, timezone, events);
+      return;
+    }
 
     if (widget.initialDate == null) {
       final sugerida = nextScheduledDate(
@@ -221,6 +244,53 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
     }
 
     _services = _templatesForDate(templates, _date);
+  }
+
+  void _seedOneService(
+    List<ServiceTemplate> templates,
+    String timezone,
+    List<Event> events,
+  ) {
+    ServiceTemplate? escolhido;
+    if (widget.initialTemplateId != null) {
+      escolhido =
+          templates.where((t) => t.id == widget.initialTemplateId).firstOrNull;
+    }
+    if (escolhido == null && widget.initialDate != null) {
+      // O dia veio decidido: o primeiro culto dele ainda sem escala, ou o
+      // primeiro do dia quando todos já têm (aí a pessoa quer outra escala
+      // naquele horário, e decide).
+      final doDia = _templatesForDate(templates, _date);
+      final abertos = openTemplatesOn(
+        date: _date,
+        templates: templates,
+        scheduled: scheduledServiceInstants(events),
+        timezone: timezone,
+      );
+      final id = abertos.firstOrNull?.id ?? doDia.firstOrNull?.templateId;
+      escolhido = templates.where((t) => t.id == id).firstOrNull;
+    }
+    if (escolhido == null && widget.initialDate == null) {
+      final proximo = nextOpenService(
+        templates: templates,
+        events: events,
+        timezone: timezone,
+        now: DateTime.now(),
+      );
+      if (proximo != null) {
+        _date = proximo.date;
+        escolhido = proximo.template;
+      }
+    }
+    _services = escolhido == null
+        ? []
+        : [
+            _ServiceDraft(
+              label: escolhido.label,
+              time: escolhido.timeOfDay,
+              templateId: escolhido.id,
+            ),
+          ];
   }
 
   List<_ServiceDraft> _templatesForDate(
@@ -261,7 +331,28 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
     if (selected == null || !mounted) return;
 
     final newDate = DateTime(selected.year, selected.month, selected.day);
-    final suggestion = _templatesForDate(templates, newDate);
+    var suggestion = _templatesForDate(templates, newDate);
+    // Por culto, o dia novo traz um culto só: o primeiro dele sem escala.
+    final teamId = ref.read(activeTeamIdProvider);
+    if (teamId != null && ref.read(schedulesPerServiceProvider(teamId))) {
+      final abertos = openTemplatesOn(
+        date: newDate,
+        templates: templates,
+        scheduled: scheduledServiceInstants(
+          ref.read(eventsProvider((teamId, 'upcoming'))).valueOrNull?.data ??
+              const <Event>[],
+        ),
+        timezone: _timezone(
+          ref.read(teamProvider(teamId)).valueOrNull?.timezone ?? '',
+        ),
+      );
+      final primeiro = abertos.firstOrNull?.id ??
+          suggestion.firstOrNull?.templateId;
+      suggestion = [
+        for (final s in suggestion)
+          if (s.templateId == primeiro) s,
+      ];
+    }
 
     // Trocar a data troca o dia da semana, e a grade do novo dia é outra. Só
     // sugerimos quando há grade para o dia -- e só quando a lista atual ainda
@@ -626,10 +717,25 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
     // falhou não trava a tela: aí vale o fuso padrão, que é o de quase todas.
     final teamSettled =
         teamAsync == null || teamAsync.hasValue || teamAsync.hasError;
-    if (!_isEditing && templatesAsync.hasValue && teamSettled) {
+    // Por culto, a sugestão depende das escalas que já existem (o próximo
+    // culto **sem** escala), e por isso espera a agenda também.
+    final perService =
+        teamId != null && ref.watch(schedulesPerServiceProvider(teamId));
+    final upcoming = perService
+        ? ref.watch(eventsProvider((teamId, 'upcoming')))
+        : null;
+    final upcomingSettled =
+        upcoming == null || upcoming.hasValue || upcoming.hasError;
+    if (!_isEditing &&
+        templatesAsync.hasValue &&
+        teamSettled &&
+        upcomingSettled) {
       _seedFromTemplates(
         templates,
         _timezone(teamAsync?.valueOrNull?.timezone ?? ''),
+        events: perService
+            ? (upcoming?.valueOrNull?.data ?? const <Event>[])
+            : null,
       );
     }
 
@@ -681,6 +787,8 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
                 onPickTime: _pickServiceTime,
                 onRemove: _removeService,
                 onAdd: _addService,
+                perService: teamId != null &&
+                    ref.watch(schedulesPerServiceProvider(teamId)),
               ),
               const SizedBox(height: AppSpacing.xl),
               const SectionHeader(
@@ -981,7 +1089,11 @@ class _ServicesSection extends StatelessWidget {
     required this.onPickTime,
     required this.onRemove,
     required this.onAdd,
+    this.perService = false,
   });
+
+  /// A equipe escala por culto: a escala nasce com um culto só.
+  final bool perService;
 
   final List<_ServiceDraft> services;
   final List<ServiceTemplate> templates;
@@ -1008,7 +1120,10 @@ class _ServicesSection extends StatelessWidget {
           title: 'Cultos',
           subtitle: loadingTemplates
               ? null
-              : hasGradeForDay
+              : hasGradeForDay && perService
+                  ? 'Um culto por escala, como a equipe escala. Para a mesma '
+                      'equipe servir em outro, adicione aqui.'
+                  : hasGradeForDay
                   ? 'Vieram da grade da igreja. Remova o que não vai ter.'
                   : 'Não há grade para este dia da semana. Adicione o horário.',
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),

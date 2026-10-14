@@ -550,8 +550,11 @@ class _EventHeader extends StatelessWidget {
                 // Cada culto na própria linha, alinhados à direita.
                 value: [
                   for (final service in services)
-                    '${service.label} '
-                        '${formatEventTime(service.startsAt, timezone)}',
+                    serviceNameAndTime(
+                      service.label,
+                      service.startsAt,
+                      timezone,
+                    ),
                 ].join('\n'),
               ),
             AppFact(
@@ -1456,8 +1459,7 @@ class _ServiceSongsSection extends StatelessWidget {
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                '${service.label} '
-                '${formatEventTime(service.startsAt, timezone)}',
+                serviceNameAndTime(service.label, service.startsAt, timezone),
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),

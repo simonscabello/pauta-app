@@ -10,7 +10,11 @@ const _rehearsalDuration = Duration(hours: 2);
 /// tem um, e o culto. "Culto · Manhã", "Páscoa · Noite".
 String _summary(Event event, EventService service, bool severalServices) {
   final base = event.hasTitle ? event.title! : 'Culto';
-  return severalServices ? '$base · ${service.label}' : base;
+  // Por culto, o nome do culto entra mesmo sendo o único: "Culto · Culto das
+  // 8h" no calendário diz de qual das escalas do domingo é o compromisso.
+  return severalServices || event.serviceTag != null
+      ? '$base · ${service.label}'
+      : base;
 }
 
 /// A escala como arquivo de calendário (.ics): um compromisso por culto e um
@@ -80,11 +84,17 @@ String googleCalendarUrl(Event event) {
   return Uri.https('calendar.google.com', '/calendar/render', params).toString();
 }
 
-/// O nome do arquivo: `escala-2026-10-18.ics`.
+/// O nome do arquivo: `escala-2026-10-18-0800.ics`.
+///
+/// Com a hora: duas escalas no mesmo dia (a equipe que escala por culto) não
+/// podem sair com o mesmo nome. Na data e na hora do fuso da equipe — a data
+/// em UTC trocava o dia de um culto às 22h.
 String scheduleIcsFileName(Event event) {
-  final d = event.startsAt.toUtc();
+  final zone = event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
+  final d = eventLocalTime(event.startsAt, zone);
   String two(int n) => n.toString().padLeft(2, '0');
-  return 'escala-${d.year}-${two(d.month)}-${two(d.day)}.ics';
+  return 'escala-${d.year}-${two(d.month)}-${two(d.day)}-'
+      '${two(d.hour)}${two(d.minute)}.ics';
 }
 
 /// "domingo, 18 de outubro, 19:00", no fuso da equipe.

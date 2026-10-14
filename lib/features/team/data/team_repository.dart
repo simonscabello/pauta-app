@@ -51,11 +51,18 @@ class TeamRepository {
   }
 
   /// O fuso não entra: é sempre o de Brasília, e a API nem aceita o campo.
-  Future<Team> update(String teamId, {required String name}) async {
+  Future<Team> update(
+    String teamId, {
+    String? name,
+    String? scheduleMode,
+  }) async {
     return _guard(() async {
       final response = await _dio.patch<Map<String, dynamic>>(
         '/teams/$teamId',
-        data: {'name': name},
+        data: {
+          if (name != null) 'name': name,
+          if (scheduleMode != null) 'scheduleMode': scheduleMode,
+        },
       );
       return Team.fromJson(response.data!);
     });
@@ -474,6 +481,18 @@ final addGuestProvider =
 final positionsProvider =
     FutureProvider.autoDispose.family<List<Position>, String>((ref, teamId) {
   return ref.watch(teamRepositoryProvider).positions(teamId);
+});
+
+/// A equipe escala por culto (cada culto é uma escala) — lido da sessão, sem
+/// ida ao servidor. Falso também quando a equipe não está na sessão.
+final schedulesPerServiceProvider = Provider.family<bool, String>((ref, teamId) {
+  return ref
+          .watch(authControllerProvider)
+          .teams
+          .where((team) => team.teamId == teamId)
+          .firstOrNull
+          ?.schedulesPerService ??
+      false;
 });
 
 /// Os momentos do culto da equipe, na ordem do culto: os que a folha da

@@ -229,10 +229,13 @@ class _SuggestionDetailScreenState
 
   /// A escala do dia pedido, quando existe e a sugestão já aponta para uma
   /// música do repertório. É o que torna "Adicionar ao culto" possível.
-  Event? _escalaDaData(SongSuggestion s) {
+  ///
+  /// Todas as do dia, em ordem: na equipe que escala por culto, o domingo tem
+  /// várias, e a música pode ir para qualquer uma.
+  List<Event> _escalasDaData(SongSuggestion s) {
     final data = s.targetDate;
     final songId = s.songId ?? _songIdCriado;
-    if (data == null || songId == null) return null;
+    if (data == null || songId == null) return const [];
     final escalas =
         ref.watch(eventsProvider((widget.teamId, 'upcoming'))).valueOrNull?.data;
     return escalas?.where((e) {
@@ -243,7 +246,8 @@ class _SuggestionDetailScreenState
       return local.year == data.year &&
           local.month == data.month &&
           local.day == data.day;
-    }).firstOrNull;
+    }).toList() ?? const <Event>[]
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
   }
 
   /// **Aceitar e pôr no culto, de uma vez.**
@@ -253,9 +257,28 @@ class _SuggestionDetailScreenState
   /// cantada". Quando o dia pedido já tem escala, a ação principal faz as duas
   /// coisas que o líder quer — e diz isso no botão. Aceitar sem pôr no culto
   /// continua ali, como segunda opção.
-  Future<void> _acceptIntoSchedule(SongSuggestion s, Event escala) async {
+  Future<void> _acceptIntoSchedule(
+    SongSuggestion s,
+    List<Event> escalas,
+  ) async {
     final songId = s.songId ?? _songIdCriado;
-    if (songId == null) return;
+    if (songId == null || escalas.isEmpty) return;
+
+    // Várias escalas no dia (equipe por culto): primeiro, qual delas.
+    var escala = escalas.first;
+    if (escalas.length > 1) {
+      final escolha = await showAppOptionsSheet<String>(
+        context: context,
+        title: 'Em qual escala?',
+        selected: escala.id,
+        options: [
+          for (final e in escalas)
+            AppOption(value: e.id, label: e.servicesSummary),
+        ],
+      );
+      if (escolha == null || !mounted) return;
+      escala = escalas.firstWhere((e) => e.id == escolha.value);
+    }
 
     // A escala inteira, com o repertório: a da lista não traz as músicas, e o
     // PUT substitui a lista — mandar só a nova apagaria as outras.
@@ -274,7 +297,7 @@ class _SuggestionDetailScreenState
           for (final c in cultos)
             AppOption(
               value: c.id,
-              label: '${c.label} ${formatEventTime(c.startsAt, fuso)}',
+              label: serviceNameAndTime(c.label, c.startsAt, fuso),
             ),
         ],
       );
@@ -529,8 +552,10 @@ class _SuggestionDetailScreenState
             busy: _busy,
             busyMessage: _busyMessage,
             onAccept: () => _accept(s),
-            scheduleForDate: canManage ? _escalaDaData(s) : null,
-            onAcceptIntoSchedule: (escala) => _acceptIntoSchedule(s, escala),
+            scheduleForDate:
+                canManage ? _escalasDaData(s).firstOrNull : null,
+            onAcceptIntoSchedule: (_) =>
+                _acceptIntoSchedule(s, _escalasDaData(s)),
             onDecline: () => _decline(s),
             onReopen: () => _reopen(s),
             onOpenSong: s.songId == null
