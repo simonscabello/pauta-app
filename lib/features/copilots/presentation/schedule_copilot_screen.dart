@@ -477,7 +477,7 @@ class _ScheduleCopilotScreenState extends ConsumerState<ScheduleCopilotScreen> {
                 message: hint.text,
                 action: hint.kind == 'TALENT' && hint.membershipId != null
                     ? TextButton(
-                        onPressed: () => context.go('/equipe'),
+                        onPressed: () => context.go('/equipe/integrantes'),
                         child: const Text('Abrir a equipe'),
                       )
                     : null,

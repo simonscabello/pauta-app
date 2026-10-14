@@ -11,6 +11,11 @@ void main() {
       expect(pageTitleFor('/agenda/abc/escalar'), 'Escalar equipe · Pauta');
       expect(pageTitleFor('/equipe/musicas/uso'), 'Relatórios do repertório · Pauta');
       expect(pageTitleFor('/equipe/musicas/xyz'), 'Música · Pauta');
+      expect(pageTitleFor('/equipe/integrantes'), 'Integrantes · Pauta');
+      expect(
+        pageTitleFor('/equipe/integrantes/novo'),
+        'Adicionar integrante · Pauta',
+      );
       expect(pageTitleFor('/rota/que/nao/existe'), 'Pauta');
     });
   });
@@ -20,26 +25,26 @@ void main() {
       AppNavSection(
         destinations: [
           AppNavDestination(
+            icon: Icons.groups_outlined,
+            selectedIcon: Icons.groups_rounded,
+            label: 'Equipe',
+            route: '/equipe',
+            alsoMatches: ['/equipe/musicas/uso'],
+          ),
+          AppNavDestination(
             icon: Icons.library_music_outlined,
             selectedIcon: Icons.library_music_rounded,
             label: 'Repertório',
             route: '/equipe/musicas',
           ),
-          AppNavDestination(
-            icon: Icons.settings_outlined,
-            selectedIcon: Icons.settings_rounded,
-            label: 'Gerenciar equipe',
-            route: '/equipe/gerenciar',
-            alsoMatches: ['/equipe/musicas/uso'],
-          ),
         ],
       ),
     ];
 
-    test('os relatórios acendem Gerenciar equipe, e não Repertório', () {
+    test('os relatórios acendem Equipe, e não Repertório', () {
       expect(
         AppSideNav.selectedRouteFor(sections, '/equipe/musicas/uso'),
-        '/equipe/gerenciar',
+        '/equipe',
       );
       expect(
         AppSideNav.selectedRouteFor(sections, '/equipe/musicas/abc'),

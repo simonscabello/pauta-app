@@ -7,6 +7,18 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.37.0 — 14/10/2026
+
+### Melhorias
+- A aba Equipe virou um painel por assunto — Músicas, Pessoas, Escalas e
+  Configurações —, e a engrenagem de "Gerenciar equipe" saiu: o que estava lá
+  aparece direto na aba.
+- Os integrantes têm tela própria, aberta pela linha "Integrantes", que mostra
+  quantos são. A aba não precisa mais ser rolada até o fim da lista.
+
+### Correções
+- Trocar de equipe com a aba Equipe aberta mostrava ainda a equipe anterior.
+
 ## 0.36.0 — 14/10/2026
 
 ### Novidades

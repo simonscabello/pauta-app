@@ -43,7 +43,7 @@ List<TeamSetupStep> teamSetupSteps({
     TeamSetupStep(
       title: 'Cadastrar os integrantes',
       hint: 'Nome e o que cada um toca. Não precisa ter o app ainda.',
-      route: '/equipe',
+      route: '/equipe/integrantes',
       done: daEquipe.length >= 2,
     ),
     TeamSetupStep(

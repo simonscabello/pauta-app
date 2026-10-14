@@ -18,7 +18,7 @@ import '../../../shared/widgets/section_header.dart';
 import '../data/whatsapp_repository.dart';
 import '../domain/team_whatsapp.dart';
 
-/// Gerenciar equipe › Grupo do WhatsApp: vincular o grupo do louvor para que
+/// Equipe › Grupo do WhatsApp: vincular o grupo do louvor para que
 /// quem lidera mande a escala por ali, pelo número do Pauta.
 ///
 /// **O grupo se prova pelo código.** Quem lidera adiciona o número do Pauta ao

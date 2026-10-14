@@ -212,6 +212,10 @@ class _WideShell extends ConsumerWidget {
             selectedIcon: Icons.groups_rounded,
             label: 'Equipe',
             route: '/equipe',
+            // Os relatórios do repertório se abrem pela aba Equipe; sem isto
+            // o prefixo mais longo acenderia "Repertório". As outras telas da
+            // aba já caem em `/equipe` pelo prefixo.
+            alsoMatches: ['/equipe/musicas/uso', '/equipe/musicas/saude'],
           ),
           const AppNavDestination(
             icon: Icons.library_music_outlined,
@@ -251,7 +255,7 @@ class _WideShell extends ConsumerWidget {
               route: '/equipe/convites',
             ),
             // "Quem não pode" é o que mais se consulta na semana de quem
-            // monta a escala, e só se chegava a ele por Gerenciar equipe.
+            // monta a escala: um atalho, além da linha na aba Equipe.
             AppNavDestination(
               icon: Icons.event_busy_outlined,
               selectedIcon: Icons.event_busy_rounded,
@@ -263,20 +267,6 @@ class _WideShell extends ConsumerWidget {
               selectedIcon: Icons.balance_rounded,
               label: 'Participação',
               route: '/equipe/participacao',
-            ),
-            AppNavDestination(
-              icon: Icons.settings_outlined,
-              selectedIcon: Icons.settings_rounded,
-              label: 'Gerenciar equipe',
-              route: '/equipe/gerenciar',
-              // As telas que só se abrem a partir de Gerenciar equipe.
-              alsoMatches: [
-                '/equipe/musicas/uso',
-                '/equipe/musicas/saude',
-                '/equipe/cultos',
-                '/equipe/funcoes',
-                '/equipe/dados',
-              ],
             ),
           ],
         ),

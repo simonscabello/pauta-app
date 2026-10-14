@@ -47,8 +47,8 @@ import '../../features/suggestions/presentation/suggestion_detail_screen.dart';
 import '../../features/suggestions/presentation/suggestions_screen.dart';
 import '../../features/team/presentation/create_team_screen.dart';
 import '../../features/team/presentation/member_form_screen.dart';
-import '../../features/team/presentation/manage_team_screen.dart';
-import '../../features/team/presentation/members_screen.dart';
+import '../../features/team/presentation/team_hub_screen.dart';
+import '../../features/team/presentation/team_members_screen.dart';
 import '../../features/team/presentation/positions_screen.dart';
 import '../../features/team/presentation/service_templates_screen.dart';
 import '../../features/team/presentation/team_settings_screen.dart';
@@ -316,10 +316,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               (id) => ServiceTemplatesScreen(teamId: id),
             ),
           ),
+          // Gerenciar equipe virou a própria aba Equipe. A rota fica para
+          // link antigo e histórico do navegador.
           GoRoute(
             path: '/equipe/gerenciar',
-            builder: (_, __) =>
-                _withActiveTeam(ref, (id) => ManageTeamScreen(teamId: id)),
+            redirect: (_, __) => '/equipe',
           ),
           GoRoute(
             path: '/equipe/funcoes',
@@ -575,24 +576,35 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/equipe',
             builder: (_, __) =>
-                _withActiveTeam(ref, (id) => MembersScreen(teamId: id)),
+                _watchingActiveTeam((id) => TeamHubScreen(teamId: id)),
             routes: [
+              // Filha de `/equipe`, e não irmã: quem chega por `go` (o passo
+              // dos Primeiros passos, a exclusão de conta) tem para onde voltar.
               GoRoute(
-                path: 'membros/novo',
-                onExit: confirmLeaveIfUnsaved,
+                path: 'integrantes',
                 builder: (_, __) =>
-                    _withActiveTeam(ref, (id) => MemberFormScreen(teamId: id)),
-              ),
-              GoRoute(
-                path: 'membros/editar',
-                onExit: confirmLeaveIfUnsaved,
-                builder: (_, state) => _withActiveTeam(
-                  ref,
-                  (id) => MemberFormScreen(
-                    teamId: id,
-                    member: state.extra as Member?,
+                    _watchingActiveTeam((id) => TeamMembersScreen(teamId: id)),
+                routes: [
+                  GoRoute(
+                    path: 'novo',
+                    onExit: confirmLeaveIfUnsaved,
+                    builder: (_, __) => _withActiveTeam(
+                      ref,
+                      (id) => MemberFormScreen(teamId: id),
+                    ),
                   ),
-                ),
+                  GoRoute(
+                    path: 'editar',
+                    onExit: confirmLeaveIfUnsaved,
+                    builder: (_, state) => _withActiveTeam(
+                      ref,
+                      (id) => MemberFormScreen(
+                        teamId: id,
+                        member: state.extra as Member?,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -665,4 +677,26 @@ Widget _withActiveTeam(Ref ref, Widget Function(String teamId) build) {
   }
 
   return build(teamId);
+}
+
+/// Como [_withActiveTeam], mas acompanhando a troca de equipe.
+///
+/// O builder da rota não roda de novo quando a equipe ativa muda (ela não está
+/// em `routeRelevantAuthKey`), e com `ref.read` a aba Equipe continuava na
+/// equipe anterior depois do seletor do cabeçalho ou da barra lateral. Início
+/// e Agenda observam a equipe por conta própria; aqui é o painel e a lista de
+/// integrantes. **Formulário não usa isto**: ele foi aberto para uma equipe, e
+/// trocar a equipe por baixo dele gravaria o integrante de uma na outra.
+Widget _watchingActiveTeam(Widget Function(String teamId) build) {
+  return Consumer(
+    builder: (context, ref, _) {
+      final teamId = ref.watch(activeTeamIdProvider);
+      if (teamId == null) {
+        return const Scaffold(
+          body: Center(child: Text('Você ainda não faz parte de uma equipe.')),
+        );
+      }
+      return build(teamId);
+    },
+  );
 }

@@ -58,7 +58,7 @@ void main() {
       );
       expect(AppSideNav.selectedRouteFor(sections, '/equipe'), '/equipe');
       expect(
-        AppSideNav.selectedRouteFor(sections, '/equipe/membros/novo'),
+        AppSideNav.selectedRouteFor(sections, '/equipe/integrantes/novo'),
         '/equipe',
       );
     });

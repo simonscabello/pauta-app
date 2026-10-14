@@ -13,7 +13,7 @@ class TeamWhatsApp {
   });
 
   /// O servidor tem o envio pelo WhatsApp ligado. Falso: nada disto aparece
-  /// no app, nem a linha em Gerenciar equipe nem o botão da escala.
+  /// no app, nem a linha na aba Equipe nem o botão da escala.
   final bool available;
 
   /// O número do Pauta está conectado ao WhatsApp agora.

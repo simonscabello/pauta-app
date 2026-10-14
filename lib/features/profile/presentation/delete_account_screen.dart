@@ -101,7 +101,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
   /// quem é dono de duas equipes estaria olhando a outra.
   Future<void> _openMembers(TeamRef team) async {
     await ref.read(activeTeamIdProvider.notifier).select(team.teamId);
-    if (mounted) context.go('/equipe');
+    if (mounted) context.go('/equipe/integrantes');
   }
 
   @override
