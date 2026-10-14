@@ -94,4 +94,65 @@ void main() {
       expect(song.momentText, 'Batismo');
     });
   });
+
+  group('a lista da equipe', () {
+    test('o nome da equipe vence o de fábrica (renomeado)', () {
+      final song = musica({
+        'moment': 'ABERTURA',
+        'momentId': 'm1',
+        'momentName': 'Entrada',
+      });
+      expect(song.momentText, 'Entrada');
+    });
+
+    test('o momento cadastrado viaja como "Outro" com o nome', () {
+      final escolha = MomentChoice.ofTeam(
+        const TeamMoment(id: 'm9', name: 'Culto de Missões'),
+      );
+      expect(escolha.moment, 'OUTRO');
+      expect(escolha.momentLabel, 'Culto de Missões');
+      expect(escolha.momentId, 'm9');
+      expect(escolha.isOneOffOther, isFalse);
+    });
+
+    test('o de fábrica leva a chave, sem rótulo', () {
+      final escolha = MomentChoice.ofTeam(
+        const TeamMoment(id: 'm2', name: 'Entrada', systemKey: 'ABERTURA'),
+      );
+      expect(escolha.moment, 'ABERTURA');
+      expect(escolha.momentLabel, isNull);
+      expect(escolha.name, 'Entrada');
+    });
+
+    test('a chave que veio de fora é ligada ao momento da equipe', () {
+      final lista = [
+        const TeamMoment(id: 'm2', name: 'Entrada', systemKey: 'ABERTURA'),
+      ];
+      final ligada = MomentChoice.ofKey('ABERTURA', lista)!;
+      expect(ligada.momentId, 'm2');
+      expect(ligada.name, 'Entrada');
+
+      // A equipe excluiu o Prelúdio: fica a chave, com o nome de fábrica.
+      final solta = MomentChoice.ofKey('PRELUDIO', lista)!;
+      expect(solta.momentId, isNull);
+      expect(solta.name, 'Prelúdio');
+      expect(MomentChoice.ofKey(null, lista), isNull);
+    });
+
+    test('a reserva sem servidor são os seis de fábrica, sem "Outro"', () {
+      final reserva = fallbackTeamMoments();
+      expect(reserva, hasLength(6));
+      expect(reserva.every((m) => m.id.isEmpty), isTrue);
+      expect(reserva.map((m) => m.systemKey), isNot(contains('OUTRO')));
+      // Escolhida por aqui, vai pela chave e o servidor liga.
+      expect(MomentChoice.ofTeam(reserva[1]).momentId, isNull);
+    });
+
+    test('"Outro" sem nome continua sendo "Outro"', () {
+      final escolha = MomentChoice.other('  ');
+      expect(escolha.momentLabel, isNull);
+      expect(escolha.name, 'Outro');
+      expect(escolha.isOneOffOther, isTrue);
+    });
+  });
 }

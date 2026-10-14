@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,10 +6,12 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:louvor_app/features/copilots/data/copilot_repository.dart';
 import 'package:louvor_app/features/copilots/domain/copilot_models.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
+import 'package:louvor_app/features/events/domain/service_moments.dart';
 import 'package:louvor_app/features/events/presentation/setlist_form_screen.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
+import 'package:louvor_app/features/team/data/team_repository.dart';
 import 'package:louvor_app/shared/widgets/app_badge.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
@@ -68,6 +71,20 @@ void main() {
             .overrideWith((ref) => const EventSuggestions(date: '2026-08-16')),
         // A montagem pede o histórico das músicas ao abrir.
         songHistoryProvider.overrideWith((ref, teamId) async => const {}),
+        // A lista da equipe: os de fábrica e um que ela cadastrou.
+        serviceMomentsProvider.overrideWith(
+          (ref, teamId) async => [
+            for (final (i, m) in fallbackTeamMoments().indexed)
+              TeamMoment(
+                id: 'm-${m.systemKey}',
+                name: m.name,
+                systemKey: m.systemKey,
+                sortOrder: i,
+              ),
+            const TeamMoment(id: 'm-missoes', name: 'Culto de Missões'),
+          ],
+        ),
+        teamRepositoryProvider.overrideWithValue(_FakeTeamRepository()),
       ],
       child: MaterialApp(
         home: SetlistFormScreen(teamId: 't1', eventId: 'e1', event: event),
@@ -175,4 +192,61 @@ void main() {
     // O hinário fica: ele é do cadastro da música, não desta escala.
     expect(find.textContaining('314 CC'), findsOneWidget);
   });
+
+  testWidgets('o momento que a equipe cadastrou aparece entre os chips', (
+    tester,
+  ) async {
+    await tester.pumpWidget(repertorio());
+
+    await tester.tap(find.text('Alfa e Ômega'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Culto de Missões'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Culto de Missões'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Aplicar'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Culto de Missões'), findsOneWidget);
+  });
+
+  testWidgets('"Novo momento" cadastra ali mesmo e já marca', (tester) async {
+    await tester.pumpWidget(repertorio());
+
+    await tester.tap(find.text('Alfa e Ômega'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    // Com o momento cadastrado na lista, a folha cresce: o chip fica abaixo
+    // da dobra da tela de teste.
+    await tester.ensureVisible(find.widgetWithText(ActionChip, 'Novo momento'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ActionChip, 'Novo momento'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nome do novo momento'),
+      'Apelo',
+    );
+    await tester.ensureVisible(find.text('Adicionar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Adicionar'));
+    await tester.pumpAndSettle();
+
+    final chip = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'Apelo'),
+    );
+    expect(chip.selected, isTrue);
+
+    await tester.tap(find.text('Aplicar'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Apelo'), findsOneWidget);
+  });
+}
+
+/// Cadastra o momento sem servidor, como o servidor responderia.
+class _FakeTeamRepository extends TeamRepository {
+  _FakeTeamRepository() : super(Dio());
+
+  @override
+  Future<TeamMoment> addServiceMoment(String teamId, String name) async =>
+      TeamMoment(id: 'm-novo', name: name, sortOrder: 7);
 }

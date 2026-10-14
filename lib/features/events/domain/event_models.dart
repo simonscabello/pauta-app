@@ -61,6 +61,8 @@ class EventSong {
     this.isNew = false,
     this.moment,
     this.momentLabel,
+    this.momentId,
+    this.momentName,
     this.hymnals = const [],
     this.chordsUrl,
     this.lyricsUrl,
@@ -112,6 +114,12 @@ class EventSong {
   /// O nome escrito à mão quando o momento é `OUTRO` ("Santa Ceia").
   final String? momentLabel;
 
+  /// O momento da lista da equipe, e o nome que ele tem nela — o que a equipe
+  /// renomeou ou cadastrou. Ausentes na escala de antes da lista e no cache
+  /// antigo: aí o nome sai de [moment]/[momentLabel].
+  final String? momentId;
+  final String? momentName;
+
   /// Em que hinários a MÚSICA está, com a principal na frente. Fato do
   /// cadastro, como o título — vem junto para a linha da escala poder
   /// escrever "314 CC" sem uma segunda ida ao servidor.
@@ -130,7 +138,45 @@ class EventSong {
 
   /// "Dízimos e Ofertas" — ou o que a pessoa escreveu, em `OUTRO`. Nulo sem
   /// momento: a linha não mostra marcador de campo vazio.
-  String? get momentText => serviceMomentLabel(moment, momentLabel);
+  String? get momentText {
+    final nome = momentName?.trim() ?? '';
+    if (nome.isNotEmpty) return nome;
+    return serviceMomentLabel(moment, momentLabel);
+  }
+
+  /// O momento desta música como escolha da folha de ajustes.
+  MomentChoice? get momentChoice {
+    final m = moment;
+    if (m == null || m.isEmpty) return null;
+    return MomentChoice(
+      momentId: momentId,
+      moment: m,
+      momentLabel: momentLabel,
+      name: momentText ?? m,
+    );
+  }
+
+  /// A mesma música com outro momento (ou nenhum).
+  EventSong withMoment(MomentChoice? choice) => EventSong(
+        songId: songId,
+        serviceId: serviceId,
+        title: title,
+        artist: artist,
+        key: key,
+        keyOverride: keyOverride,
+        defaultKey: defaultKey,
+        note: note,
+        isNew: isNew,
+        moment: choice?.moment,
+        momentLabel: choice?.momentLabel,
+        momentId: choice?.momentId,
+        momentName: choice?.name,
+        hymnals: hymnals,
+        chordsUrl: chordsUrl,
+        lyricsUrl: lyricsUrl,
+        youtubeUrl: youtubeUrl,
+        spotifyUrl: spotifyUrl,
+      );
 
   factory EventSong.fromJson(Map<String, dynamic> json) {
     return EventSong(
@@ -150,6 +196,8 @@ class EventSong {
       isNew: json['isNew'] as bool? ?? false,
       moment: json['moment'] as String?,
       momentLabel: json['momentLabel'] as String?,
+      momentId: json['momentId'] as String?,
+      momentName: json['momentName'] as String?,
       // Ausente vale lista vazia: é o que o cache gravado antes desta versão
       // guarda, e é o que a maioria das músicas é.
       hymnals: (json['hymnals'] as List<dynamic>? ?? const [])

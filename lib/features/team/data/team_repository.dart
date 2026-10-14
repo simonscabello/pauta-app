@@ -8,6 +8,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../events/domain/service_moments.dart';
 import '../domain/service_template.dart';
 import '../domain/team_models.dart';
 import '../domain/workload_report.dart';
@@ -114,6 +115,75 @@ class TeamRepository {
   Future<void> deactivatePosition(String teamId, String positionId) async {
     return _guard(() async {
       await _dio.delete<void>('/teams/$teamId/positions/$positionId');
+    });
+  }
+
+  // --- Momentos do culto ---
+
+  Future<List<TeamMoment>> serviceMoments(
+    String teamId, {
+    bool includeInactive = false,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>(
+        '/teams/$teamId/service-moments',
+        queryParameters: includeInactive ? {'includeInactive': true} : null,
+      );
+      return response.data!
+          .map((e) => TeamMoment.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  /// Cadastrar um nome que a equipe já excluiu traz o antigo de volta.
+  Future<TeamMoment> addServiceMoment(String teamId, String name) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/service-moments',
+        data: {'name': name},
+      );
+      return TeamMoment.fromJson(response.data!);
+    });
+  }
+
+  Future<TeamMoment> updateServiceMoment(
+    String teamId,
+    String momentId, {
+    String? name,
+    bool? isActive,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/teams/$teamId/service-moments/$momentId',
+        data: {
+          if (name != null) 'name': name,
+          if (isActive != null) 'isActive': isActive,
+        },
+      );
+      return TeamMoment.fromJson(response.data!);
+    });
+  }
+
+  /// Excluir só desativa: as escalas que já usam o momento continuam com o
+  /// nome dele.
+  Future<void> deleteServiceMoment(String teamId, String momentId) async {
+    return _guard(() async {
+      await _dio.delete<void>('/teams/$teamId/service-moments/$momentId');
+    });
+  }
+
+  Future<List<TeamMoment>> reorderServiceMoments(
+    String teamId,
+    List<String> ids,
+  ) async {
+    return _guard(() async {
+      final response = await _dio.put<List<dynamic>>(
+        '/teams/$teamId/service-moments/order',
+        data: {'ids': ids},
+      );
+      return response.data!
+          .map((e) => TeamMoment.fromJson(e as Map<String, dynamic>))
+          .toList();
     });
   }
 
@@ -404,6 +474,21 @@ final addGuestProvider =
 final positionsProvider =
     FutureProvider.autoDispose.family<List<Position>, String>((ref, teamId) {
   return ref.watch(teamRepositoryProvider).positions(teamId);
+});
+
+/// Os momentos do culto da equipe, na ordem do culto: os que a folha da
+/// escala e o seletor oferecem.
+final serviceMomentsProvider =
+    FutureProvider.autoDispose.family<List<TeamMoment>, String>((ref, teamId) {
+  return ref.watch(teamRepositoryProvider).serviceMoments(teamId);
+});
+
+/// Inclui os excluídos — só a tela "Momentos do culto" precisa vê-los.
+final allServiceMomentsProvider =
+    FutureProvider.autoDispose.family<List<TeamMoment>, String>((ref, teamId) {
+  return ref
+      .watch(teamRepositoryProvider)
+      .serviceMoments(teamId, includeInactive: true);
 });
 
 /// Inclui as funções desativadas — só a tela de gestão precisa vê-las.

@@ -45,6 +45,7 @@ String pageTitleFor(String path) {
     ['equipe', 'whatsapp'] => 'Grupo do WhatsApp',
     ['equipe', 'cultos'] => 'Cultos da igreja',
     ['equipe', 'funcoes'] => 'Funções',
+    ['equipe', 'momentos'] => 'Momentos do culto',
     ['equipe', 'dados'] => 'Dados da equipe',
     ['equipe', 'indisponibilidade'] => 'Quem não pode',
     ['equipe', 'participacao'] => 'Participação',

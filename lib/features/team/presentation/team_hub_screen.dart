@@ -183,6 +183,13 @@ class TeamHubScreen extends ConsumerWidget {
                               onTap: () => context.push('/equipe/cultos'),
                             ),
                             AppGroupRow(
+                              icon: Icons.flag_outlined,
+                              title: 'Momentos do culto',
+                              subtitle:
+                                  'Abertura, ofertas, Santa Ceia: os da sua igreja',
+                              onTap: () => context.push('/equipe/momentos'),
+                            ),
+                            AppGroupRow(
                               icon: Icons.event_busy_rounded,
                               title: 'Quem não pode',
                               subtitle: 'O mês e quem mais avisou que não podia',

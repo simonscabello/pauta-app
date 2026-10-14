@@ -10,12 +10,14 @@ class MomentUsage {
     required this.moment,
     required this.count,
     this.label,
+    this.momentId,
   });
 
   factory MomentUsage.fromJson(Map<String, dynamic> json) {
     return MomentUsage(
       moment: json['moment'] as String,
       label: json['label'] as String?,
+      momentId: json['momentId'] as String?,
       count: json['count'] as int? ?? 0,
     );
   }
@@ -23,14 +25,23 @@ class MomentUsage {
   /// O valor do enum (`'LOUVOR'`, `'DIZIMOS_E_OFERTAS'`...).
   final String moment;
 
-  /// O nome escrito à mão em `OUTRO` ("Santa Ceia"). Nulo nos demais.
+  /// O nome do momento na equipe — renomeado, ou cadastrado por ela —, ou o
+  /// escrito à mão em `OUTRO` ("Santa Ceia"). Nulo no de fábrica sem a lista
+  /// da equipe (as escalas de antes dela).
   final String? label;
+
+  /// O momento da lista da equipe, quando o histórico sabe qual é.
+  final String? momentId;
 
   /// Escalas, e não cultos: a oferta da manhã e a da noite do mesmo domingo
   /// são uma ida à oferta.
   final int count;
 
-  String get displayLabel => serviceMomentLabel(moment, label) ?? moment;
+  String get displayLabel {
+    final nome = label?.trim() ?? '';
+    if (nome.isNotEmpty) return nome;
+    return serviceMomentLabel(moment) ?? moment;
+  }
 }
 
 /// O que o histórico diz de uma música: quando foi a última vez, quantas vezes

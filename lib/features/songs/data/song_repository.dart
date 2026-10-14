@@ -136,15 +136,19 @@ class SongRepository {
     });
   }
 
-  /// "Sugestões do Pauta" para um momento do culto desta escala.
+  /// "Sugestões do Pauta" para um momento do culto desta escala: o da lista
+  /// da equipe (`momentId`) ou, sem ela, a chave de fábrica.
   Future<List<MomentSuggestion>> momentSuggestions(
-    String eventId,
-    String moment,
-  ) async {
+    String eventId, {
+    String? momentId,
+    String? moment,
+  }) async {
     return _guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
         '/events/$eventId/moment-suggestions',
-        queryParameters: {'moment': moment},
+        queryParameters: {
+          if (momentId != null) 'momentId': momentId else 'moment': moment,
+        },
       );
       return (response.data!['suggestions'] as List<dynamic>? ?? const [])
           .map((e) => MomentSuggestion.fromJson(e as Map<String, dynamic>))
@@ -445,13 +449,19 @@ final repertoireHealthProvider =
   (ref, teamId) => ref.watch(songRepositoryProvider).repertoireHealth(teamId),
 );
 
-typedef MomentSuggestionQuery = ({String eventId, String moment});
+typedef MomentSuggestionQuery = ({
+  String eventId,
+  String? momentId,
+  String moment,
+});
 
 final momentSuggestionsProvider = FutureProvider.autoDispose
     .family<List<MomentSuggestion>, MomentSuggestionQuery>(
-  (ref, query) => ref
-      .watch(songRepositoryProvider)
-      .momentSuggestions(query.eventId, query.moment),
+  (ref, query) => ref.watch(songRepositoryProvider).momentSuggestions(
+        query.eventId,
+        momentId: query.momentId,
+        moment: query.moment,
+      ),
 );
 
 /// Puxar para atualizar: o acervo vem de novo do servidor, e a aba que está

@@ -278,6 +278,9 @@ class EventRepository {
                   // mandar `null` ou omitir dá no mesmo no servidor, e nada
                   // preenche "Momento de Louvor" por dedução.
                   if (song.moment != null) 'moment': song.moment,
+                  // O momento da lista da equipe. Quando vai, é ele que manda;
+                  // a chave e o nome ao lado servem ao servidor de antes dele.
+                  if (song.momentId != null) 'momentId': song.momentId,
                   // Só faz sentido em "Outro"; o servidor limpa nos demais,
                   // mas mandar o que não vale já seria dizer duas coisas.
                   if (song.moment == otherServiceMoment &&

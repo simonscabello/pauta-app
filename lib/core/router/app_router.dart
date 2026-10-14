@@ -50,6 +50,7 @@ import '../../features/team/presentation/member_form_screen.dart';
 import '../../features/team/presentation/team_hub_screen.dart';
 import '../../features/team/presentation/team_members_screen.dart';
 import '../../features/team/presentation/positions_screen.dart';
+import '../../features/team/presentation/service_moments_screen.dart';
 import '../../features/team/presentation/service_templates_screen.dart';
 import '../../features/team/presentation/team_settings_screen.dart';
 import '../../features/team/presentation/workload_report_screen.dart';
@@ -321,6 +322,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/equipe/gerenciar',
             redirect: (_, __) => '/equipe',
+          ),
+          GoRoute(
+            path: '/equipe/momentos',
+            builder: (_, __) => _withActiveTeam(
+              ref,
+              (id) => ServiceMomentsScreen(teamId: id),
+            ),
           ),
           GoRoute(
             path: '/equipe/funcoes',

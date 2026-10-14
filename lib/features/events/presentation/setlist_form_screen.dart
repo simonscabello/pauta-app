@@ -30,6 +30,7 @@ import '../../songs/presentation/add_song_screen.dart';
 import '../../songs/presentation/musical_key_picker.dart';
 import '../../songs/presentation/song_theme_picker.dart';
 import '../../suggestions/presentation/event_suggestions_band.dart';
+import '../../team/data/team_repository.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -71,6 +72,13 @@ class SetlistFormScreen extends ConsumerStatefulWidget {
 }
 
 class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
+  /// Os momentos do culto da equipe, para a folha de ajustes e o seletor. Sem
+  /// a lista (carregando, sem rede), os seis de fábrica: escolhidos por aqui
+  /// vão pela chave, e o servidor liga ao momento da equipe.
+  List<TeamMoment> get _momentos =>
+      ref.read(serviceMomentsProvider(widget.teamId)).valueOrNull ??
+      fallbackTeamMoments();
+
   /// serviceId -> músicas daquele culto, na ordem.
   final Map<String, List<EventSong>> _porCulto = {};
   List<EventService> _cultos = const [];
@@ -105,7 +113,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         for (final culto in _cultos)
           for (final s in _lista(culto.id))
             '${culto.id}|${s.songId}|${s.keyOverride}|${s.note}|'
-                '${s.moment}|${s.momentLabel}',
+                '${s.moment}|${s.momentLabel}|${s.momentId}',
       ].join('\n');
 
   bool _alterado() => _populated && _assinatura() != _salvo;
@@ -176,6 +184,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         // continua disponível, que é o caso comum de manhã e noite.
         jaEscolhidas: _lista(culto.id).map((s) => s.songId).toSet(),
         mostrarTodosOsCultos: _cultos.length > 1,
+        moments: _momentos,
       ),
     );
 
@@ -213,7 +222,13 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     final novas = songs.where((s) => !ja.contains(s.song.id)).toList();
     setState(() {
       for (final item in novas) {
-        _lista(culto.id).add(_novoItem(culto, item.song, moment: item.moment));
+        _lista(culto.id).add(
+          _novoItem(
+            culto,
+            item.song,
+            moment: MomentChoice.ofKey(item.moment, _momentos),
+          ),
+        );
       }
     });
     showAppSnackBar(
@@ -297,6 +312,8 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
             isNew: s.isNew,
             moment: s.moment,
             momentLabel: s.momentLabel,
+            momentId: s.momentId,
+            momentName: s.momentName,
             hymnals: s.hymnals,
             chordsUrl: s.chordsUrl,
             lyricsUrl: s.lyricsUrl,
@@ -315,7 +332,11 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     );
   }
 
-  EventSong _novoItem(EventService culto, Song song, {String? moment}) =>
+  EventSong _novoItem(
+    EventService culto,
+    Song song, {
+    MomentChoice? moment,
+  }) =>
       EventSong(
         songId: song.id,
         serviceId: culto.id,
@@ -329,7 +350,10 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         // O momento só vem quando o líder o escolheu no seletor — aí é decisão
         // dele, tomada ali. Sem escolha, a música entra sem momento: preencher
         // por dedução poria na escala uma decisão que ninguém tomou.
-        moment: moment,
+        moment: moment?.moment,
+        momentLabel: moment?.momentLabel,
+        momentId: moment?.momentId,
+        momentName: moment?.name,
         chordsUrl: song.chordsUrl,
         lyricsUrl: song.lyricsUrl,
         youtubeUrl: song.youtubeUrl,
@@ -351,6 +375,8 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
       maxWidth: 520,
       builder: (_) => _SongSettingsDialog(
         song: song,
+        teamId: widget.teamId,
+        moments: _momentos,
         usualMoments: historico == null
             ? null
             : usualMomentsPhrase(historico.moments),
@@ -370,8 +396,10 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         defaultKey: song.defaultKey,
         note: ajuste.note,
         isNew: song.isNew,
-        moment: ajuste.moment,
-        momentLabel: ajuste.momentLabel,
+        moment: ajuste.moment?.moment,
+        momentLabel: ajuste.moment?.momentLabel,
+        momentId: ajuste.moment?.momentId,
+        momentName: ajuste.moment?.name,
         hymnals: song.hymnals,
         chordsUrl: song.chordsUrl,
         lyricsUrl: song.lyricsUrl,
@@ -383,6 +411,9 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Começa a buscar a lista da equipe ao abrir: quando a folha de ajustes
+    // abrir, ela já está aqui.
+    ref.watch(serviceMomentsProvider(widget.teamId));
     return UnsavedChangesGuard(
       isDirty: _alterado,
       child: _buildBody(context),
@@ -873,17 +904,11 @@ class _SetlistTile extends StatelessWidget {
 /// O que a folha de ajustes devolve. Campos nulos são o campo apagado, e não
 /// "não mexi": a folha mostra o estado inteiro e devolve o estado inteiro.
 class _SongSettings {
-  const _SongSettings({
-    this.keyOverride,
-    this.note,
-    this.moment,
-    this.momentLabel,
-  });
+  const _SongSettings({this.keyOverride, this.note, this.moment});
 
   final String? keyOverride;
   final String? note;
-  final String? moment;
-  final String? momentLabel;
+  final MomentChoice? moment;
 }
 
 /// Tom, momento do culto e recado desta música **nesta escala**.
@@ -895,20 +920,35 @@ class _SongSettings {
 /// **O momento começa em "sem momento", e não em "Momento de Louvor".** A
 /// maioria das músicas de uma escala não tem momento nomeado; escolher um por
 /// quem não escolheu poria na escala publicada uma decisão de ninguém.
-class _SongSettingsDialog extends StatefulWidget {
-  const _SongSettingsDialog({required this.song, this.usualMoments});
+///
+/// Os chips são a lista da equipe, e **"Novo momento" cadastra ali mesmo**: o
+/// culto especial ou a liturgia nova não pedem para sair da montagem, e o
+/// momento fica na lista para os próximos domingos. "Outro" continua para o
+/// que acontece uma vez só.
+class _SongSettingsDialog extends ConsumerStatefulWidget {
+  const _SongSettingsDialog({
+    required this.song,
+    required this.teamId,
+    required this.moments,
+    this.usualMoments,
+  });
 
   final EventSong song;
+  final String teamId;
+
+  /// A lista da equipe (ativos), ou a de reserva quando ela não carregou.
+  final List<TeamMoment> moments;
 
   /// "Momento de Louvor (7 vezes) · Abertura (2 vezes)", do histórico das
   /// escalas. Só informa: nenhum chip vem marcado por causa disso.
   final String? usualMoments;
 
   @override
-  State<_SongSettingsDialog> createState() => _SongSettingsDialogState();
+  ConsumerState<_SongSettingsDialog> createState() =>
+      _SongSettingsDialogState();
 }
 
-class _SongSettingsDialogState extends State<_SongSettingsDialog> {
+class _SongSettingsDialogState extends ConsumerState<_SongSettingsDialog> {
   /// Nulo é "vale o tom da equipe". Um tom anotado antes da lista volta como
   /// está, como na edição da música.
   late String? _keyOverride = (widget.song.keyOverride ?? '').trim().isEmpty
@@ -917,42 +957,96 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
   late final TextEditingController _note = TextEditingController(
     text: widget.song.note ?? '',
   );
+
+  late final List<TeamMoment> _moments = [...widget.moments];
+  late MomentChoice? _moment = _inicial();
   late final TextEditingController _momentLabel = TextEditingController(
-    text: widget.song.momentLabel ?? '',
+    text: _moment?.isOneOffOther == true ? (_moment!.momentLabel ?? '') : '',
   );
 
-  late String? _moment = widget.song.moment;
+  bool _criando = false;
+  bool _salvandoNovo = false;
+  String? _erroNovo;
+  final TextEditingController _novoNome = TextEditingController();
+
+  /// A escolha que a música já tem. Uma escala de antes da lista da equipe
+  /// traz só a chave, e é ligada aqui ao momento da equipe com ela.
+  MomentChoice? _inicial() {
+    final atual = widget.song.momentChoice;
+    if (atual == null) return null;
+    if (atual.momentId != null || atual.isOneOffOther) return atual;
+    return MomentChoice.ofKey(atual.moment, widget.moments) ?? atual;
+  }
 
   @override
   void dispose() {
     _note.dispose();
     _momentLabel.dispose();
+    _novoNome.dispose();
     super.dispose();
   }
 
   void _aplicar() {
     final recado = _note.text.trim();
-    final rotulo = _momentLabel.text.trim();
+    final escolha = _moment;
 
     Navigator.pop(
       context,
       _SongSettings(
         keyOverride: _keyOverride,
         note: recado.isEmpty ? null : recado,
-        moment: _moment,
-        // Só em "Outro", como no servidor: guardar "Santa Ceia" preso a
-        // "Abertura" deixaria o nome de uma escolha desfeita na linha.
-        momentLabel: _moment == otherServiceMoment && rotulo.isNotEmpty
-            ? rotulo
-            : null,
+        // "Outro" leva o nome do campo; os demais, o da lista.
+        moment: escolha != null && escolha.isOneOffOther
+            ? MomentChoice.other(_momentLabel.text)
+            : escolha,
       ),
     );
+  }
+
+  Future<void> _cadastrarMomento() async {
+    final nome = _novoNome.text.trim();
+    if (nome.length < 2) {
+      setState(() => _erroNovo = 'Informe o nome do momento.');
+      return;
+    }
+    setState(() {
+      _salvandoNovo = true;
+      _erroNovo = null;
+    });
+    try {
+      final novo = await ref
+          .read(teamRepositoryProvider)
+          .addServiceMoment(widget.teamId, nome);
+      ref.invalidate(serviceMomentsProvider(widget.teamId));
+      ref.invalidate(allServiceMomentsProvider(widget.teamId));
+      if (!mounted) return;
+      setState(() {
+        if (!_moments.any((m) => m.id == novo.id)) _moments.add(novo);
+        _moment = MomentChoice.ofTeam(novo);
+        _criando = false;
+        _salvandoNovo = false;
+        _novoNome.clear();
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _salvandoNovo = false;
+        _erroNovo = e.message;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final escolha = _moment;
+    // O momento que a música já tinha e saiu da lista (excluído): continua à
+    // vista, marcado, para não sumir sem ninguém ter mexido nele.
+    final foraDaLista = escolha != null &&
+        !escolha.isOneOffOther &&
+        !_moments.any(escolha.matches);
+    final outroMarcado = escolha?.isOneOffOther ?? false;
 
     return SafeArea(
       child: Padding(
@@ -1012,19 +1106,43 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                for (final entry in serviceMoments.entries)
+                if (foraDaLista)
                   ChoiceChip(
-                    label: Text(entry.value),
-                    selected: _moment == entry.key,
+                    label: Text(escolha.name),
+                    selected: true,
+                    onSelected: (_) => setState(() => _moment = null),
+                  ),
+                for (final m in _moments)
+                  ChoiceChip(
+                    label: Text(m.name),
+                    selected: escolha?.matches(m) ?? false,
                     // Tocar no que já está marcado limpa: é como se volta
                     // atrás sem um chip "nenhum" ocupando a primeira posição.
                     onSelected: (marcado) => setState(
-                      () => _moment = marcado ? entry.key : null,
+                      () => _moment = marcado ? MomentChoice.ofTeam(m) : null,
                     ),
+                  ),
+                ChoiceChip(
+                  label: Text(serviceMoments[otherServiceMoment]!),
+                  selected: outroMarcado,
+                  onSelected: (marcado) => setState(
+                    () => _moment = marcado
+                        ? MomentChoice.other(_momentLabel.text)
+                        : null,
+                  ),
+                ),
+                if (!_criando)
+                  ActionChip(
+                    avatar: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Novo momento'),
+                    onPressed: () => setState(() {
+                      _criando = true;
+                      _erroNovo = null;
+                    }),
                   ),
               ],
             ),
-            if (_moment == otherServiceMoment) ...[
+            if (outroMarcado) ...[
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _momentLabel,
@@ -1033,10 +1151,54 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Qual momento',
                   hintText: 'Ex.: Santa Ceia',
+                  helperText: 'Só nesta escala. Para repetir, use '
+                      '"Novo momento".',
                   // O contador de 40 seria a única coisa numerada da folha,
                   // para um campo de duas palavras.
                   counterText: '',
                 ),
+              ),
+            ],
+            if (_criando) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _novoNome,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 40,
+                enabled: !_salvandoNovo,
+                onSubmitted: (_) => _cadastrarMomento(),
+                decoration: InputDecoration(
+                  labelText: 'Nome do novo momento',
+                  hintText: 'Ex.: Apelo',
+                  helperText: 'Fica na lista da equipe para as próximas '
+                      'escalas.',
+                  errorText: _erroNovo,
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _salvandoNovo
+                        ? null
+                        : () => setState(() {
+                              _criando = false;
+                              _erroNovo = null;
+                              _novoNome.clear();
+                            }),
+                    style: AppButtonStyles.compactText,
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  FilledButton.tonal(
+                    onPressed: _salvandoNovo ? null : _cadastrarMomento,
+                    style: AppButtonStyles.compact,
+                    child: Text(_salvandoNovo ? 'Adicionando…' : 'Adicionar'),
+                  ),
+                ],
               ),
             ],
             const SizedBox(height: AppSpacing.lg),
@@ -1068,7 +1230,12 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
                     child: const Text('Cancelar'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  FilledButton(onPressed: _aplicar, child: const Text('Aplicar')),
+                  FilledButton(
+                    // Com o nome do momento novo digitado e não adicionado,
+                    // "Aplicar" o perderia sem aviso.
+                    onPressed: _criando ? null : _aplicar,
+                    child: const Text('Aplicar'),
+                  ),
                 ],
               ),
             ),
@@ -1093,7 +1260,7 @@ class _PickerResult {
 
   /// O momento escolhido no seletor, que as músicas marcadas levam. Nulo = o
   /// líder não escolheu, e elas entram sem momento.
-  final String? moment;
+  final MomentChoice? moment;
 }
 
 /// A letra ou a faixa de números que abre um trecho da lista.
@@ -1283,13 +1450,6 @@ class _PickerEmpty extends StatelessWidget {
   );
 }
 
-/// Os momentos que o seletor oferece. "Outro" fica de fora: ele pede um nome
-/// escrito à mão, e isso continua na folha de ajustes da música.
-final _pickerMoments = [
-  for (final entry in serviceMoments.entries)
-    if (entry.key != otherServiceMoment) entry,
-];
-
 /// Quantas "Sugestões do Pauta" aparecem. Poucas: são um atalho no topo da
 /// lista, e o repertório inteiro continua logo abaixo.
 const _maxMomentSuggestions = 3;
@@ -1309,9 +1469,14 @@ class _SongPicker extends ConsumerStatefulWidget {
     required this.culto,
     required this.jaEscolhidas,
     required this.mostrarTodosOsCultos,
+    required this.moments,
   });
 
   final String teamId;
+
+  /// Os momentos da equipe que o seletor oferece. "Outro" fica de fora: ele
+  /// pede um nome escrito à mão, e isso continua na folha de ajustes.
+  final List<TeamMoment> moments;
 
   /// A escala em montagem: é a data dela que decide o que as sugestões deixam
   /// de fora (a música do domingo anterior, a do seguinte).
@@ -1347,7 +1512,13 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
   /// ele, o seletor é o de sempre. Com ele, aparecem as "Sugestões do Pauta"
   /// e as músicas marcadas entram já com esse momento — porque foi o líder
   /// quem disse, aqui.
-  String? _moment;
+  TeamMoment? _moment;
+
+  MomentSuggestionQuery _query(TeamMoment moment) => (
+        eventId: widget.eventId,
+        momentId: moment.id.isEmpty ? null : moment.id,
+        moment: moment.systemKey ?? otherServiceMoment,
+      );
 
   Widget _tile(Song song, {Widget? details}) {
     final marcada = _selecionadas.containsKey(song.id);
@@ -1470,11 +1641,7 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
         ? const <MomentSuggestion>[]
         : [
             for (final sugestao in ref
-                    .watch(
-                      momentSuggestionsProvider(
-                        (eventId: widget.eventId, moment: moment),
-                      ),
-                    )
+                    .watch(momentSuggestionsProvider(_query(moment)))
                     .valueOrNull ??
                 const <MomentSuggestion>[])
               if (!widget.jaEscolhidas.contains(sugestao.song.id)) sugestao,
@@ -1539,15 +1706,15 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                     ),
                   ),
                 ),
-                for (final entry in _pickerMoments)
+                for (final m in widget.moments)
                   Padding(
                     padding: const EdgeInsets.only(right: AppSpacing.sm),
                     child: ChoiceChip(
-                      label: Text(entry.value),
-                      selected: _moment == entry.key,
+                      label: Text(m.name),
+                      selected: _moment == m,
                       // Tocar no marcado desmarca, como na folha de ajustes.
                       onSelected: (marcado) => setState(
-                        () => _moment = marcado ? entry.key : null,
+                        () => _moment = marcado ? m : null,
                       ),
                     ),
                   ),
@@ -1763,7 +1930,9 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                                 context,
                                 _PickerResult.songs(
                                   _selecionadas.values.toList(),
-                                  moment: _moment,
+                                  moment: _moment == null
+                                      ? null
+                                      : MomentChoice.ofTeam(_moment!),
                                 ),
                               ),
                       // Sem o momento no rótulo: num celular ele cortava o

@@ -5,7 +5,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:louvor_app/features/copilots/data/copilot_repository.dart';
 import 'package:louvor_app/features/copilots/domain/copilot_models.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
+import 'package:louvor_app/features/events/domain/service_moments.dart';
 import 'package:louvor_app/features/events/presentation/setlist_form_screen.dart';
+import 'package:louvor_app/features/team/data/team_repository.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
 import 'package:louvor_app/features/songs/presentation/musical_key_picker.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
@@ -68,6 +70,10 @@ void main() {
             .overrideWith((ref) => const EventSuggestions(date: '2026-08-16')),
         // Pelo mesmo motivo: a montagem pede o histórico das músicas ao abrir.
         songHistoryProvider.overrideWith((ref, teamId) async => const {}),
+        // E a lista de momentos do culto da equipe.
+        serviceMomentsProvider.overrideWith(
+          (ref, teamId) async => fallbackTeamMoments(),
+        ),
       ],
       child: MaterialApp(
         home: SetlistFormScreen(teamId: 't1', eventId: 'e1', event: event),
