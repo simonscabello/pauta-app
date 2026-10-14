@@ -57,7 +57,18 @@ enum HomeNoticeKind {
 
   /// (liderança) a próxima escala da equipe ainda não tem ninguém escalado.
   unstaffedSchedule,
+
+  /// (liderança) escala publicada desta semana com culto ainda sem músicas.
+  ///
+  /// Logo depois do conflito: a equipe já recebeu a escala e está esperando o
+  /// repertório para ouvir e ensaiar. Só repertório planejado -- o "definido
+  /// na hora" não tem o que cobrar.
+  setlistMissing,
 }
+
+/// Quantos dias à frente o aviso de músicas em aberto olha: a semana, que é
+/// quando a falta já atrasa o ensaio de alguém.
+const setlistMissingWindowDays = 7;
 
 /// Um aviso curto da Home, logo abaixo da manchete.
 ///
@@ -99,6 +110,7 @@ class HomeNotice {
         // escondia entre as publicadas.
         HomeNoticeKind.pendingDrafts => '/agenda?filtro=rascunhos',
         HomeNoticeKind.unstaffedSchedule => '/agenda/${event!.id}/escalar',
+        HomeNoticeKind.setlistMissing => '/agenda/${event!.id}/repertorio',
       };
 }
 
@@ -194,7 +206,12 @@ class HomeSummary {
       // o fio de "quando eu toco", e "e depois?" continua o mesmo fio.
       myFollowing: minhas.length > 1 ? minhas[1] : null,
       hasSchedules: events.isNotEmpty,
-      notices: _notices(events, canManage: canManage),
+      notices: _notices(
+        events,
+        canManage: canManage,
+        now: now,
+        headlineId: myNext?.id,
+      ),
       // Sem a escala da manchete: o mesmo compromisso em dois blocos vizinhos
       // é a regra que a agenda também segue ("duas listas, nunca o mesmo
       // compromisso nas duas").
@@ -213,6 +230,8 @@ class HomeSummary {
   static List<HomeNotice> _notices(
     List<Event> events, {
     required bool canManage,
+    required DateTime now,
+    String? headlineId,
   }) {
     final notices = <HomeNotice>[];
 
@@ -231,6 +250,24 @@ class HomeSummary {
             person: conflito.warnings.unavailableAssigned.first,
             count: conflito.warnings.unavailableAssigned.length,
           ),
+        );
+      }
+
+      // A escala da manchete já diz "Músicas a definir" ali mesmo: o mesmo
+      // compromisso em dois blocos vizinhos é o que a Home evita.
+      final semMusica = events
+          .where(
+            (e) =>
+                e.id != headlineId &&
+                !e.isDraft &&
+                e.servicesWithoutSongs.isNotEmpty &&
+                daysUntilEvent(e, now) >= 0 &&
+                daysUntilEvent(e, now) < setlistMissingWindowDays,
+          )
+          .firstOrNull;
+      if (semMusica != null) {
+        notices.add(
+          HomeNotice(kind: HomeNoticeKind.setlistMissing, event: semMusica),
         );
       }
 

@@ -21,6 +21,7 @@ import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
+import '../../../shared/widgets/open_link.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/share_action.dart';
@@ -30,6 +31,7 @@ import '../../auth/application/auth_controller.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
+import '../domain/listen_playlist.dart';
 import '../domain/schedule_share_text.dart';
 import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../../unavailability/domain/unavailability_models.dart';
@@ -37,6 +39,7 @@ import '../../whatsapp/data/whatsapp_repository.dart';
 import '../../whatsapp/presentation/send_to_group_action.dart';
 import 'duplicate_event_dialog.dart';
 import 'event_song_sheet.dart';
+import 'schedule_calendar_action.dart';
 
 class EventDetailScreen extends ConsumerWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -91,6 +94,14 @@ class EventDetailScreen extends ConsumerWidget {
                     whatsAppGroup,
                   ),
                   icon: const Icon(Icons.send_rounded),
+                ),
+              // Para todos os papéis: quem toca é quem mais precisa do
+              // lembrete do próprio calendário.
+              if (!event.isDraft)
+                IconButton(
+                  tooltip: 'Adicionar ao calendário',
+                  onPressed: () => addScheduleToCalendar(context, event),
+                  icon: const Icon(Icons.event_available_outlined),
                 ),
               if (!event.isDraft)
                 IconButton(
@@ -1369,6 +1380,25 @@ class _SongsSection extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
+        // Ouvir tudo em sequência é o que o músico faz na véspera do ensaio:
+        // um toque em vez de abrir música por música.
+        if (youtubeListenUrl(event) case final url?)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                style: AppButtonStyles.compactText,
+                onPressed: () => openExternalLink(context, url),
+                icon: const Icon(Icons.play_circle_outline_rounded, size: 18),
+                label: Text(
+                  youtubeListenCount(event) == 1
+                      ? 'Ouvir no YouTube'
+                      : 'Ouvir as ${youtubeListenCount(event)} músicas no YouTube',
+                ),
+              ),
             ),
           ),
       ],

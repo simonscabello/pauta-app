@@ -338,10 +338,12 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen>
                 loading: _saving,
                 onPressed: _saving ? null : _salvar,
               ),
-              if (!widget.isEditing) ...[
+              ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  'A equipe recebe um aviso assim que você marcar.',
+                  widget.isEditing
+                      ? 'Mudando o dia, a hora ou o local, a equipe recebe um aviso.'
+                      : 'A equipe recebe um aviso assim que você marcar.',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,

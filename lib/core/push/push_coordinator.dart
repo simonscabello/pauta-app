@@ -46,6 +46,16 @@ class PushCoordinator {
     await _push.init();
     if (!_push.isReady) return;
 
+    // Na Web, assinar exige a chave do servidor. Sem ela (servidor sem Web
+    // Push), o navegador nao assina e nada mais acontece aqui.
+    if (_push.platform == 'web') {
+      try {
+        _push.setWebPushKey(await _ref.read(authRepositoryProvider).webPushKey());
+      } catch (error) {
+        debugPrint('Falha ao buscar a chave do aviso no navegador: $error');
+      }
+    }
+
     await registerDevice();
 
     _refreshSubscription ??= _push.onTokenRefresh.listen((token) {
@@ -71,7 +81,7 @@ class PushCoordinator {
     try {
       await _ref
           .read(authRepositoryProvider)
-          .registerDevice(token: token, platform: 'android');
+          .registerDevice(token: token, platform: _push.platform);
     } catch (error) {
       // Sem aviso e melhor do que sem app: a proxima entrada tenta de novo.
       debugPrint('Falha ao registrar o aparelho: $error');

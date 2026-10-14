@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/push/push_service.dart';
+import '../../../core/push/web_push_prompt.dart';
 import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
@@ -36,6 +37,7 @@ import '../../update/presentation/app_update_banner.dart';
 import '../domain/home_summary.dart';
 import 'home_next_card.dart';
 import 'home_quick_access.dart';
+import 'team_setup_card.dart';
 
 /// O relógio da Home — "HOJE" e "AMANHÃ" na manchete dependem dele.
 ///
@@ -88,7 +90,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // decidir sobre avisos antes de saber o que o app avisa — e o tour tem uma
     // parada justamente para isso.
     if (!onboardingSettled) return;
-    if (_askedForNotifications || !PushService.isSupported) return;
+    // No navegador o pedido precisa nascer de um toque: quem pergunta é o
+    // cartão [WebPushPrompt], logo abaixo do cabeçalho.
+    if (_askedForNotifications ||
+        !PushService.isSupported ||
+        PushService.permissionNeedsGesture) {
+      return;
+    }
     _askedForNotifications = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(ref.read(pushServiceProvider).requestPermission());
@@ -226,6 +234,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   AppSpacing.md,
                 ),
               ),
+              // Como o pedido do Android, espera as boas-vindas e o tour: a
+              // pessoa decide sobre avisos depois de saber o que o app avisa.
+              if (!onboardingDue.isLoading &&
+                  onboardingDue.valueOrNull != true &&
+                  !tourActive)
+                const WebPushPrompt(
+                  margin: EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    0,
+                    AppSpacing.screenPadding,
+                    AppSpacing.md,
+                  ),
+                ),
               if (outraEquipe case final outra?)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -399,6 +420,13 @@ class _HomeBody extends StatelessWidget {
               final notices = summary.notices.isEmpty
                   ? null
                   : _HomeNotices(notices: summary.notices);
+              // Só existe enquanto a equipe não está montada (ver o widget).
+              final setup = canManage
+                  ? TeamSetupCard(
+                      teamId: teamId,
+                      hasSchedules: summary.hasSchedules,
+                    )
+                  : null;
 
               // Rolagem que monta tudo, e não `ListView`: a lista preguiçosa só
               // constrói o que está perto da tela, e no celular os atalhos
@@ -434,6 +462,7 @@ class _HomeBody extends StatelessWidget {
                                     const SizedBox(height: AppSpacing.xl),
                                     notices,
                                   ],
+                                  if (setup != null) setup,
                                 ],
                               ),
                             ),
@@ -459,6 +488,7 @@ class _HomeBody extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xl),
                           notices,
                         ],
+                        if (setup != null) setup,
                         if (week != null) ...[
                           const SizedBox(height: AppSpacing.xl),
                           week,
@@ -557,6 +587,12 @@ class _HomeNotices extends StatelessWidget {
               ? '1 escala em rascunho'
               : '${notice.count} escalas em rascunho',
           message: 'A equipe só vê a escala depois de publicada.',
+        ),
+      HomeNoticeKind.setlistMissing => (
+          icon: Icons.queue_music_rounded,
+          title: 'Músicas a definir',
+          message: '${formatEventShortDate(event!.startsAt, timezone)} '
+              'já foi publicada e a equipe espera o repertório para ensaiar.',
         ),
       HomeNoticeKind.unstaffedSchedule => (
           icon: Icons.person_add_alt_1_rounded,

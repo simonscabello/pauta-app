@@ -127,7 +127,8 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                         // Condicional aqui, e nao so dentro da linha: o grupo
                         // desenha o divisor antes de cada filho, mesmo vazio.
-                        if (PushService.isSupported)
+                        if (PushService.isSupported ||
+                            PushService.needsInstallForPush)
                           const _PushNotificationsRow(),
                       ],
                     ),
@@ -359,7 +360,20 @@ class _PushNotificationsRowState extends ConsumerState<_PushNotificationsRow> {
   Widget build(BuildContext context) {
     final ligado = ref.watch(authControllerProvider).user?.pushEnabled ?? true;
 
-    // Sem push na plataforma (Web e desktop hoje), a linha nao aparece: um
+    // iPhone no Safari: o aviso existe, mas so com o Pauta na tela de inicio.
+    // A linha explica o caminho em vez de oferecer um interruptor que nao
+    // liga nada.
+    if (PushService.needsInstallForPush) {
+      return const AppGroupRow(
+        icon: Icons.notifications_off_outlined,
+        title: 'Avisos no iPhone',
+        subtitle: 'Adicione o Pauta à tela de início (Compartilhar › '
+            'Adicionar à Tela de Início) e abra por lá para receber avisos.',
+        showChevron: false,
+      );
+    }
+
+    // Sem push na plataforma (desktop nativo), a linha nao aparece: um
     // interruptor que nao liga nada e pior do que interruptor nenhum.
     if (!PushService.isSupported) return const SizedBox.shrink();
 
@@ -372,13 +386,20 @@ class _PushNotificationsRowState extends ConsumerState<_PushNotificationsRow> {
   Widget _row(bool ligado) {
     return AppGroupRow(
       icon: Icons.notifications_active_outlined,
-      title: 'Avisos no celular',
-      subtitle: ligado && _blockedBySystem
-          ? 'Bloqueado nos ajustes do Android'
-          : 'Escala publicada, trocas e repertório',
+      title: PushService.isBrowser ? 'Avisos neste navegador' : 'Avisos no celular',
+      subtitle: switch ((ligado && _blockedBySystem, PushService.isBrowser)) {
+        // No navegador a permissão é deste navegador, e não da conta: sem ela
+        // o interruptor aparece desligado, e ligá-lo é o pedido.
+        (true, true) when ref.read(pushServiceProvider).isBlockedByBrowser =>
+          'Bloqueado neste navegador. Libere nas configurações do site '
+              '(o cadeado ao lado do endereço).',
+        (true, true) => 'Ligue para receber a escala e os lembretes aqui.',
+        (true, false) => 'Bloqueado nos ajustes do Android',
+        _ => 'Escala publicada, trocas e repertório',
+      },
       showChevron: false,
       trailing: Switch(
-        value: ligado,
+        value: PushService.isBrowser ? ligado && !_blockedBySystem : ligado,
         onChanged: _saving ? null : _toggle,
       ),
     );

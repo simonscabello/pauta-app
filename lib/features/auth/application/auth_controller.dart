@@ -272,6 +272,14 @@ class AuthController extends StateNotifier<AuthState> {
       final refreshToken = await _storage.readRefreshToken();
       if (refreshToken != null) await _repository.logout(refreshToken);
     } finally {
+      // O cache de leitura guarda a agenda e os nomes da equipe. Num
+      // computador compartilhado, quem entrasse depois na mesma equipe veria
+      // a agenda de quem saiu enquanto a sua carrega.
+      try {
+        await ReadCache(_ref.read(sharedPreferencesProvider)).clearAll();
+      } catch (_) {
+        // Sair não pode depender de limpar o cache.
+      }
       await _signOutLocally();
     }
   }

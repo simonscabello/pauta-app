@@ -92,11 +92,13 @@ class TeamEventDetailScreen extends ConsumerWidget {
     final confirmado = await showConfirmDialog(
       context,
       title: 'Cancelar este evento?',
-      // A frase diz o que o sistema NÃO faz. Prometer que "a equipe será
-      // avisada" seria mentira: só a criação notifica, e quem já leu o aviso
-      // vai continuar contando com o churrasco.
-      message: 'O evento sai da agenda de todo mundo, mas a equipe não '
-          'recebe aviso. Avise quem precisar saber.',
+      // Desde a 0.36.0 o servidor avisa a equipe do cancelamento -- só do
+      // evento que ainda vai acontecer: apagar a reunião do mês passado é
+      // arrumação, e não notícia.
+      message: event.startsAt.isAfter(DateTime.now())
+          ? 'O evento sai da agenda de todo mundo, e a equipe recebe um aviso '
+              'de que foi cancelado.'
+          : 'O evento sai da agenda de todo mundo.',
       confirmLabel: 'Cancelar evento',
       cancelLabel: 'Voltar',
       destructive: true,

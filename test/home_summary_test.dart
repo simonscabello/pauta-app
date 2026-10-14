@@ -321,6 +321,53 @@ void main() {
       expect(lider.notices.last.route, '/agenda/e1/escalar');
     });
 
+    test('escala publicada desta semana sem música avisa quem lidera', () {
+      final semMusica = _event(
+        id: 'e1',
+        startsAt: '2026-09-13T12:00:00.000Z',
+        assignments: _group('Vocal', ['Maria']),
+        services: [
+          _service(
+            id: 's1',
+            label: 'Manhã',
+            startsAt: '2026-09-13T12:00:00.000Z',
+            songCount: 0,
+          ),
+        ],
+      );
+      // Fora da semana, e publicada sem música: ainda não é cobrança.
+      final longe = _event(
+        id: 'e2',
+        startsAt: '2026-09-27T12:00:00.000Z',
+        assignments: _group('Vocal', ['Maria']),
+        services: [
+          _service(
+            id: 's2',
+            label: 'Manhã',
+            startsAt: '2026-09-27T12:00:00.000Z',
+            songCount: 0,
+          ),
+        ],
+      );
+
+      final lider = HomeSummary.of(
+        [semMusica, longe],
+        membershipId: 'm-Simon',
+        canManage: true,
+        now: DateTime.utc(2026, 9, 9, 12),
+      );
+      expect(lider.notices.map((n) => n.kind), [HomeNoticeKind.setlistMissing]);
+      expect(lider.notices.single.route, '/agenda/e1/repertorio');
+
+      final membro = HomeSummary.of(
+        [semMusica],
+        membershipId: 'm-Maria',
+        canManage: false,
+        now: DateTime.utc(2026, 9, 9, 12),
+      );
+      expect(membro.notices, isEmpty);
+    });
+
     test('quem lidera e toca hoje não perde o aviso de escala vazia', () {
       // Era o defeito do aviso "é hoje": com o limite de dois, ele tomava a
       // vaga de "Ninguém escalado ainda" justamente de quem lidera e toca.

@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../platform/web_bridge.dart';
+
 /// O canal em que o aviso aparece no Android.
 ///
 /// **Precisa ser identico ao `ANDROID_CHANNEL_ID` do backend**
@@ -69,10 +71,45 @@ class PushService {
   FirebaseMessaging? _messaging;
   bool _ready = false;
 
-  /// Ligado apenas no Android: a Web precisa de VAPID e service worker (fora
-  /// do v1) e o desktop nao tem para onde entregar.
-  static bool get isSupported =>
+  /// A chave publica do Web Push, que o servidor entrega. Sem ela o
+  /// navegador nao assina, e o aviso na Web fica desligado.
+  String? _webPushKey;
+
+  /// Android (FCM) e navegador com service worker e Push API (Web Push). No
+  /// iPhone, so com o Pauta adicionado a tela de inicio -- ver
+  /// [needsInstallForPush]. O desktop nativo nao tem para onde entregar.
+  static bool get isSupported => _isAndroid || (kIsWeb && WebBridge.pushSupported);
+
+  /// iPhone no Safari, fora da tela de inicio: o aviso existe, mas so depois
+  /// de instalar. A tela explica em vez de esconder o assunto.
+  static bool get needsInstallForPush => kIsWeb && WebBridge.pushNeedsInstall;
+
+  static bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  /// O aviso chega pelo navegador, e nao por um app instalado: muda o nome
+  /// que a tela da ao aparelho ("neste navegador") e onde se desbloqueia.
+  static bool get isBrowser => kIsWeb;
+
+  /// A resposta do navegador ao pedido de aviso: `granted`, `denied`,
+  /// `default` (ainda não perguntado) ou `unsupported`.
+  static String get browserPermission =>
+      kIsWeb ? WebBridge.pushPermission : 'unsupported';
+
+  /// Como o servidor chama este tipo de aparelho.
+  String get platform => kIsWeb ? 'web' : 'android';
+
+  /// Na Web, o pedido de permissao precisa nascer de um toque (o Safari
+  /// recusa o que nao nasce). A tela oferece um botao em vez de perguntar
+  /// sozinha.
+  static bool get permissionNeedsGesture => kIsWeb;
+
+  /// Recebe a chave publica do servidor. `null` desliga o aviso no navegador.
+  void setWebPushKey(String? key) {
+    _webPushKey = key == null || key.isEmpty ? null : key;
+  }
+
+  bool get hasWebPushKey => _webPushKey != null;
 
   bool get isReady => _ready;
 
@@ -85,6 +122,11 @@ class PushService {
   /// **Nao pede permissao** -- ver [requestPermission].
   Future<void> init() async {
     if (!isSupported || _ready) return;
+    if (kIsWeb) {
+      WebBridge.onPushTap(_addTapJson);
+      _ready = true;
+      return;
+    }
     try {
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
@@ -127,6 +169,10 @@ class PushService {
 
   /// O aviso que abriu o app quando ele estava fechado.
   Future<PushTap?> initialTap() async {
+    if (kIsWeb) {
+      final json = WebBridge.takeInitialPushTap();
+      return json == null ? null : _tapFromJson(json);
+    }
     final message = await _messaging?.getInitialMessage();
     if (message == null) return null;
     return PushTap.fromData(message.data);
@@ -139,6 +185,9 @@ class PushService {
   /// ser avisado, e um "nao" dado ali e caro -- o sistema so volta a
   /// perguntar uma vez.
   Future<bool> requestPermission() async {
+    if (kIsWeb) {
+      return await WebBridge.requestPushPermission() == 'granted';
+    }
     final messaging = _messaging;
     if (messaging == null) return false;
     try {
@@ -151,6 +200,7 @@ class PushService {
   }
 
   Future<bool> hasPermission() async {
+    if (kIsWeb) return WebBridge.pushPermission == 'granted';
     final messaging = _messaging;
     if (messaging == null) return false;
     try {
@@ -166,6 +216,11 @@ class PushService {
   /// a **exibicao**, nao a entrega. Por isso o registro no servidor acontece
   /// ao entrar na conta, e nao depois de pedir permissao.
   Future<String?> currentToken() async {
+    if (kIsWeb) {
+      final key = _webPushKey;
+      if (key == null) return WebBridge.pushCurrentSubscription();
+      return WebBridge.pushSubscribe(key);
+    }
     final messaging = _messaging;
     if (messaging == null) return null;
     try {
@@ -180,6 +235,24 @@ class PushService {
   /// de dados). Sem escutar isto, o aparelho para de receber em silencio.
   Stream<String> get onTokenRefresh =>
       _messaging?.onTokenRefresh ?? const Stream<String>.empty();
+
+  /// O navegador bloqueou o aviso (a pessoa negou, ou desligou nas
+  /// configuracoes do site). So a propria pessoa desfaz, pelo navegador.
+  bool get isBlockedByBrowser => kIsWeb && WebBridge.pushPermission == 'denied';
+
+  void _addTapJson(String json) {
+    final tap = _tapFromJson(json);
+    if (tap != null) _taps.add(tap);
+  }
+
+  static PushTap? _tapFromJson(String json) {
+    try {
+      final data = jsonDecode(json);
+      return data is Map<String, dynamic> ? PushTap.fromData(data) : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static bool _granted(NotificationSettings settings) =>
       settings.authorizationStatus == AuthorizationStatus.authorized ||

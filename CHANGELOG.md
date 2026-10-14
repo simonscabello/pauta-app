@@ -7,6 +7,28 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.36.0 — 14/10/2026
+
+### Novidades
+- Avisos neste navegador: na versão Web, a Home oferece "Ativar avisos", e a
+  escala publicada, as trocas e os lembretes chegam mesmo com a aba fechada.
+  No iPhone, adicionando o Pauta à tela de início.
+- "Ouvir as músicas no YouTube": na escala, as músicas tocam em sequência,
+  na ordem do culto.
+- "Adicionar ao calendário": a escala e o ensaio vão para o Google Agenda ou
+  para a agenda do celular.
+- Para quem lidera, a Home avisa da escala desta semana que ainda está sem
+  músicas, e uma equipe nova ganha os "Primeiros passos" até a primeira
+  escala.
+
+### Melhorias
+- O cancelamento de um evento avisa a equipe, e a tela diz isso.
+- A agenda mostra inteiros os meses mais antigos.
+
+### Correções
+- Sair da conta apaga a agenda guardada no aparelho: num computador
+  compartilhado, quem entrava depois via a agenda de quem saiu.
+
 ## 0.35.1 — 07/10/2026
 
 ### Melhorias

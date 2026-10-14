@@ -107,6 +107,15 @@ class AuthRepository {
     await _dio.delete<void>('/users/me/devices', data: {'token': token});
   }
 
+  /// A chave pública do aviso no navegador, ou nulo quando o servidor não
+  /// manda aviso para navegador.
+  Future<String?> webPushKey() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/users/me/devices/web-push-key',
+    );
+    return response.data?['publicKey'] as String?;
+  }
+
   /// Envia a foto como **bytes**, e não como caminho de arquivo.
   ///
   /// `MultipartFile.fromFile` usa `dart:io`, que não existe no navegador: no

@@ -155,6 +155,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       ref.invalidate(agendaEventsProvider((teamId, scope)));
       ref.invalidate(teamEventsProvider((teamId, scope)));
     }
+    ref.invalidate(agendaMonthProvider);
     // Os erros são exibidos pela tela, inclusive durante atualização manual.
     await Future.wait([
       for (final scope in ['upcoming', 'past'])
@@ -174,9 +175,27 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         auth.teams.first;
     final upcoming = ref.watch(agendaEventsProvider((teamId, 'upcoming')));
     final past = ref.watch(agendaEventsProvider((teamId, 'past')));
-    final events = [
+    // O mês que o calendário mostra, quando as duas listas não o cobrem
+    // inteiro: pedido pelo recorte de dias da API, e só ele.
+    final shownMonth = _month;
+    final monthUncovered = shownMonth != null &&
+        (_outsideCoverage(past.valueOrNull, shownMonth, past: true) ||
+            _outsideCoverage(
+              upcoming.valueOrNull,
+              DateTime(shownMonth.year, shownMonth.month + 1, 0),
+              past: false,
+            ));
+    final monthFill = monthUncovered
+        ? ref.watch(agendaMonthProvider((teamId, shownMonth))).valueOrNull
+        : null;
+    final listed = [
       ...upcoming.valueOrNull?.data ?? <Event>[],
       ...past.valueOrNull?.data ?? <Event>[],
+    ];
+    final listedIds = {for (final event in listed) event.id};
+    final events = [
+      ...listed,
+      ...?monthFill?.where((event) => !listedIds.contains(event.id)),
     ];
     // Os eventos da equipe entram na mesma agenda, e não numa aba própria:
     // quem abre esta tela quer o mês inteiro, e "reunião de quinta" some se
@@ -251,15 +270,19 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     }
 
     final daySource = selected.isBefore(today) ? past : upcoming;
-    final dayIncomplete = _outsideCoverage(
-      daySource.valueOrNull,
-      selected,
-      past: selected.isBefore(today),
-    );
+    final monthFilled = monthFill != null &&
+        selected.year == month.year &&
+        selected.month == month.month;
+    final dayIncomplete = !monthFilled &&
+        _outsideCoverage(
+          daySource.valueOrNull,
+          selected,
+          past: selected.isBefore(today),
+        );
     final monthEnd = DateTime(month.year, month.month + 1, 0);
-    final monthIncomplete =
-        _outsideCoverage(past.valueOrNull, month, past: true) ||
-            _outsideCoverage(upcoming.valueOrNull, monthEnd, past: false);
+    final monthIncomplete = monthFill == null &&
+        (_outsideCoverage(past.valueOrNull, month, past: true) ||
+            _outsideCoverage(upcoming.valueOrNull, monthEnd, past: false));
     final allLoaded = upcoming.hasValue && past.hasValue;
     final monthHasEntries = entries.any(
       (entry) => entry.day.year == month.year && entry.day.month == month.month,

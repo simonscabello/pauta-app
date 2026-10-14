@@ -27,5 +27,9 @@
 
 	header /flutter_service_worker.js Cache-Control "no-cache"
 	header /flutter_bootstrap.js Cache-Control "no-cache"
+	# A ponte com o navegador e o service worker dos avisos mudam junto com o
+	# app; o navegador confere o service worker sozinho, mas a ponte não.
+	header /pauta-web.js Cache-Control "no-cache"
+	header /push-sw.js Cache-Control "no-cache"
 	header /version.json Cache-Control "no-cache"
 }

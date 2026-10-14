@@ -52,6 +52,27 @@ class EventRepository {
     }
   }
 
+  /// As escalas de um recorte de dias (`AAAA-MM-DD`, inclusivos, no fuso da
+  /// equipe), em ordem cronológica. É como a agenda completa um mês que as
+  /// listas de próximas e passadas não cobrem inteiro.
+  Future<List<Event>> listRange(
+    String teamId, {
+    required String from,
+    required String to,
+  }) async {
+    try {
+      final response = await _dio.get<List<dynamic>>(
+        '/teams/$teamId/events',
+        queryParameters: {'from': from, 'to': to, 'limit': 100},
+      );
+      return response.data!
+          .map((e) => Event.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<CachedValue<Event>> find(String eventId) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/events/$eventId');

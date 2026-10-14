@@ -1,0 +1,36 @@
+# Confere cada push em `master` e cada pull request: `flutter analyze` e
+# `flutter test`.
+#
+# Por que existe: o push em `master` publica a versão Web (o Railway faz
+# deploy a cada push), e o `release-apk.yml` só roda analyze e test quando a
+# tag sai -- tarde, porque a Web já está no ar. Este fluxo não segura o deploy,
+# mas deixa o vermelho visível no commit antes da tag.
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # A mesma versão do release-apk.yml e da máquina de desenvolvimento.
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Análise
+        run: flutter analyze
+
+      - name: Testes
+        run: flutter test
