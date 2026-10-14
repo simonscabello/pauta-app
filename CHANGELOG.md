@@ -7,6 +7,20 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.40.0 — 14/10/2026
+
+### Novidades
+- Sugerir com IA: escolha quantos hinos entram na sugestão — tanto faz,
+  nenhum, 1, 2 ou 3.
+- Peça até 15 músicas e fique com as que servem: cada sugestão tem Fixar,
+  Trocar e Tirar, e o que você tirou dá para trazer de volta.
+
+### Melhorias
+- Um campo só para o tema e a ideia central da mensagem.
+- A quantidade de músicas começa no que o culto costuma ter.
+- O cadeado virou "Fixar", escrito, com a explicação na tela: a música
+  fixada fica quando você pede um ajuste.
+
 ## 0.39.0 — 14/10/2026
 
 ### Novidades

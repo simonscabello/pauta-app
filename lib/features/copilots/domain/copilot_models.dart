@@ -496,11 +496,40 @@ class SuggestedSong {
       );
 }
 
+/// O que a folha do Copiloto de Repertório mostra antes do pedido.
+class RepertoireDefaults {
+  const RepertoireDefaults({
+    required this.count,
+    required this.maxCount,
+    required this.hymnsAvailable,
+  });
+
+  /// Sem resposta do servidor: 4 músicas, e a escolha de hinos aparece.
+  static const fallback =
+      RepertoireDefaults(count: 4, maxCount: 15, hymnsAvailable: 3);
+
+  /// Quantas músicas este culto costuma ter.
+  final int count;
+  final int maxCount;
+
+  /// Hinos no repertório da equipe. Zero = a escolha de hinos some.
+  final int hymnsAvailable;
+
+  factory RepertoireDefaults.fromJson(Map<String, dynamic> json) =>
+      RepertoireDefaults(
+        count: json['count'] as int? ?? fallback.count,
+        maxCount: json['maxCount'] as int? ?? fallback.maxCount,
+        hymnsAvailable:
+            json['hymnsAvailable'] as int? ?? fallback.hymnsAvailable,
+      );
+}
+
 class RepertoireSuggestion {
   const RepertoireSuggestion({
     required this.id,
     required this.version,
     required this.theme,
+    this.hymns,
     required this.summary,
     required this.unmet,
     required this.songs,
@@ -509,6 +538,9 @@ class RepertoireSuggestion {
   final String id;
   final int version;
   final String theme;
+
+  /// Quantos hinos foram pedidos. Nulo = tanto faz.
+  final int? hymns;
   final String? summary;
   final String? unmet;
   final List<SuggestedSong> songs;
@@ -518,6 +550,7 @@ class RepertoireSuggestion {
         id: json['id'] as String,
         version: json['version'] as int? ?? 1,
         theme: json['theme'] as String? ?? '',
+        hymns: json['hymns'] as int?,
         summary: json['summary'] as String?,
         unmet: json['unmet'] as String?,
         songs: _list(json['songs']).map(SuggestedSong.fromJson).toList(),

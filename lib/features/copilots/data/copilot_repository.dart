@@ -118,12 +118,25 @@ class CopilotRepository {
 
   // --- Copiloto de Repertório ----------------------------------------------
 
+  Future<RepertoireDefaults> repertoireDefaults(
+    String eventId, {
+    required String serviceId,
+  }) =>
+      _guard(() async {
+        final res = await _dio.get<Map<String, dynamic>>(
+          '/events/$eventId/repertoire-copilot/defaults',
+          queryParameters: {'serviceId': serviceId},
+        );
+        return RepertoireDefaults.fromJson(res.data!);
+      });
+
+  /// [hymns] nulo = tanto faz; 0 = nenhum hino.
   Future<RepertoireSuggestion> suggestRepertoire(
     String eventId, {
     required String serviceId,
     required String theme,
-    String? context,
-    int? count,
+    required int count,
+    int? hymns,
   }) =>
       _guard(() async {
         final res = await _dio.post<Map<String, dynamic>>(
@@ -131,9 +144,8 @@ class CopilotRepository {
           data: {
             'serviceId': serviceId,
             'theme': theme,
-            if (context != null && context.trim().isNotEmpty)
-              'context': context.trim(),
-            if (count != null) 'count': count,
+            'count': count,
+            if (hymns != null) 'hymns': hymns,
           },
         );
         return RepertoireSuggestion.fromJson(res.data!);
@@ -145,6 +157,9 @@ class CopilotRepository {
     required int baseVersion,
     required String instruction,
     required List<String> lockedSongIds,
+    required List<String> excludedSongIds,
+    required int count,
+    int? hymns,
   }) =>
       _guard(() async {
         final res = await _dio.post<Map<String, dynamic>>(
@@ -153,6 +168,9 @@ class CopilotRepository {
             'baseVersion': baseVersion,
             'instruction': instruction,
             'lockedSongIds': lockedSongIds,
+            'excludedSongIds': excludedSongIds,
+            'count': count,
+            if (hymns != null) 'hymns': hymns,
           },
         );
         return RepertoireSuggestion.fromJson(res.data!);
