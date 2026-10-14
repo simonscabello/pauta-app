@@ -36,6 +36,17 @@ class AppConfig {
   static const String termsUrl = '$siteUrl/termos.html';
   static const String accountDeletionUrl = '$siteUrl/excluir-conta.html';
 
+  /// O site de apresentação, onde moram os guias. **Outro endereço** que o
+  /// [siteUrl] (que, apesar do nome, é o do app, onde ficam as páginas legais).
+  static const String publicSiteUrl = 'https://pauta-louvor.up.railway.app';
+
+  /// O passo a passo de quem lidera, aberto pelo fim do tour do líder e pela
+  /// Ajuda. Descreve o app de hoje: mudou um fluxo, muda o guia junto.
+  static const String leaderGuideUrl = '$publicSiteUrl/guia/lider.html';
+
+  /// O guia curto de quem é integrante.
+  static const String memberGuideUrl = '$publicSiteUrl/guia/integrante.html';
+
   static const Duration connectTimeout = Duration(seconds: 10);
   static const Duration receiveTimeout = Duration(seconds: 15);
 }

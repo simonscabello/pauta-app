@@ -35,6 +35,11 @@ class OnboardingFlow {
 /// publicado antes.
 abstract final class OnboardingFlows {
   static const member = OnboardingFlow('member_onboarding', 1);
+
+  /// O tour de quem lidera (10/2026): por onde se monta a equipe e a escala.
+  /// Oferecido a quem é dono ou líder da equipe ativa, **no lugar** do de
+  /// integrante — inclusive a quem já tinha visto aquele, uma vez.
+  static const leader = OnboardingFlow('leader_onboarding', 1);
 }
 
 /// Como a pessoa saiu da apresentação. As duas encerram a oferta automática.

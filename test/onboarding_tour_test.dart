@@ -25,6 +25,79 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// funcionam; o tour anda pelas telas certas; **pular e concluir gravam, e
 /// rever pela Ajuda não grava nada.**
 void main() {
+  group('tour de quem lidera', () {
+    const completo = AuthUser(
+      id: 'u1',
+      name: 'Samuel',
+      email: 'samuel@teste.com',
+      mustChangePassword: false,
+      avatarUrl: 'https://exemplo/foto.png',
+      birthDate: null,
+    );
+
+    testWidgets('anda pelas telas de montar a equipe e grava o flow do líder',
+        (tester) async {
+      final app = await _pumpApp(tester, role: 'OWNER');
+      app.tour.offerWelcome(OnboardingFlows.leader);
+      await _settle(tester);
+
+      expect(find.textContaining('Você lidera a equipe'), findsOneWidget);
+      await tester.tap(find.text('Conhecer o Pauta'));
+      await _settle(tester);
+
+      final rotas = <String>[];
+      for (var i = 0; i < 7; i++) {
+        expect(find.text('${i + 1} DE 7'), findsOneWidget);
+        rotas.add(app.location());
+        await tester.tap(find.text(i == 6 ? 'Concluir' : 'Próximo'));
+        await _settle(tester);
+      }
+      expect(rotas, [
+        '/equipe',
+        '/equipe/cultos',
+        '/equipe/integrantes',
+        '/equipe/convites',
+        '/equipe/musicas',
+        '/agenda',
+        '/inicio',
+      ]);
+
+      // Sem a data de nascimento, "Complete seu perfil" vem antes do fim.
+      await tester.tap(find.text('Deixar para depois'));
+      await _settle(tester);
+      // O fim oferece o passo a passo completo.
+      expect(find.text('Abrir o guia do líder'), findsOneWidget);
+      await tester.tap(find.text('Começar'));
+      await _settle(tester);
+
+      expect(app.repository.recorded, [
+        (OnboardingFlows.leader, OnboardingOutcome.completed),
+      ]);
+    });
+
+    testWidgets('pular o tour do líder grava o flow do líder', (tester) async {
+      final app = await _pumpApp(tester, role: 'OWNER', user: completo);
+      app.tour.offerWelcome(OnboardingFlows.leader);
+      await _settle(tester);
+      await tester.tap(find.text('Conhecer o Pauta'));
+      await _settle(tester);
+      await tester.tap(find.text('Pular'));
+      await _settle(tester);
+
+      expect(app.repository.recorded, [
+        (OnboardingFlows.leader, OnboardingOutcome.skipped),
+      ]);
+    });
+
+    testWidgets('o tour de integrante não oferece o guia do líder',
+        (tester) async {
+      final app = await _pumpApp(tester);
+      app.tour.offerWelcome();
+      await _settle(tester);
+      expect(find.textContaining('Você lidera a equipe'), findsNothing);
+    });
+  });
+
   testWidgets('boas-vindas, avançar, voltar e pular — pular grava SKIPPED',
       (tester) async {
     final app = await _pumpApp(tester);
@@ -377,6 +450,7 @@ Future<_App> _pumpApp(
     mustChangePassword: false,
   ),
   bool tallHome = false,
+  String role = 'MEMBER',
 }) async {
   tester.view.physicalSize = const Size(400, 860);
   tester.view.devicePixelRatio = 1.0;
@@ -394,6 +468,7 @@ Future<_App> _pumpApp(
         builder: (_, __) {
           final children = [
             _block(TourTargetIds.homeNext, 'manchete'),
+            _block(TourTargetIds.homeSetup, 'primeiros passos'),
             SizedBox(height: tallHome ? 2400 : 16),
             _block(
               TourTargetIds.homeAvailability,
@@ -420,6 +495,7 @@ Future<_App> _pumpApp(
       GoRoute(
         path: '/agenda',
         builder: (_, __) => _page('Agenda', [
+          _block(TourTargetIds.agendaNew, 'Nova'),
           _block(TourTargetIds.agendaCalendar, 'calendário'),
         ]),
       ),
@@ -428,8 +504,19 @@ Future<_App> _pumpApp(
         builder: (_, __) => _page('Equipe', [
           _block(TourTargetIds.teamRepertoire, 'Repertório'),
           const Text('Sugestões'),
+          _block(TourTargetIds.teamManage, 'grupo Escalas'),
         ]),
       ),
+      for (final (path, id, label) in [
+        ('/equipe/cultos', TourTargetIds.servicesAdd, 'Adicionar culto'),
+        ('/equipe/integrantes', TourTargetIds.membersAdd, 'Adicionar pessoa'),
+        ('/equipe/convites', TourTargetIds.invitesGeneral, 'Convite geral'),
+        ('/equipe/musicas', TourTargetIds.songsAdd, 'Adicionar música'),
+      ])
+        GoRoute(
+          path: path,
+          builder: (_, __) => _page(label, [_block(id, label)]),
+        ),
       GoRoute(
         path: '/perfil',
         builder: (_, __) => Consumer(
@@ -468,12 +555,12 @@ Future<_App> _pumpApp(
             ref,
             AuthState.signedIn(
               user,
-              const [
+              [
                 TeamSummary(
                   membershipId: 'm1',
                   teamId: 't1',
                   name: 'Louvor',
-                  role: 'MEMBER',
+                  role: role,
                   displayName: 'Maria',
                 ),
               ],

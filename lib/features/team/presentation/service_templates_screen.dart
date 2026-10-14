@@ -22,6 +22,8 @@ import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/service_template.dart';
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 
 /// A grade de cultos da igreja, e como a equipe escala nela.
 ///
@@ -48,6 +50,9 @@ class ServiceTemplatesScreen extends ConsumerWidget {
       label: 'Adicionar',
       icon: Icons.add_rounded,
       onPressed: () => _openEditor(context, ref),
+      // O tour do líder aponta para cá: os cultos vêm antes de tudo.
+      wrap: (button) =>
+          TourTarget(id: TourTargetIds.servicesAdd, child: button),
     );
 
     return Scaffold(

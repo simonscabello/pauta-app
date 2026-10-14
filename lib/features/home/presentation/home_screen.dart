@@ -25,6 +25,7 @@ import '../../events/presentation/agenda_event_tile.dart';
 import '../../onboarding/application/tour_controller.dart';
 import '../../onboarding/data/onboarding_repository.dart';
 import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/domain/onboarding_models.dart';
 import '../../onboarding/presentation/tour_target.dart';
 import '../../songs/data/song_repository.dart';
 import '../../suggestions/data/suggestion_repository.dart';
@@ -119,15 +120,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         auth.teams.first;
     final events = ref.watch(eventsProvider((teamId, 'upcoming')));
 
-    // As boas-vindas são de todo mundo, liderança inclusive: o tour mostra o
-    // app que os dois papéis usam, e quem lidera também chega sem saber onde
-    // fica a disponibilidade ou a letra da escala.
-    final onboardingDue = ref.watch(memberOnboardingDueProvider);
+    // As boas-vindas são de todo mundo, mas o tour depende do papel na equipe
+    // ativa: quem lidera vê **onde se monta** a equipe e a escala (o tour do
+    // líder); quem é integrante, onde ver a sua escala. Quem já lidera e viu o
+    // de integrante recebe o do líder uma vez.
+    final leaderTour = team.canManage;
+    final onboardingDue = ref.watch(
+      leaderTour ? leaderOnboardingDueProvider : memberOnboardingDueProvider,
+    );
     final tourActive =
         ref.watch(tourControllerProvider.select((tour) => tour.isActive));
     if (onboardingDue.valueOrNull == true && !tourActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) ref.read(tourControllerProvider.notifier).offerWelcome();
+        if (mounted) {
+          ref.read(tourControllerProvider.notifier).offerWelcome(
+                leaderTour ? OnboardingFlows.leader : OnboardingFlows.member,
+              );
+        }
       });
     }
 
@@ -423,9 +432,12 @@ class _HomeBody extends StatelessWidget {
                   : _HomeNotices(notices: summary.notices);
               // Só existe enquanto a equipe não está montada (ver o widget).
               final setup = canManage
-                  ? TeamSetupCard(
-                      teamId: teamId,
-                      hasSchedules: summary.hasSchedules,
+                  ? TourTarget(
+                      id: TourTargetIds.homeSetup,
+                      child: TeamSetupCard(
+                        teamId: teamId,
+                        hasSchedules: summary.hasSchedules,
+                      ),
                     )
                   : null;
 

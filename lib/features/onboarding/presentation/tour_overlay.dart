@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_elevation.dart';
@@ -19,10 +20,12 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_brand_mark.dart';
 import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/open_link.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../profile/presentation/profile_photo.dart';
 import '../application/tour_controller.dart';
 import '../domain/member_tour.dart';
+import '../domain/onboarding_models.dart';
 import 'tour_target.dart';
 
 /// O tour por cima do app inteiro.
@@ -162,9 +165,13 @@ class _TourLayerState extends ConsumerState<_TourLayer>
     final targetContext = TourTarget.contextOf(id);
     final box = targetContext?.findRenderObject();
     final layer = context.findRenderObject();
+    // Alvo de tamanho zero conta como ausente: é o cartão que se esconde por
+    // dentro (os "Primeiros passos" de uma equipe já montada), e um recorte
+    // sem área seria a tela escura sem nada destacado.
     if (box is! RenderBox ||
         !box.attached ||
         !box.hasSize ||
+        box.size.isEmpty ||
         layer is! RenderBox ||
         !layer.hasSize) {
       return null;
@@ -276,13 +283,17 @@ class _TourLayerState extends ConsumerState<_TourLayer>
     final Widget card = switch (tour.phase) {
       TourPhase.idle => const SizedBox.shrink(),
       TourPhase.welcome => _WelcomeCard(
+          leader: tour.isLeader,
           onStart: () => ref.read(tourControllerProvider.notifier).start(),
         ),
       TourPhase.preparing || TourPhase.paused => const SizedBox.shrink(),
       // Esperando a tela nova montar o alvo: um indicador, e não o escuro
       // vazio — três segundos de tela preta parecem app travado.
       TourPhase.touring => waitingTarget
-          ? const _WaitingIndicator()
+          // Chave por parada: duas esperas seguidas (a de uma parada saindo e
+          // a da próxima entrando) não podem ter a mesma chave no
+          // `AnimatedSwitcher`.
+          ? _WaitingIndicator(key: ValueKey('espera-${tour.index}'))
           : _StepCard(
               key: ValueKey(tour.index),
               step: step!,
@@ -301,7 +312,9 @@ class _TourLayerState extends ConsumerState<_TourLayer>
           onBack: ref.read(tourControllerProvider.notifier).back,
         ),
       TourPhase.finished => _FinishedCard(
+          leader: tour.isLeader,
           onStart: _finish,
+          onOpenGuide: () => openExternalLink(context, AppConfig.leaderGuideUrl),
           onBack: ref.read(tourControllerProvider.notifier).back,
         ),
     };
@@ -498,9 +511,13 @@ class _TourCard extends StatelessWidget {
 /// tour — que é curto justamente para caber no primeiro acesso. Quem quiser
 /// sair no meio tem o "Pular" de cada parada.
 class _WelcomeCard extends StatelessWidget {
-  const _WelcomeCard({required this.onStart});
+  const _WelcomeCard({required this.onStart, this.leader = false});
 
   final VoidCallback onStart;
+
+  /// O tour de quem lidera: o texto fala de montar a equipe, e não de
+  /// participar de uma que já existe.
+  final bool leader;
 
   @override
   Widget build(BuildContext context) {
@@ -529,15 +546,22 @@ class _WelcomeCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Aqui você encontra tudo o que precisa para participar da sua '
-              'equipe de louvor.',
+              leader
+                  ? 'Você lidera a equipe. Vamos ver onde você monta a equipe '
+                      'e as escalas.'
+                  : 'Aqui você encontra tudo o que precisa para participar da '
+                      'sua equipe de louvor.',
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Veja suas escalas, prepare as músicas, informe sua '
-              'disponibilidade, acompanhe os compromissos e participe da vida '
-              'da equipe.',
+              leader
+                  ? 'Cultos, integrantes, convites, repertório e a escala — '
+                      'cada um em uma parada. O passo a passo completo fica no '
+                      'guia do líder.'
+                  : 'Veja suas escalas, prepare as músicas, informe sua '
+                      'disponibilidade, acompanhe os compromissos e participe '
+                      'da vida da equipe.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -642,7 +666,7 @@ class _StepCard extends StatelessWidget {
 
 /// Esperando a tela da parada montar o alvo.
 class _WaitingIndicator extends StatelessWidget {
-  const _WaitingIndicator();
+  const _WaitingIndicator({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -847,10 +871,19 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
 }
 
 class _FinishedCard extends StatelessWidget {
-  const _FinishedCard({required this.onStart, required this.onBack});
+  const _FinishedCard({
+    required this.onStart,
+    required this.onBack,
+    required this.onOpenGuide,
+    this.leader = false,
+  });
 
   final VoidCallback onStart;
   final VoidCallback onBack;
+
+  /// Abre o guia do líder no site. Só aparece no tour de quem lidera.
+  final VoidCallback onOpenGuide;
+  final bool leader;
 
   @override
   Widget build(BuildContext context) {
@@ -881,8 +914,12 @@ class _FinishedCard extends StatelessWidget {
             Text('Tudo pronto! 🎵', style: theme.textTheme.headlineSmall),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Agora você já sabe onde encontrar suas escalas, preparar as '
-              'músicas, informar sua disponibilidade e acompanhar sua equipe.',
+              leader
+                  ? 'Agora você sabe onde montar a equipe e as escalas. Para o '
+                      'passo a passo de cada tela, abra o guia do líder.'
+                  : 'Agora você já sabe onde encontrar suas escalas, preparar '
+                      'as músicas, informar sua disponibilidade e acompanhar '
+                      'sua equipe.',
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -898,6 +935,14 @@ class _FinishedCard extends StatelessWidget {
               onPressed: onStart,
               child: const Text('Começar'),
             ),
+            if (leader) ...[
+              const SizedBox(height: AppSpacing.xs),
+              OutlinedButton.icon(
+                onPressed: onOpenGuide,
+                icon: const Icon(Icons.menu_book_rounded, size: 18),
+                label: const Text('Abrir o guia do líder'),
+              ),
+            ],
             const SizedBox(height: AppSpacing.xs),
             TextButton(onPressed: onBack, child: const Text('Voltar')),
           ],
@@ -911,9 +956,14 @@ class _FinishedCard extends StatelessWidget {
 ///
 /// Não passa pelas boas-vindas — quem tocou em "Conhecer o Pauta" já disse
 /// que quer — e não grava nada no servidor.
-void startTourManually(WidgetRef ref, BuildContext context) {
+void startTourManually(
+  WidgetRef ref,
+  BuildContext context, {
+  OnboardingFlow flow = OnboardingFlows.member,
+}) {
   ref.read(tourControllerProvider.notifier).start(
         manual: true,
         origin: GoRouterState.of(context).uri.path,
+        flow: flow,
       );
 }

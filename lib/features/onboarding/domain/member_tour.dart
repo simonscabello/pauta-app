@@ -21,6 +21,29 @@ abstract final class TourTargetIds {
 
   /// O interruptor "Avisos no celular" do Perfil (só existe no Android).
   static const profilePush = 'profile.push';
+
+  // --- Tour do líder (`leader_tour.dart`) ---
+
+  /// O grupo "Escalas" do painel da aba Equipe.
+  static const teamManage = 'team.manage';
+
+  /// "Adicionar", em Cultos da igreja.
+  static const servicesAdd = 'services.add';
+
+  /// "Adicionar", em Integrantes.
+  static const membersAdd = 'members.add';
+
+  /// O convite geral (o código), em Convites.
+  static const invitesGeneral = 'invites.general';
+
+  /// "Adicionar", no Repertório.
+  static const songsAdd = 'songs.add';
+
+  /// "Nova", na Agenda (botão flutuante no celular, do cabeçalho no monitor).
+  static const agendaNew = 'agenda.new';
+
+  /// O cartão "Primeiros passos" da Home.
+  static const homeSetup = 'home.setup';
 }
 
 /// Uma parada do tour: para onde ir, o que destacar e o que dizer.

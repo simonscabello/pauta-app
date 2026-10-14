@@ -138,13 +138,21 @@ Future<void> recordOnboardingOutcome(
 /// pergunta; mudar o nome ou a foto, não. Antes de perguntar ao servidor,
 /// entrega o que ficou pendente — e, havendo pendência deste tour, a resposta
 /// já é não.
-final memberOnboardingDueProvider =
-    FutureProvider.autoDispose<bool>((ref) async {
+final memberOnboardingDueProvider = FutureProvider.autoDispose<bool>(
+  (ref) => _onboardingDue(ref, OnboardingFlows.member),
+);
+
+/// O mesmo, para o tour de quem lidera: a Home pergunta este quando a pessoa
+/// é dona ou líder da equipe ativa.
+final leaderOnboardingDueProvider = FutureProvider.autoDispose<bool>(
+  (ref) => _onboardingDue(ref, OnboardingFlows.leader),
+);
+
+Future<bool> _onboardingDue(Ref ref, OnboardingFlow flow) async {
   final userId =
       ref.watch(authControllerProvider.select((state) => state.user?.id));
   if (userId == null) return false;
 
-  const flow = OnboardingFlows.member;
   final pending = ref.read(pendingOnboardingsProvider);
   final repository = ref.read(onboardingRepositoryProvider);
 
@@ -163,4 +171,4 @@ final memberOnboardingDueProvider =
     records: records,
     pendingLocally: pending.contains(userId, flow),
   );
-});
+}

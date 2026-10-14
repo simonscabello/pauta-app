@@ -10,6 +10,7 @@ import '../../events/data/event_repository.dart';
 import '../../home/domain/home_summary.dart';
 import '../../team/data/team_repository.dart';
 import '../data/onboarding_repository.dart';
+import '../domain/leader_tour.dart';
 import '../domain/member_tour.dart';
 import '../domain/onboarding_models.dart';
 
@@ -48,7 +49,14 @@ class TourState {
     this.manual = false,
     this.origin,
     this.showedProfile = false,
+    this.flow = OnboardingFlows.member,
   });
+
+  /// Qual tour: o de integrante ou o de quem lidera. Decide as paradas, as
+  /// boas-vindas e o final, e o que fica gravado ao concluir ou pular.
+  final OnboardingFlow flow;
+
+  bool get isLeader => flow == OnboardingFlows.leader;
 
   final TourPhase phase;
   final List<TourStep> steps;
@@ -79,8 +87,10 @@ class TourState {
     bool? manual,
     String? origin,
     bool? showedProfile,
+    OnboardingFlow? flow,
   }) {
     return TourState(
+      flow: flow ?? this.flow,
       phase: phase ?? this.phase,
       steps: steps ?? this.steps,
       index: index ?? this.index,
@@ -123,29 +133,37 @@ class TourController extends StateNotifier<TourState> {
   String? _offeredFor;
 
   /// As boas-vindas, se ainda não apareceram nesta abertura.
-  void offerWelcome() {
+  void offerWelcome([OnboardingFlow flow = OnboardingFlows.member]) {
     final userId = _ref.read(authControllerProvider).user?.id;
     if (userId == null || state.isActive || _offeredFor == userId) return;
     _offeredFor = userId;
-    state = const TourState(phase: TourPhase.welcome, origin: '/inicio');
+    state = TourState(phase: TourPhase.welcome, origin: '/inicio', flow: flow);
   }
 
   /// Começa pela primeira parada — vindo das boas-vindas ou da Ajuda.
-  Future<void> start({bool manual = false, String? origin}) async {
+  Future<void> start({
+    bool manual = false,
+    String? origin,
+    OnboardingFlow? flow,
+  }) async {
     final wasManual = manual || state.manual;
     final from = origin ?? state.origin ?? '/inicio';
+    final which = flow ?? state.flow;
     state = TourState(
       phase: TourPhase.preparing,
       manual: wasManual,
       origin: from,
+      flow: which,
     );
 
-    final steps = memberTourSteps(
-      MemberTourContext(
-        nextScheduleId: await _nextScheduleId(),
-        pushSupported: PushService.isSupported,
-      ),
-    );
+    final steps = which == OnboardingFlows.leader
+        ? leaderTourSteps()
+        : memberTourSteps(
+            MemberTourContext(
+              nextScheduleId: await _nextScheduleId(),
+              pushSupported: PushService.isSupported,
+            ),
+          );
     // Cancelado enquanto a escala chegava (saiu da conta, por exemplo).
     if (state.phase != TourPhase.preparing) return;
 
@@ -251,23 +269,29 @@ class TourController extends StateNotifier<TourState> {
   Future<String?> skip() async {
     final origin = state.origin;
     final manual = state.manual;
+    final flow = state.flow;
     _stopWatchingRoute();
     state = const TourState();
-    if (!manual) await _record(OnboardingOutcome.skipped);
+    if (!manual) await _record(flow, OnboardingOutcome.skipped);
     return origin;
   }
 
   /// "Começar", na última tela.
   Future<void> finish() async {
     final manual = state.manual;
+    final flow = state.flow;
     _stopWatchingRoute();
     state = const TourState();
-    if (!manual) await _record(OnboardingOutcome.completed);
+    if (!manual) await _record(flow, OnboardingOutcome.completed);
   }
 
-  Future<void> _record(OnboardingOutcome outcome) async {
-    await recordOnboardingOutcome(_ref, OnboardingFlows.member, outcome);
-    _ref.invalidate(memberOnboardingDueProvider);
+  Future<void> _record(OnboardingFlow flow, OnboardingOutcome outcome) async {
+    await recordOnboardingOutcome(_ref, flow, outcome);
+    _ref.invalidate(
+      flow == OnboardingFlows.leader
+          ? leaderOnboardingDueProvider
+          : memberOnboardingDueProvider,
+    );
   }
 
   /// A próxima escala **em que a pessoa entra**, pela mesma leitura da Home.

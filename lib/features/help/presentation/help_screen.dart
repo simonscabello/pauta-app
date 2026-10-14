@@ -8,7 +8,9 @@ import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/open_link.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../onboarding/domain/onboarding_models.dart';
 import '../../onboarding/presentation/tour_overlay.dart';
+import '../../team/data/team_repository.dart';
 import '../domain/help_faq.dart';
 
 /// A Central de Ajuda (`/perfil/ajuda`).
@@ -25,8 +27,16 @@ class HelpScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Quem lidera **alguma** equipe: a dúvida de como publicar não depende
     // de qual equipe está ativa agora.
-    final lidera =
-        ref.watch(authControllerProvider).teams.any((t) => t.canManage);
+    final auth = ref.watch(authControllerProvider);
+    final lidera = auth.teams.any((t) => t.canManage);
+    // O tour do líder anda pelas telas de gestão **da equipe ativa**: só faz
+    // sentido para quem lidera a equipe que está na tela.
+    final activeTeamId = ref.watch(activeTeamIdProvider);
+    final lideraAtiva = auth.teams
+            .where((t) => t.teamId == activeTeamId)
+            .firstOrNull
+            ?.canManage ??
+        false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ajuda')),
@@ -50,6 +60,18 @@ class HelpScreen extends ConsumerWidget {
                         'áreas do aplicativo.',
                     onTap: () => startTourManually(ref, context),
                   ),
+                  if (lideraAtiva)
+                    AppGroupRow(
+                      icon: Icons.flag_outlined,
+                      title: 'Conhecer o Pauta, para quem lidera',
+                      subtitle: 'Onde montar a equipe, o repertório e as '
+                          'escalas.',
+                      onTap: () => startTourManually(
+                        ref,
+                        context,
+                        flow: OnboardingFlows.leader,
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: AppSpacing.xxl),
@@ -66,6 +88,16 @@ class HelpScreen extends ConsumerWidget {
                   title: 'Para quem lidera',
                   dividerIndent: AppGroup.textIndent,
                   children: [
+                    // O passo a passo inteiro, com as telas: o que não cabe
+                    // numa pergunta frequente nem no tour.
+                    AppGroupRow(
+                      icon: Icons.menu_book_rounded,
+                      title: 'Guia completo do líder',
+                      subtitle: 'Passo a passo, da equipe nova à escala '
+                          'publicada.',
+                      onTap: () =>
+                          openExternalLink(context, AppConfig.leaderGuideUrl),
+                    ),
                     for (final entry in leaderHelpFaq) FaqTile(entry: entry),
                   ],
                 ),
@@ -76,6 +108,12 @@ class HelpScreen extends ConsumerWidget {
               AppGroup(
                 title: 'Sobre o Pauta',
                 children: [
+                  AppGroupRow(
+                    icon: Icons.menu_book_outlined,
+                    title: 'Guia do integrante',
+                    onTap: () =>
+                        openExternalLink(context, AppConfig.memberGuideUrl),
+                  ),
                   AppGroupRow(
                     icon: Icons.privacy_tip_outlined,
                     title: 'Política de privacidade',

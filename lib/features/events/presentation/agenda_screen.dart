@@ -560,11 +560,14 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       // mouse ele sobe para o cabeçalho, junto do título da tela. A diferença
       // para a Home é o que o botão leva junto: aqui, o dia selecionado.
       floatingActionButton: fab
-          ? FloatingActionButton.extended(
-              onPressed: create,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Nova'),
-              tooltip: 'Criar escala ou evento',
+          ? TourTarget(
+              id: TourTargetIds.agendaNew,
+              child: FloatingActionButton.extended(
+                onPressed: create,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Nova'),
+                tooltip: 'Criar escala ou evento',
+              ),
             )
           : null,
       body: SafeArea(
@@ -594,10 +597,13 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                       icon: const Icon(Icons.refresh_rounded),
                     ),
                   if (team.canManage && janelaLarga)
-                    IconButton.filled(
-                      tooltip: 'Criar escala ou evento',
-                      onPressed: create,
-                      icon: const Icon(Icons.add_rounded),
+                    TourTarget(
+                      id: TourTargetIds.agendaNew,
+                      child: IconButton.filled(
+                        tooltip: 'Criar escala ou evento',
+                        onPressed: create,
+                        icon: const Icon(Icons.add_rounded),
+                      ),
                     ),
                 ],
               ),

@@ -20,6 +20,8 @@ import '../data/song_repository.dart';
 import '../domain/song_models.dart';
 import 'song_resources.dart';
 import 'song_theme_picker.dart';
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 
 /// Repertório da equipe.
 ///
@@ -125,6 +127,8 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                 label: 'Adicionar',
                 icon: Icons.add_rounded,
                 onPressed: () => context.push('/equipe/musicas/nova'),
+                wrap: (button) =>
+                    TourTarget(id: TourTargetIds.songsAdd, child: button),
               )
             : AppPrimaryAction(
                 label: 'Sugerir',

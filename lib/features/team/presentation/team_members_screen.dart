@@ -24,6 +24,8 @@ import '../../invites/presentation/invite_actions.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 import 'reset_password_action.dart';
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 
 /// Integrantes: a lista das pessoas da equipe, numa tela só dela.
 ///
@@ -59,6 +61,7 @@ class TeamMembersScreen extends ConsumerWidget {
       label: wide ? 'Adicionar integrante' : 'Adicionar',
       icon: Icons.person_add_rounded,
       onPressed: () => context.push('/equipe/integrantes/novo'),
+      wrap: (button) => TourTarget(id: TourTargetIds.membersAdd, child: button),
     );
     final headerAction = canManage ? adicionar.headerAction(context) : null;
 

@@ -21,6 +21,8 @@ import '../../team/data/team_repository.dart';
 import '../../team/domain/team_models.dart';
 import '../data/invite_repository.dart';
 import '../domain/invite_models.dart';
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 
 /// Tela do líder: gera o convite geral da equipe e um convite individual por
 /// membro que ainda não tem conta.
@@ -85,7 +87,15 @@ class InvitesScreen extends ConsumerWidget {
                           'equipe como membro.',
                     ),
                     if (general.isNotEmpty) ...[
-                      _GeneralInviteCard(invite: general.first, teamId: teamId),
+                      // O alvo do tour do líder: o código que se manda à
+                      // equipe. Sem código ainda, o botão de gerar.
+                      TourTarget(
+                        id: TourTargetIds.invitesGeneral,
+                        child: _GeneralInviteCard(
+                          invite: general.first,
+                          teamId: teamId,
+                        ),
+                      ),
                       // Códigos gerais anteriores ainda valem até vencer: ficam
                       // como linhas, para não somar outro botão cheio.
                       if (general.length > 1) ...[
@@ -104,7 +114,13 @@ class InvitesScreen extends ConsumerWidget {
                       ],
                     ],
                     const SizedBox(height: AppSpacing.sm),
-                    _GenerateButton(teamId: teamId, first: general.isEmpty),
+                    if (general.isEmpty)
+                      TourTarget(
+                        id: TourTargetIds.invitesGeneral,
+                        child: _GenerateButton(teamId: teamId, first: true),
+                      )
+                    else
+                      _GenerateButton(teamId: teamId, first: false),
                     const SizedBox(height: AppSpacing.xxl),
                     _IndividualSection(teamId: teamId, invites: list),
                   ],

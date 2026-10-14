@@ -173,7 +173,11 @@ class TeamHubScreen extends ConsumerWidget {
                       ),
                       if (canManage) ...[
                         const SizedBox(height: AppSpacing.xl),
-                        AppGroup(
+                        // O alvo do tour do líder: o grupo de quem monta as
+                        // escalas.
+                        TourTarget(
+                          id: TourTargetIds.teamManage,
+                          child: AppGroup(
                           title: 'Escalas',
                           children: [
                             AppGroupRow(
@@ -204,6 +208,7 @@ class TeamHubScreen extends ConsumerWidget {
                                   context.push('/equipe/participacao'),
                             ),
                           ],
+                        ),
                         ),
                         const SizedBox(height: AppSpacing.xl),
                         AppGroup(
