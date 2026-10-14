@@ -7,6 +7,19 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.39.0 — 14/10/2026
+
+### Novidades
+- Tour para quem lidera: na primeira abertura, quem é dono ou líder vê onde
+  monta a equipe — cultos, integrantes, convites, repertório e a escala —, e
+  no fim abre o guia do líder.
+- Guias no site: o passo a passo do líder e o do integrante, com as telas do
+  app, abertos pela Ajuda.
+
+### Correções
+- O tour não trava mais ao passar rápido por telas em que o ponto destacado
+  ainda está carregando.
+
 ## 0.38.0 — 14/10/2026
 
 ### Novidades
