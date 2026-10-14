@@ -7,6 +7,28 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.38.0 — 14/10/2026
+
+### Novidades
+- Momentos do culto da sua igreja: em Equipe › Escalas › Momentos do culto,
+  renomeie, reordene ou exclua os de sempre e cadastre os seus. Ao montar as
+  músicas, "Novo momento" cadastra na hora; "Outro" continua para o que
+  acontece uma vez só.
+- Escala por dia ou por culto: em Cultos da igreja, escolha "Uma por culto"
+  para cada culto ter a sua escala — equipe, músicas, ensaio e quem ministra.
+  A nova escala vem com o próximo culto sem escala, e "Copiar de" repete a
+  equipe de outro culto do dia.
+- O Copiloto de Escalas monta o mês por culto, nas equipes que escalam assim.
+
+### Melhorias
+- Na escala de um culto só, o nome do culto aparece nas telas, no texto do
+  WhatsApp e no calendário — sem repetir a hora quando o nome já a diz.
+- A Home junta as suas escalas do mesmo dia: "Também neste dia: Noite 19:00".
+- O arquivo do calendário leva a hora no nome.
+
+### Correções
+- Duplicar uma escala agora leva o momento de cada música.
+
 ## 0.37.0 — 14/10/2026
 
 ### Melhorias
