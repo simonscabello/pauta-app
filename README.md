@@ -73,7 +73,7 @@ flutter test
 APK para instalar no celular — aponta para a API em produção (Railway):
 
 ```powershell
-flutter build apk --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+flutter build apk --release --dart-define=API_BASE_URL=https://api.pautalouvor.com.br
 ```
 
 A URL vai **sem** barra no fim e **sem** `/api/v1`: o `AppConfig` já concatena o
@@ -115,7 +115,7 @@ O procedimento completo de Railway, versão, assinatura e publicação está em
 ### Publicar a versão Web
 
 ```powershell
-flutter build web --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+flutter build web --release --dart-define=API_BASE_URL=https://api.pautalouvor.com.br
 ```
 
 A saída fica em `build/web`. É um site estático: sirva a pasta inteira em
@@ -163,7 +163,7 @@ Variáveis de **build** (o Caddy não as lê em runtime):
 
 | Variável | Obrigatória | Valor |
 | --- | --- | --- |
-| `API_BASE_URL` | sim | `https://backend-production-b304.up.railway.app` |
+| `API_BASE_URL` | sim | `https://api.pautalouvor.com.br` |
 | `FLUTTER_VERSION` | não | padrão `3.44.8` (stable deste projeto) |
 
 `API_BASE_URL` é a base, **sem** barra no fim e **sem** `/api/v1`. O
@@ -177,13 +177,13 @@ Build e execução locais:
 
 ```bash
 docker build \
-  --build-arg API_BASE_URL=https://backend-production-b304.up.railway.app \
+  --build-arg API_BASE_URL=https://api.pautalouvor.com.br \
   --build-arg FLUTTER_VERSION=3.44.8 \
   -t pauta-web .
 ```
 
 ```powershell
-docker build --build-arg API_BASE_URL=https://backend-production-b304.up.railway.app --build-arg FLUTTER_VERSION=3.44.8 -t pauta-web .
+docker build --build-arg API_BASE_URL=https://api.pautalouvor.com.br --build-arg FLUTTER_VERSION=3.44.8 -t pauta-web .
 docker run --rm -e PORT=8080 -p 8080:8080 pauta-web
 ```
 
