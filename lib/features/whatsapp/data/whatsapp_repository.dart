@@ -27,6 +27,17 @@ class WhatsAppRepository {
     });
   }
 
+  /// Liga ou desliga as respostas a `@Pauta` no grupo vinculado.
+  Future<TeamWhatsApp> setAnswers(String teamId, {required bool enabled}) {
+    return _guard(() async {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/teams/$teamId/whatsapp',
+        data: {'answersEnabled': enabled},
+      );
+      return TeamWhatsApp.fromJson(response.data!);
+    });
+  }
+
   Future<void> unlink(String teamId) {
     return _guard(() => _dio.delete<void>('/teams/$teamId/whatsapp'));
   }

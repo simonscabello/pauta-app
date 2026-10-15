@@ -145,6 +145,14 @@ class _WhatsAppGroupScreenState extends ConsumerState<WhatsAppGroupScreen> {
                             'a escala publicada vai para lá com um toque, '
                             'pelo número do Pauta.',
                       ),
+                    if (whatsApp.group != null) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      _AnswersSwitch(
+                        enabled: whatsApp.answersEnabled,
+                        busy: _working,
+                        onChanged: _setAnswers,
+                      ),
+                    ],
                     if (whatsApp.group == null ||
                         whatsApp.linkCode != null) ...[
                       const SizedBox(height: AppSpacing.lg),
@@ -168,6 +176,20 @@ class _WhatsAppGroupScreenState extends ConsumerState<WhatsAppGroupScreen> {
     setState(() => _working = true);
     try {
       await ref.read(whatsAppRepositoryProvider).createLinkCode(widget.teamId);
+      ref.invalidate(teamWhatsAppProvider(widget.teamId));
+    } on ApiException catch (e) {
+      if (mounted) showAppSnackBar(context, e.message, tone: AppTone.danger);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _setAnswers(bool enabled) async {
+    setState(() => _working = true);
+    try {
+      await ref
+          .read(whatsAppRepositoryProvider)
+          .setAnswers(widget.teamId, enabled: enabled);
       ref.invalidate(teamWhatsAppProvider(widget.teamId));
     } on ApiException catch (e) {
       if (mounted) showAppSnackBar(context, e.message, tone: AppTone.danger);
@@ -267,6 +289,42 @@ class _LinkedGroup extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// O interruptor das respostas a `@Pauta`.
+///
+/// Desligado por padrão: cada resposta é o número falando no grupo sem
+/// ninguém da liderança apertar botão, e é a liderança quem decide aceitar.
+/// O texto diz o que sai, para quem liga saber que rascunho não aparece.
+class _AnswersSwitch extends StatelessWidget {
+  const _AnswersSwitch({
+    required this.enabled,
+    required this.busy,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final bool busy;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SwitchListTile.adaptive(
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      tileColor: theme.colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      title: const Text('Responder quando marcarem o Pauta'),
+      subtitle: const Text(
+        'Quem estiver no grupo escreve @Pauta e recebe a próxima escala, as '
+        'músicas, o ensaio ou a agenda do mês. Só o que já foi publicado.',
+      ),
+      value: enabled,
+      onChanged: busy ? null : onChanged,
     );
   }
 }

@@ -7,6 +7,13 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.41.0 — 15/10/2026
+
+### Novidades
+- Grupo do WhatsApp: "Responder quando marcarem o Pauta". Ligado, quem está
+  no grupo escreve @Pauta e recebe a próxima escala, as músicas, o ensaio ou
+  a agenda do mês.
+
 ## 0.40.0 — 14/10/2026
 
 ### Novidades

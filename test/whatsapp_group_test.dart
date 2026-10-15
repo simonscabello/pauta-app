@@ -22,9 +22,12 @@ void main() {
         'phoneNumber': '5527999990000',
         'group': {'name': 'Louvor SIBB', 'linkedAt': '2026-09-28T20:00:00.000Z'},
         'linkCode': null,
+        'answersEnabled': true,
       });
 
       expect(estado.canSend, isTrue);
+      expect(estado.answersEnabled, isTrue);
+      expect(TeamWhatsApp.fromJson({'available': true}).answersEnabled, isFalse);
       expect(estado.group!.label, 'Louvor SIBB');
       expect(estado.linkCode, isNull);
     });
@@ -108,6 +111,25 @@ void main() {
       expect(find.text('Gerar código'), findsOneWidget);
     });
 
+    testWidgets('com grupo: as respostas a @Pauta ligam pelo interruptor, '
+        'e sem grupo ele não aparece', (tester) async {
+      final repo = _FakeRepository(_estado(group: _grupo));
+      await _pump(tester, repo);
+
+      final interruptor = find.byType(SwitchListTile);
+      expect(tester.widget<SwitchListTile>(interruptor).value, isFalse);
+      await tester.tap(interruptor);
+      await tester.pumpAndSettle();
+
+      expect(repo.answers, isTrue);
+      expect(tester.widget<SwitchListTile>(interruptor).value, isTrue);
+
+      await _desmontar(tester);
+      await _pump(tester, _FakeRepository(_estado()));
+      expect(find.byType(SwitchListTile), findsNothing);
+      await _desmontar(tester);
+    });
+
     testWidgets('cabe em 320px com fonte grande', (tester) async {
       await _pump(
         tester,
@@ -135,6 +157,7 @@ TeamWhatsApp _estado({
   bool connected = true,
   WhatsAppGroup? group,
   WhatsAppLinkCode? code,
+  bool answers = false,
 }) =>
     TeamWhatsApp(
       available: true,
@@ -142,6 +165,7 @@ TeamWhatsApp _estado({
       phoneNumber: '5527999990000',
       group: group,
       linkCode: code,
+      answersEnabled: answers,
     );
 
 class _FakeRepository extends WhatsAppRepository {
@@ -149,6 +173,18 @@ class _FakeRepository extends WhatsAppRepository {
 
   TeamWhatsApp state;
   bool unlinked = false;
+  bool answers = false;
+
+  @override
+  Future<TeamWhatsApp> setAnswers(String teamId, {required bool enabled}) async {
+    answers = enabled;
+    state = _estado(
+      connected: state.connected,
+      group: state.group,
+      answers: enabled,
+    );
+    return state;
+  }
 
   @override
   Future<TeamWhatsApp> status(String teamId) async => state;

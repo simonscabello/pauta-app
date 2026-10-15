@@ -10,6 +10,7 @@ class TeamWhatsApp {
     this.phoneNumber,
     this.group,
     this.linkCode,
+    this.answersEnabled = false,
   });
 
   /// O servidor tem o envio pelo WhatsApp ligado. Falso: nada disto aparece
@@ -24,6 +25,10 @@ class TeamWhatsApp {
 
   final WhatsAppGroup? group;
   final WhatsAppLinkCode? linkCode;
+
+  /// O número do Pauta responde no grupo quando alguém o marca
+  /// (`@Pauta 1`). Ausente na API antiga: desligado.
+  final bool answersEnabled;
 
   /// O botão "Enviar para o grupo" da escala só existe com as duas coisas.
   bool get canSend => available && group != null;
@@ -47,6 +52,7 @@ class TeamWhatsApp {
               code: code['code'] as String,
               expiresAt: DateTime.parse(code['expiresAt'] as String).toLocal(),
             ),
+      answersEnabled: json['answersEnabled'] == true,
     );
   }
 
