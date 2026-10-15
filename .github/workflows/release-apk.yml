@@ -160,9 +160,9 @@ jobs:
       - name: Build do APK
         run: |
           flutter build apk --release \
-            --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+            --dart-define=API_BASE_URL=https://api.pautalouvor.com.br
           flutter build apk --release --split-per-abi \
-            --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+            --dart-define=API_BASE_URL=https://api.pautalouvor.com.br
 
       - name: Nomear os arquivos com a versão
         id: artefatos

@@ -29,7 +29,7 @@ class AppConfig {
   /// apontando para localhost mostraria uma pagina que nao existe.
   static const String siteUrl = String.fromEnvironment(
     'SITE_URL',
-    defaultValue: 'https://pautapp.up.railway.app',
+    defaultValue: 'https://app.pautalouvor.com.br',
   );
 
   static const String privacyUrl = '$siteUrl/privacidade.html';
@@ -38,7 +38,7 @@ class AppConfig {
 
   /// O site de apresentação, onde moram os guias. **Outro endereço** que o
   /// [siteUrl] (que, apesar do nome, é o do app, onde ficam as páginas legais).
-  static const String publicSiteUrl = 'https://pauta-louvor.up.railway.app';
+  static const String publicSiteUrl = 'https://pautalouvor.com.br';
 
   /// O passo a passo de quem lidera, aberto pelo fim do tour do líder e pela
   /// Ajuda. Descreve o app de hoje: mudou um fluxo, muda o guia junto.
