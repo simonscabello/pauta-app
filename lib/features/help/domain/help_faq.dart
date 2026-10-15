@@ -100,12 +100,14 @@ const helpFaq = <FaqEntry>[
   ),
   FaqEntry(
     question: 'Esqueci minha senha. Como entro?',
-    answer: 'Na tela de entrada, toque em **Esqueci minha senha**. Quem lidera '
-        'a sua equipe cria uma senha temporária para você, e o Pauta já '
-        'mostra o recado pronto para mandar pelo WhatsApp.\n\n'
-        'Ao entrar com a senha temporária, o Pauta pede para você escolher '
-        'uma nova. Não crie outra conta: as suas escalas estão na que você '
-        'já tem.',
+    answer: 'Na tela de entrada, toque em **Esqueci minha senha** e informe o '
+        'e-mail da sua conta. Chega um código de 6 números, que vale 15 '
+        'minutos: digite o código e a senha nova, e o Pauta já entra. Se o '
+        'e-mail não aparecer, confira a caixa de spam.\n\n'
+        'Sem acesso ao e-mail? Na mesma tela, toque em **Peça a quem '
+        'lidera**: quem lidera a sua equipe cria uma senha temporária, e o '
+        'Pauta já mostra o recado pronto para mandar pelo WhatsApp. Não crie '
+        'outra conta: as suas escalas estão na que você já tem.',
   ),
   FaqEntry(
     question: 'Como altero meus dados ou preferências?',
@@ -220,6 +222,7 @@ const leaderHelpFaq = <FaqEntry>[
         'senha**. O Pauta mostra uma senha temporária uma única vez, com '
         'botões para copiar e mandar pelo WhatsApp.\n\n'
         'Ao entrar com ela, a pessoa escolhe uma senha nova. A opção só '
-        'aparece para quem já tem conta.',
+        'aparece para quem já tem conta. Quem tem acesso ao próprio e-mail '
+        'também pode recuperar sozinho, em **Esqueci minha senha**.',
   ),
 ];

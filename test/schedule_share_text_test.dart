@@ -153,6 +153,30 @@ void main() {
     expect('Josy'.allMatches(text).length, 1);
   });
 
+  test('quem ministra e dirige o culto leva o selo uma vez só', () {
+    final event = Event.fromJson({
+      'id': 'e-selo',
+      'teamId': 't1',
+      'startsAt': '2026-10-15T22:30:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': 'America/Sao_Paulo',
+      'minister': {'membershipId': 'ana', 'displayName': 'Ana'},
+      'assignments': [
+        funcao('Vocal', 'VOCAL', 1, [membro('ana', 'Ana')]),
+        funcao('Violão', 'INSTRUMENT', 2, [membro('marcos', 'Marcos')]),
+        funcao('Multimídia', 'TECH', 3, [membro('laudiceia', 'Laudiceia')]),
+        funcao('Direção do culto', 'OTHER', 4, [membro('ana', 'Ana')]),
+      ],
+      'songs': [],
+    });
+
+    final text = buildScheduleShareText(event);
+
+    expect(text, contains('*Vocal:* Ana (ministrante)\n'));
+    expect(text, contains('*Direção do culto:* Ana\n'));
+    expect('ministrante'.allMatches(text).length, 1);
+  });
+
   test('recado do líder divide o parêntese com o instrumento', () {
     final event = Event.fromJson({
       'id': 'e-recado',

@@ -17,14 +17,13 @@ String forgotPasswordMessage(String email) {
       'senha".$conta';
 }
 
-/// "Esqueci minha senha", no login.
+/// Pedir uma senha temporária a quem lidera a equipe.
 ///
-/// **Não há e-mail de recuperação no Pauta**: quem cria uma senha temporária é
-/// quem lidera a equipe, pelo menu do integrante (`Redefinir senha`). O
-/// caminho existia, mas o login não dizia nada sobre ele — oferecia só "Criar
-/// agora" e "Problemas para conectar?", e quem tem pouca familiaridade
-/// desistia ou criava uma segunda conta. A folha diz o caminho e já entrega o
-/// recado escrito, para mandar pelo WhatsApp.
+/// Era o único "Esqueci minha senha" até o código por e-mail
+/// (`ForgotPasswordScreen`); hoje é a saída de quem não tem acesso ao e-mail e
+/// a do servidor sem e-mail configurado. Quem cria a senha temporária é quem
+/// lidera, pelo menu do integrante (`Redefinir senha`); a folha diz o caminho
+/// e já entrega o recado escrito, para mandar pelo WhatsApp.
 Future<void> showForgotPasswordSheet(
   BuildContext context, {
   String email = '',

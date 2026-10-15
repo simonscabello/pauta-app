@@ -53,6 +53,33 @@ class AuthRepository {
     }
   }
 
+  /// Pede o código de "Esqueci minha senha". A API responde igual exista a
+  /// conta ou não; devolve quantos minutos o código vale.
+  Future<int> requestPasswordReset(String email) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/forgot-password',
+        data: {'email': email},
+      );
+      return (response.data?['expiresInMinutes'] as num?)?.toInt() ?? 15;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// Troca a senha com o código do e-mail e já devolve a sessão.
+  Future<Session> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) {
+    return _post('/auth/reset-password', {
+      'email': email,
+      'code': code,
+      'newPassword': newPassword,
+    });
+  }
+
   Future<Session> changePassword({
     required String currentPassword,
     required String newPassword,

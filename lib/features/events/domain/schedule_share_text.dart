@@ -91,7 +91,9 @@ String _shareDate(DateTime utc, String timezone) {
 /// linha: melhor não juntar do que juntar errado.
 ///
 /// **Quem ministra vem primeiro na própria função**, com "(ministrante)" ao
-/// lado. Já está escalado ali; a linha separada repetiria o nome.
+/// lado. Já está escalado ali; a linha separada repetiria o nome. O selo vai
+/// **uma vez**, na primeira linha em que a pessoa aparece: quem ministra e
+/// dirige o culto lia "Ana (ministrante)" nas duas.
 void _writeTeam(StringBuffer buffer, Event event) {
   buffer.writeln();
 
@@ -105,10 +107,28 @@ void _writeTeam(StringBuffer buffer, Event event) {
   final ministranteId = event.minister?.membershipId;
   var ministranteEscalado = false;
 
-  String pessoa(AssignmentMember member, {String? instrumento}) {
+  // A linha dos instrumentos fica onde estaria o primeiro instrumento: se o
+  // primeiro grupo com quem ministra é instrumento, o selo vai para o
+  // primeiro instrumento dela.
+  bool temMinistrante(AssignmentGroup g) =>
+      g.members.any((m) => m.membershipId == ministranteId);
+  final primeiro = event.assignments.where(temMinistrante).firstOrNull;
+  final grupoDoSelo = primeiro != null && primeiro.isInstrument
+      ? event.assignments
+          .where((g) => g.isInstrument && temMinistrante(g))
+          .firstOrNull
+      : primeiro;
+
+  String pessoa(
+    AssignmentMember member,
+    AssignmentGroup group, {
+    String? instrumento,
+  }) {
     final detalhes = <String>[
       if (instrumento != null) instrumento,
-      if (ministranteId != null && member.membershipId == ministranteId)
+      if (ministranteId != null &&
+          member.membershipId == ministranteId &&
+          identical(group, grupoDoSelo))
         'ministrante',
       // O recado que o líder escreveu para aquela pessoa ("chega 8h30"): é
       // dirigido a alguém, e fora da linha dela vira aviso de ninguém.
@@ -130,7 +150,7 @@ void _writeTeam(StringBuffer buffer, Event event) {
   final instrumentistas = [
     for (final group in event.assignments.where((g) => g.isInstrument))
       for (final member in ministranteNaFrente(group.members))
-        pessoa(member, instrumento: _lowerFirst(group.positionName)),
+        pessoa(member, group, instrumento: _lowerFirst(group.positionName)),
   ];
   var instrumentosEscritos = false;
 
@@ -144,7 +164,8 @@ void _writeTeam(StringBuffer buffer, Event event) {
       continue;
     }
     final pessoas = [
-      for (final member in ministranteNaFrente(group.members)) pessoa(member),
+      for (final member in ministranteNaFrente(group.members))
+        pessoa(member, group),
     ];
     if (pessoas.isEmpty) continue;
     buffer.writeln('${_bold('${group.positionName}:')} ${pessoas.join(', ')}');

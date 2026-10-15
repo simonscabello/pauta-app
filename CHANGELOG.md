@@ -7,6 +7,20 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.42.0 — 15/10/2026
+
+### Novidades
+- Esqueci minha senha: informe o seu e-mail, receba um código e crie uma
+  senha nova sozinho. Ao salvar, você já entra no app.
+
+### Melhorias
+- Sem acesso ao e-mail, o recado para pedir a senha a quem lidera continua
+  na mesma tela.
+
+### Correções
+- Texto da escala: "(ministrante)" aparece uma vez só, na primeira função de
+  quem ministra.
+
 ## 0.41.0 — 15/10/2026
 
 ### Novidades

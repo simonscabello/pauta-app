@@ -8,6 +8,7 @@ import '../../features/ai_assistants/presentation/ai_assistants_screen.dart';
 import '../../features/ai_assistants/presentation/new_ai_key_screen.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/change_password_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
@@ -82,7 +83,12 @@ DateTime? _parseDate(String? value) {
 }
 
 /// Rotas acessiveis sem sessao.
-const _publicRoutes = {'/login', '/cadastro', '/diagnostico'};
+const _publicRoutes = {
+  '/login',
+  '/cadastro',
+  '/esqueci-senha',
+  '/diagnostico',
+};
 
 /// Enquanto a senha não for trocada, so estas rotas respondem -- espelha o que
 /// o backend permite via @SkipPasswordChangeCheck.
@@ -234,6 +240,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/cadastro', builder: (_, __) => const RegisterScreen()),
+      GoRoute(
+        path: '/esqueci-senha',
+        builder: (_, state) => ForgotPasswordScreen(
+          initialEmail: state.extra is String ? state.extra! as String : '',
+        ),
+      ),
       GoRoute(
         path: '/trocar-senha',
         builder: (_, __) => const ChangePasswordScreen(),

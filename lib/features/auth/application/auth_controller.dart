@@ -111,6 +111,29 @@ class AuthController extends StateNotifier<AuthState> {
     Future<void> Function(AuthUser user)? onAuthenticated,
   }) async {
     final session = await _repository.login(email: email, password: password);
+    await _signIn(session, onAuthenticated: onAuthenticated);
+  }
+
+  /// "Esqueci minha senha": o código do e-mail troca a senha e já entra.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    final session = await _repository.resetPassword(
+      email: email,
+      code: code,
+      newPassword: newPassword,
+    );
+    await _signIn(session);
+  }
+
+  /// Entrada a partir de uma sessão nova vinda do servidor (login ou senha
+  /// recuperada).
+  Future<void> _signIn(
+    Session session, {
+    Future<void> Function(AuthUser user)? onAuthenticated,
+  }) async {
     // Quem entra pela senha com uma sessao ainda guardada (tela bloqueada pela
     // biometria, ou sem rede na abertura) deixaria o refresh antigo valido no
     // servidor por semanas. Revoga antes de sobrescrever.

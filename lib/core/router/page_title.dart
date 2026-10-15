@@ -13,6 +13,7 @@ String pageTitleFor(String path) {
     [] => 'Pauta',
     ['login'] => 'Entrar',
     ['cadastro'] => 'Criar conta',
+    ['esqueci-senha'] => 'Esqueci minha senha',
     ['desbloquear'] => 'Desbloquear',
     ['trocar-senha'] => 'Trocar senha',
     ['diagnostico'] => 'Diagnóstico de conexão',

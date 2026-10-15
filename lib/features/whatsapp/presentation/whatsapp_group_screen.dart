@@ -320,8 +320,8 @@ class _AnswersSwitch extends StatelessWidget {
       ),
       title: const Text('Responder quando marcarem o Pauta'),
       subtitle: const Text(
-        'Quem estiver no grupo escreve @Pauta e recebe a próxima escala, as '
-        'músicas, o ensaio ou a agenda do mês. Só o que já foi publicado.',
+        'Quem estiver no grupo escreve @Pauta e recebe a próxima escala, a '
+        'de domingo ou as escalas do mês. Só o que já foi publicado.',
       ),
       value: enabled,
       onChanged: busy ? null : onChanged,
