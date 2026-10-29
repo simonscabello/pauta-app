@@ -7,6 +7,20 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.43.0 — 29/10/2026
+
+### Novidades
+- "Denunciar" na música do repertório de outra equipe (ao adicionar música) e
+  na foto de perfil de quem está na equipe.
+
+### Melhorias
+- O app passa a falar com `api.pautalouvor.com.br`, e as páginas legais e os
+  guias abrem em `pautalouvor.com.br`.
+- Política de privacidade e termos com o responsável e o e-mail de contato
+  (`contato@pautalouvor.com.br`).
+- A Ajuda e a tela da chave do assistente de IA dizem que ele também cadastra
+  músicas e marca quem não pode.
+
 ## 0.42.0 — 15/10/2026
 
 ### Novidades
