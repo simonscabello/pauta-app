@@ -12,6 +12,12 @@ class AppConfig {
     defaultValue: 'http://10.0.2.2:3000',
   );
 
+  /// O build da Google Play (`--dart-define=DISTRIBUTION=play`). App da loja
+  /// não pode mandar baixar APK (política de Abuso de Dispositivo e Rede): a
+  /// Play atualiza sozinha, e o aviso de versão nova some.
+  static const bool isPlayStore =
+      String.fromEnvironment('DISTRIBUTION') == 'play';
+
   /// Prefixo das rotas de negocio. /health fica fora dele.
   static const String apiUrl = '$apiBaseUrl/api/v1';
 

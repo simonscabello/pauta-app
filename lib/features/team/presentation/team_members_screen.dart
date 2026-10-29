@@ -7,6 +7,7 @@ import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/widgets/report_content_sheet.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -648,7 +649,6 @@ class _MemberMenu extends ConsumerWidget {
   }
 }
 
-
 /// A folha que abre ao tocar numa pessoa: falar com ela, e editar para quem
 /// lidera.
 ///
@@ -725,6 +725,25 @@ Future<void> _showMemberSheet(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                ),
+              // A foto foi a pessoa que pôs, não a liderança: denunciar é de
+              // todo mundo, e vai para o Pauta, não para a equipe.
+              if (member.hasAccount && member.avatarUrl != null)
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                  ),
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Denunciar foto'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    showReportContentSheet(
+                      context,
+                      kind: ReportKind.profilePhoto,
+                      targetId: member.id,
+                      subject: member.displayName,
+                    );
+                  },
                 ),
               if (canManage)
                 ListTile(

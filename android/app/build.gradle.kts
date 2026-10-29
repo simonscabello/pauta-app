@@ -1,4 +1,5 @@
 import java.io.FileInputStream
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -19,6 +20,15 @@ if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// O build da Google Play (`--dart-define=DISTRIBUTION=play`) é outro app no
+// aparelho: o do GitHub continua em `br.com.escalas.louvor_app`, e quem o tem
+// instalado segue recebendo o APK. O Flutter repassa os dart-defines ao Gradle
+// em base64, separados por vírgula.
+val isPlayBuild = (project.findProperty("dart-defines") as String?)
+    ?.split(",")
+    ?.any { String(Base64.getDecoder().decode(it)) == "DISTRIBUTION=play" }
+    ?: false
+
 android {
     namespace = "br.com.escalas.louvor_app"
     compileSdk = flutter.compileSdkVersion
@@ -36,7 +46,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "br.com.escalas.louvor_app"
+        applicationId = if (isPlayBuild) "br.com.pautalouvor.app" else "br.com.escalas.louvor_app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

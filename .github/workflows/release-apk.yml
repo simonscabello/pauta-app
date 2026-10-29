@@ -164,6 +164,18 @@ jobs:
           flutter build apk --release --split-per-abi \
             --dart-define=API_BASE_URL=https://api.pautalouvor.com.br
 
+      # O pacote da Google Play: outro app (br.com.pautalouvor.app), sem o
+      # aviso de baixar APK. Assinado com a mesma chave, que na Play é a de
+      # upload; a de verdade fica com o Google (Play App Signing). O envio ao
+      # Console ainda é à mão, pelo arquivo anexado ao Release.
+      - name: Build do AAB da Play
+        run: |
+          flutter build appbundle --release \
+            --dart-define=API_BASE_URL=https://api.pautalouvor.com.br \
+            --dart-define=DISTRIBUTION=play
+          cp build/app/outputs/bundle/release/app-release.aab \
+            "build/app/outputs/flutter-apk/pauta-play-${{ steps.tag.outputs.version }}.aab"
+
       - name: Nomear os arquivos com a versão
         id: artefatos
         run: |
@@ -207,9 +219,9 @@ jobs:
           )
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" louve*.apk --clobber
+            gh release upload "$TAG" louve*.apk pauta-play-*.aab --clobber
           else
-            gh release create "$TAG" louve*.apk \
+            gh release create "$TAG" louve*.apk pauta-play-*.aab \
               --title "Pauta $V" \
               --notes "$NOTAS"
           fi

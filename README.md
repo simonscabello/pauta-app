@@ -7,7 +7,9 @@ modelos e a mesma API.
 
 O pacote Dart continua se chamando `louvor_app` e o `applicationId` do Android
 continua o mesmo: são identificadores de instalação e assinatura, não marca.
-Trocá-los publicaria outro aplicativo.
+Trocá-los publicaria outro aplicativo. A exceção é o build da Google Play
+(`--dart-define=DISTRIBUTION=play`), que é outro app de propósito:
+`br.com.pautalouvor.app`, sem o aviso de baixar APK.
 
 Projeto **independente** do backend: só se comunicam por HTTP. Arquitetura e
 convenções: o `AGENTS.md` e a pasta `docs/` do repositório

@@ -8,6 +8,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/report_content_sheet.dart';
 import '../../../shared/widgets/app_bottom_action_bar.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_content_width.dart';
@@ -655,6 +656,23 @@ class _CatalogTile extends StatelessWidget {
               ),
             ),
             Icon(Icons.add_rounded, color: scheme.onSurfaceVariant),
+            // A música é de outra equipe: quem procura não a escreveu.
+            PopupMenuButton<void>(
+              tooltip: 'Opções de ${item.title}',
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  onTap: () => showReportContentSheet(
+                    context,
+                    kind: ReportKind.catalogSong,
+                    targetId: item.sourceSongId,
+                    subject: [item.title, item.artist]
+                        .whereType<String>()
+                        .join(' · '),
+                  ),
+                  child: const Text('Denunciar'),
+                ),
+              ],
+            ),
           ],
         ),
       ),

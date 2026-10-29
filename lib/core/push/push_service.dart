@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/app_config.dart';
 import '../platform/web_bridge.dart';
 
 /// O canal em que o aviso aparece no Android.
@@ -96,8 +97,13 @@ class PushService {
   static String get browserPermission =>
       kIsWeb ? WebBridge.pushPermission : 'unsupported';
 
-  /// Como o servidor chama este tipo de aparelho.
-  String get platform => kIsWeb ? 'web' : 'android';
+  /// Como o servidor chama este tipo de aparelho. O app da Play tem nome
+  /// próprio para não receber o aviso de baixar o APK novo.
+  String get platform => kIsWeb
+      ? 'web'
+      : AppConfig.isPlayStore
+          ? 'android-play'
+          : 'android';
 
   /// Na Web, o pedido de permissao precisa nascer de um toque (o Safari
   /// recusa o que nao nasce). A tela oferece um botao em vez de perguntar

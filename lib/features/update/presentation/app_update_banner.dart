@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_feedback.dart';
@@ -37,6 +38,7 @@ class AppUpdateBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (AppConfig.isPlayStore) return const SizedBox.shrink();
     final update = ref.watch(appUpdateProvider).valueOrNull;
     if (update == null || !update.updateAvailable) {
       return const SizedBox.shrink();
