@@ -133,8 +133,9 @@ const helpFaq = <FaqEntry>[
         'com o endereço e o cabeçalho que o Pauta mostra.\n\n'
         'O assistente consulta o que você já vê no app. Ele só grava alguma '
         'coisa se a chave for criada com **Também criar escalas** — opção de '
-        'quem lidera —, e mesmo assim só monta, edita e publica escalas e põe '
-        'as músicas nelas quando você pede. O Claude no navegador e no '
+        'quem lidera —, e mesmo assim só monta, edita e publica escalas, põe '
+        'as músicas nelas, cadastra e edita músicas do repertório e marca '
+        'quem não pode quando você pede. O Claude no navegador e no '
         'celular e o ChatGPT ainda não aceitam chave.\n\n'
         'Para desconectar, abra o menu da chave e toque em **Revogar chave**. '
         'Trocar a senha desconecta todos os assistentes de uma vez.',
