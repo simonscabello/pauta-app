@@ -7,6 +7,20 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.45.0 — 21/11/2026
+
+### Novidades
+- "Aparência da leitura" na letra e na cifra: tamanho da letra, fundo
+  (escuro, claro, papel ou preto) e a cor dos acordes, guardados no
+  aparelho.
+
+### Melhorias
+- A cifra ocupa quase a tela inteira: uma barra só no topo, o título numa
+  linha e anterior, próxima e a rolagem numa faixa fina embaixo, sem botões
+  por cima da letra.
+- Acordes em laranja e em negrito, com mais contraste sobre o fundo e a
+  letra.
+
 ## 0.44.0 — 20/11/2026
 
 ### Novidades

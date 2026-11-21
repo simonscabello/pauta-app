@@ -11,11 +11,9 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
-import '../../../shared/widgets/app_bottom_action_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
-import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
@@ -24,7 +22,7 @@ import '../data/song_repository.dart';
 import '../domain/chord_sheet.dart';
 import '../domain/musical_keys.dart';
 import '../domain/song_models.dart';
-import '../../../shared/widgets/app_detail_header.dart';
+import 'reader_appearance.dart';
 import '../../../shared/widgets/open_link.dart';
 
 /// O tamanho da letra no modo leitura, guardado no aparelho.
@@ -115,16 +113,23 @@ final lyricsScrollSpeedProvider =
   return LyricsScrollSpeedController(prefs);
 });
 
-/// A lista do leitor com a rolagem automática: tocar/pausar e a velocidade,
-/// flutuando no canto, longe da barra do topo.
+/// A lista do leitor com a rolagem automática: tocar/pausar e a velocidade
+/// numa faixa fina embaixo, junto do "Próxima" ([navigation]). Antes eles
+/// flutuavam sobre a letra e o "Próxima" ocupava uma barra própria, e a cifra
+/// ficava com pouco mais da metade da tela.
 ///
 /// Pausa quando a pessoa toca ou arrasta a letra, para no fim e, quando
 /// parou no fim, recomeça do topo na música seguinte ([restartKey]).
 class _AutoScrollList extends ConsumerStatefulWidget {
-  const _AutoScrollList({required this.restartKey, required this.children});
+  const _AutoScrollList({
+    required this.restartKey,
+    required this.children,
+    this.navigation,
+  });
 
   final Object restartKey;
   final List<Widget> children;
+  final Widget? navigation;
 
   @override
   ConsumerState<_AutoScrollList> createState() => _AutoScrollListState();
@@ -183,52 +188,63 @@ class _AutoScrollListState extends ConsumerState<_AutoScrollList>
   @override
   Widget build(BuildContext context) {
     final speed = ref.watch(lyricsScrollSpeedProvider);
+    final scheme = Theme.of(context).colorScheme;
 
-    return Stack(
+    return Column(
       children: [
-        Listener(
-          onPointerDown: (_) => _stop(),
-          onPointerSignal: (_) => _stop(),
-          child: ListView(
-            key: ValueKey(widget.restartKey),
-            controller: _scroll,
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenPadding,
-              AppSpacing.lg,
-              AppSpacing.screenPadding,
-              AppSpacing.fabClearance,
+        Expanded(
+          child: Listener(
+            onPointerDown: (_) => _stop(),
+            onPointerSignal: (_) => _stop(),
+            child: ListView(
+              key: ValueKey(widget.restartKey),
+              controller: _scroll,
+              // Margem menor que a das outras telas: cada coluna a mais é uma
+              // linha de cifra que deixa de quebrar em duas.
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.xl,
+              ),
+              children: widget.children,
             ),
-            children: widget.children,
           ),
         ),
-        Positioned(
-          right: AppSpacing.lg,
-          bottom: AppSpacing.lg,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Tooltip(
-                message: 'Velocidade da rolagem',
-                child: FilledButton.tonalIcon(
-                  onPressed: ref.read(lyricsScrollSpeedProvider.notifier).next,
-                  icon: const Icon(Icons.speed_rounded),
-                  label: Text(
-                    '${speed + 1}',
-                    semanticsLabel: 'Velocidade da rolagem: ${speed + 1} de '
-                        '${LyricsScrollSpeedController.levels.length}',
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                Expanded(child: widget.navigation ?? const SizedBox.shrink()),
+                Tooltip(
+                  message: 'Velocidade da rolagem',
+                  child: TextButton.icon(
+                    onPressed:
+                        ref.read(lyricsScrollSpeedProvider.notifier).next,
+                    icon: const Icon(Icons.speed_rounded),
+                    label: Text(
+                      '${speed + 1}',
+                      semanticsLabel: 'Velocidade da rolagem: ${speed + 1} de '
+                          '${LyricsScrollSpeedController.levels.length}',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              FloatingActionButton(
-                heroTag: null,
-                tooltip: _playing ? 'Pausar a rolagem' : 'Rolar sozinho',
-                onPressed: () => _playing ? _stop() : setState(_start),
-                child: Icon(
-                  _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                IconButton.filled(
+                  tooltip: _playing ? 'Pausar a rolagem' : 'Rolar sozinho',
+                  onPressed: () => _playing ? _stop() : setState(_start),
+                  icon: Icon(
+                    _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -276,24 +292,32 @@ class _KeepScreenOnState extends State<KeepScreenOn> {
   Widget build(BuildContext context) => widget.child;
 }
 
-/// A− e A+ na barra do topo da letra.
+/// A− e A+ da folha de aparência, com o tamanho atual entre eles.
 class LyricsFontButtons extends ConsumerWidget {
   const LyricsFontButtons({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(lyricsScaleProvider);
+    final scale = ref.watch(lyricsScaleProvider);
     final controller = ref.read(lyricsScaleProvider.notifier);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
+        IconButton.outlined(
           tooltip: 'Diminuir a letra',
           icon: const Icon(Icons.text_decrease_rounded),
           onPressed: controller.canShrink ? controller.shrink : null,
         ),
-        IconButton(
+        SizedBox(
+          width: 64,
+          child: Text(
+            '${(scale * 100).round()}%',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        IconButton.outlined(
           tooltip: 'Aumentar a letra',
           icon: const Icon(Icons.text_increase_rounded),
           onPressed: controller.canGrow ? controller.grow : null,
@@ -317,7 +341,7 @@ class LyricsText extends ConsumerWidget {
     return SelectableText(
       lyrics.trim(),
       style: base?.copyWith(
-        height: 1.7,
+        height: 1.5,
         fontSize: (base.fontSize ?? 16) * scale,
       ),
     );
@@ -332,6 +356,9 @@ String? _readerTarget(String? initialKey, String? writtenKey, int? steps) {
   return base == null ? null : shiftMusicalKey(base, steps);
 }
 
+/// Uma barra só: o tom (na cifra), a aparência e o site. O tom e o A−/A+
+/// tinham uma segunda barra embaixo desta; o tamanho da letra, que se acerta
+/// uma vez e fica guardado, foi para a folha de aparência.
 AppBar _readerAppBar(
   BuildContext context, {
   required String title,
@@ -342,10 +369,16 @@ AppBar _readerAppBar(
 }) {
   return AppBar(
     title: Text(title),
-    bottom:
-        chordMode ? _ChordKeyBar(currentKey: currentKey, onStep: onStep) : null,
     actions: [
-      if (!chordMode) const LyricsFontButtons(),
+      if (chordMode) _KeyStepper(currentKey: currentKey, onStep: onStep),
+      IconButton(
+        tooltip: 'Aparência da leitura',
+        icon: const Icon(Icons.palette_outlined),
+        onPressed: () => showReaderAppearanceSheet(
+          context,
+          fontButtons: const LyricsFontButtons(),
+        ),
+      ),
       if (url?.trim().isNotEmpty ?? false)
         IconButton(
           tooltip: 'Abrir no site',
@@ -356,43 +389,81 @@ AppBar _readerAppBar(
   );
 }
 
-class _ChordKeyBar extends StatelessWidget implements PreferredSizeWidget {
-  const _ChordKeyBar({required this.currentKey, required this.onStep});
+class _KeyStepper extends StatelessWidget {
+  const _KeyStepper({required this.currentKey, required this.onStep});
 
   final String? currentKey;
   final ValueChanged<int>? onStep;
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-
-  @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: 'Baixar meio tom',
-              icon: const Icon(Icons.remove),
-              onPressed: onStep == null ? null : () => onStep!(-1),
-            ),
-            Text(
-              currentKey ?? '—',
-              semanticsLabel: currentKey == null
-                  ? 'Tom desconhecido'
-                  : musicalKeySpokenLabel(currentKey!),
-            ),
-            IconButton(
-              tooltip: 'Subir meio tom',
-              icon: const Icon(Icons.add),
-              onPressed: onStep == null ? null : () => onStep!(1),
-            ),
-          ],
+        IconButton(
+          tooltip: 'Baixar meio tom',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.remove),
+          onPressed: onStep == null ? null : () => onStep!(-1),
         ),
-        const LyricsFontButtons(),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 28),
+          child: Text(
+            currentKey ?? '—',
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+            semanticsLabel: currentKey == null
+                ? 'Tom desconhecido'
+                : musicalKeySpokenLabel(currentKey!),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Subir meio tom',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.add),
+          onPressed: onStep == null ? null : () => onStep!(1),
+        ),
       ],
+    );
+  }
+}
+
+/// O título da música e uma linha de detalhes, no lugar do título grande com
+/// divisória: o leitor é para tocar, e o que importa é a primeira estrofe
+/// aparecer sem rolar.
+List<Widget> _readerHeader(BuildContext context, String title, String details) {
+  final theme = Theme.of(context);
+  return [
+    Text(
+      title,
+      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+    ),
+    if (details.isNotEmpty)
+      Text(
+        details,
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    const SizedBox(height: AppSpacing.md),
+  ];
+}
+
+/// O leitor com o fundo que a pessoa escolheu (ou o escuro/claro do app).
+class _ReaderThemed extends ConsumerWidget {
+  const _ReaderThemed({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final chosen = ref.watch(readerAppearanceProvider).palette;
+    return Theme(
+      data: readerTheme(resolveReaderPalette(context, chosen)),
+      child: child,
     );
   }
 }
@@ -416,13 +487,21 @@ class ChordSheetView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scale = ref.watch(lyricsScaleProvider);
+    final chordColor = ref.watch(readerAppearanceProvider).chordColor;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final base = theme.textTheme.bodyLarge!;
-    final lyricsStyle = base.copyWith(fontSize: base.fontSize! * scale);
+    // Entrelinha curta: o acorde fica colado à sílaba dele, e cada par
+    // acorde/letra ocupa menos altura — menos rolagem durante a música.
+    final lyricsStyle = base.copyWith(
+      fontSize: base.fontSize! * scale,
+      height: 1.3,
+      color: scheme.onSurface,
+    );
     final chordStyle = lyricsStyle.copyWith(
-      color: scheme.primary,
-      fontWeight: FontWeight.bold,
+      color: chordColor.on(theme.brightness),
+      fontWeight: FontWeight.w800,
+      height: 1.15,
     );
 
     if (chords?.trim().isEmpty ?? true) {
@@ -442,13 +521,19 @@ class ChordSheetView extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Uma linha discreta, e não um cartão: o tom já está na barra.
         if (normalizeMusicalKey(sourceKey) == null ||
             normalizeMusicalKey(targetKey) == null)
-          AppNotice(
-            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-            message: sourceKey?.trim().isNotEmpty == true
-                ? 'A cifra está como foi escrita, em $sourceKey.'
-                : 'O tom em que a cifra foi escrita não foi informado.',
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              sourceKey?.trim().isNotEmpty == true
+                  ? 'A cifra está como foi escrita, em $sourceKey.'
+                  : 'O tom em que a cifra foi escrita não foi informado.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ),
         for (final line in parseChordSheet(sheet))
           _chordLine(line, lyricsStyle, chordStyle, scheme.onSurfaceVariant),
@@ -649,6 +734,12 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return KeepScreenOn(
+      child: _ReaderThemed(child: Builder(builder: _buildScreen)),
+    );
+  }
+
+  Widget _buildScreen(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final atual = widget.songs[_index];
@@ -660,16 +751,32 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
     final proxima =
         _index < widget.songs.length - 1 ? widget.songs[_index + 1] : null;
 
-    final previousButton = anterior == null
+    // Anterior só com o ícone; o "Próxima" diz qual é, que é o que se
+    // procura no meio do culto.
+    final navigation = widget.songs.length < 2
         ? null
-        : Align(
-            alignment: Alignment.centerLeft,
-            heightFactor: 1,
-            child: TextButton.icon(
-              onPressed: () => _move(-1),
-              icon: const Icon(Icons.chevron_left_rounded),
-              label: const Text('Anterior'),
-            ),
+        : Row(
+            children: [
+              IconButton(
+                tooltip:
+                    anterior == null ? null : 'Anterior: ${anterior.title}',
+                icon: const Icon(Icons.chevron_left_rounded),
+                onPressed: anterior == null ? null : () => _move(-1),
+              ),
+              if (proxima != null)
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: () => _move(1),
+                    iconAlignment: IconAlignment.end,
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    label: Text(
+                      'Próxima: ${proxima.title}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+            ],
           );
 
     final title = widget.chordMode ? 'Cifra' : 'Letra';
@@ -694,135 +801,103 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
         ? target
         : null;
     final detalhes = [
+      if (widget.songs.length > 1) '${_index + 1} de ${widget.songs.length}',
       if (atual.hymnal != null) atual.hymnal!.label,
       if (!widget.chordMode && (atualKey?.isNotEmpty ?? false)) 'Tom $atualKey',
       if (atual.momentText != null) atual.momentText!,
     ].join(' · ');
 
-    return KeepScreenOn(
-      child: Scaffold(
-        appBar: _readerAppBar(
-          context,
-          title: widget.songs.length > 1
-              ? '$title · ${_index + 1} de ${widget.songs.length}'
-              : title,
-          chordMode: widget.chordMode,
-          url: widget.chordMode
-              ? (song?.hasChords == false
-                  ? null
-                  : song?.chordsUrl ?? atual.chordsUrl)
-              : atual.lyricsUrl,
-          currentKey: sourceKey == null ? null : target ?? sourceKey,
-          onStep: sourceKey != null && song!.hasChords
-              ? (step) => setState(() => _steps = (_steps ?? 0) + step)
-              : null,
-        ),
-        bottomNavigationBar: widget.songs.length < 2
-            ? null
-            : AppBottomActionBar(
-                leading: proxima == null ? null : previousButton,
-                action: proxima == null
-                    ? previousButton!
-                    : FilledButton.icon(
-                        onPressed: () => _move(1),
-                        iconAlignment: IconAlignment.end,
-                        icon: const Icon(Icons.chevron_right_rounded),
-                        label: Text(
-                          'Próxima: ${proxima.title}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-              ),
-        body: SafeArea(
-          top: false,
-          child: AppContentWidth.reading(
-            child: Column(
-              children: [
-                if (cachedAt != null) CacheStampBanner(cachedAt: cachedAt),
-                if (offerKey != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.screenPadding,
-                      AppSpacing.sm,
-                      AppSpacing.screenPadding,
-                      0,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      heightFactor: 1,
-                      child: TextButton.icon(
-                        onPressed: _savingKey
-                            ? null
-                            : () => _useForAll(atual, offerKey),
-                        icon: const Icon(Icons.groups_outlined),
-                        label: Text('Usar $offerKey para todos'),
-                      ),
-                    ),
+    return Scaffold(
+      appBar: _readerAppBar(
+        context,
+        title: title,
+        chordMode: widget.chordMode,
+        url: widget.chordMode
+            ? (song?.hasChords == false
+                ? null
+                : song?.chordsUrl ?? atual.chordsUrl)
+            : atual.lyricsUrl,
+        currentKey: sourceKey == null ? null : target ?? sourceKey,
+        onStep: sourceKey != null && song!.hasChords
+            ? (step) => setState(() => _steps = (_steps ?? 0) + step)
+            : null,
+      ),
+      body: SafeArea(
+        top: false,
+        child: AppContentWidth.reading(
+          child: Column(
+            children: [
+              if (cachedAt != null) CacheStampBanner(cachedAt: cachedAt),
+              if (offerKey != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.xs,
+                    AppSpacing.md,
+                    0,
                   ),
-                Expanded(
-                  child: _AutoScrollList(
-                    restartKey: atual.songId,
-                    children: [
-                      Text(atual.title, style: theme.textTheme.headlineMedium),
-                      if (detalhes.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          detalhes,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: scheme.primary,
-                          ),
-                        ),
-                      ],
-                      if (atual.note?.isNotEmpty ?? false) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          atual.note!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.lg),
-                      Divider(height: 1, color: scheme.outlineVariant),
-                      const SizedBox(height: AppSpacing.lg),
-                      full.when(
-                        loading: () => const Padding(
-                          padding: EdgeInsets.all(AppSpacing.xl),
-                          child: AppLoading(),
-                        ),
-                        error: (_, __) => AppErrorState(
-                          message:
-                              'Não foi possível carregar a ${title.toLowerCase()}.',
-                          onRetry: () => ref.invalidate(
-                            songProvider(
-                              (teamId: widget.teamId, songId: atual.songId),
-                            ),
-                          ),
-                        ),
-                        data: (cached) => widget.chordMode
-                            ? ChordSheetView(
-                                chords: cached.data.chords,
-                                sourceKey: cached.data.chordsKey,
-                                targetKey: target,
-                                chordsUrl:
-                                    cached.data.chordsUrl ?? atual.chordsUrl,
-                              )
-                            : cached.data.hasLyrics
-                                ? LyricsText(lyrics: cached.data.lyrics!)
-                                : Text(
-                                    'A letra desta música ainda não foi guardada no '
-                                    'Pauta.',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                      ),
-                    ],
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    heightFactor: 1,
+                    child: TextButton.icon(
+                      onPressed:
+                          _savingKey ? null : () => _useForAll(atual, offerKey),
+                      icon: const Icon(Icons.groups_outlined),
+                      label: Text('Usar $offerKey para todos'),
+                    ),
                   ),
                 ),
-              ],
-            ),
+              Expanded(
+                child: _AutoScrollList(
+                  restartKey: atual.songId,
+                  navigation: navigation,
+                  children: [
+                    ..._readerHeader(context, atual.title, detalhes),
+                    if (atual.note?.isNotEmpty ?? false) ...[
+                      Text(
+                        atual.note!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    full.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(AppSpacing.xl),
+                        child: AppLoading(),
+                      ),
+                      error: (_, __) => AppErrorState(
+                        message:
+                            'Não foi possível carregar a ${title.toLowerCase()}.',
+                        onRetry: () => ref.invalidate(
+                          songProvider(
+                            (teamId: widget.teamId, songId: atual.songId),
+                          ),
+                        ),
+                      ),
+                      data: (cached) => widget.chordMode
+                          ? ChordSheetView(
+                              chords: cached.data.chords,
+                              sourceKey: cached.data.chordsKey,
+                              targetKey: target,
+                              chordsUrl:
+                                  cached.data.chordsUrl ?? atual.chordsUrl,
+                            )
+                          : cached.data.hasLyrics
+                              ? LyricsText(lyrics: cached.data.lyrics!)
+                              : Text(
+                                  'A letra desta música ainda não foi guardada no '
+                                  'Pauta.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -859,58 +934,56 @@ class _SongLyricsScreenState extends State<SongLyricsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final song = widget.song;
-    final scheme = theme.colorScheme;
     final url = widget.chordMode ? song.chordsUrl : song.lyricsUrl;
     final sourceKey = normalizeMusicalKey(song.chordsKey);
     final target = _readerTarget(song.defaultKey, sourceKey, _steps);
 
     return KeepScreenOn(
-      child: Scaffold(
-        appBar: _readerAppBar(
-          context,
-          title: widget.chordMode ? 'Cifra' : 'Letra',
-          chordMode: widget.chordMode,
-          url: widget.chordMode && !song.hasChords ? null : url,
-          currentKey: sourceKey == null ? null : target ?? sourceKey,
-          onStep: sourceKey != null && song.hasChords
-              ? (step) => setState(() => _steps = (_steps ?? 0) + step)
-              : null,
-        ),
-        body: SafeArea(
-          top: false,
-          child: AppContentWidth.reading(
-            child: Column(
-              children: [
-                if (widget.cachedAt != null)
-                  CacheStampBanner(cachedAt: widget.cachedAt!),
-                Expanded(
-                  child: _AutoScrollList(
-                    restartKey: song.id,
-                    children: [
-                      Text(
-                        song.displayTitle,
-                        style: theme.textTheme.headlineMedium,
+      child: _ReaderThemed(
+        child: Builder(
+          builder: (context) => Scaffold(
+            appBar: _readerAppBar(
+              context,
+              title: widget.chordMode ? 'Cifra' : 'Letra',
+              chordMode: widget.chordMode,
+              url: widget.chordMode && !song.hasChords ? null : url,
+              currentKey: sourceKey == null ? null : target ?? sourceKey,
+              onStep: sourceKey != null && song.hasChords
+                  ? (step) => setState(() => _steps = (_steps ?? 0) + step)
+                  : null,
+            ),
+            body: SafeArea(
+              top: false,
+              child: AppContentWidth.reading(
+                child: Column(
+                  children: [
+                    if (widget.cachedAt != null)
+                      CacheStampBanner(cachedAt: widget.cachedAt!),
+                    Expanded(
+                      child: _AutoScrollList(
+                        restartKey: song.id,
+                        children: [
+                          ..._readerHeader(
+                            context,
+                            song.displayTitle,
+                            song.subtitle,
+                          ),
+                          if (widget.chordMode)
+                            ChordSheetView(
+                              chords: song.chords,
+                              sourceKey: song.chordsKey,
+                              targetKey: target,
+                              chordsUrl: song.chordsUrl,
+                            )
+                          else
+                            LyricsText(lyrics: song.lyrics ?? ''),
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.xs),
-                      SmallCapsLine(song.subtitle),
-                      const SizedBox(height: AppSpacing.lg),
-                      Divider(height: 1, color: scheme.outlineVariant),
-                      const SizedBox(height: AppSpacing.lg),
-                      if (widget.chordMode)
-                        ChordSheetView(
-                          chords: song.chords,
-                          sourceKey: song.chordsKey,
-                          targetKey: target,
-                          chordsUrl: song.chordsUrl,
-                        )
-                      else
-                        LyricsText(lyrics: song.lyrics ?? ''),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

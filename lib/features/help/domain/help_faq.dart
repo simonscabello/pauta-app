@@ -50,7 +50,9 @@ const helpFaq = <FaqEntry>[
         'volte e toque em **Colar cifra**.\n\n'
         'Aberta pela escala, a cifra muda sozinha quando quem lidera troca o '
         'tom (quem lidera faz isso no próprio leitor, em **Usar … para '
-        'todos**). O botão de tocar, no canto, rola a letra sozinho. A escala '
+        'todos**). O botão de tocar, embaixo, rola a letra sozinho, e o botão '
+        'da paleta, no alto, muda o tamanho da letra, o fundo e a cor dos '
+        'acordes. A escala '
         'que você abriu com internet leva as letras e cifras para o celular, e '
         'elas abrem mesmo sem conexão.\n\n'
         'Se aparecer "Sem link", a equipe ainda não cadastrou aquele material.',

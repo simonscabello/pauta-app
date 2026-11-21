@@ -7,7 +7,6 @@ import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
 import 'package:louvor_app/features/songs/domain/song_models.dart';
 import 'package:louvor_app/features/songs/presentation/lyrics_reader.dart';
-import 'package:louvor_app/shared/widgets/app_notice.dart';
 
 Future<void> _open(
   WidgetTester tester,
@@ -52,8 +51,13 @@ void main() {
     expect(find.text('B/D#'), findsNWidgets(2));
     final fontBefore =
         tester.widget<Text>(find.text('B/D#').first).style!.fontSize!;
+    await tester.tap(find.byTooltip('Aparência da leitura'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Aumentar a letra'));
     await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byTooltip('Aumentar a letra'))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Aumentar a letra'), findsNothing);
     expect(
       tester.widget<Text>(find.text('B/D#').first).style!.fontSize,
       greaterThan(fontBefore),
@@ -77,12 +81,12 @@ void main() {
       chords: sheet,
     );
     await _open(tester, const SongLyricsScreen(song: song, chordMode: true));
-    expect(find.byType(AppNotice), findsOneWidget);
+    expect(find.text('A cifra está como foi escrita, em D.'), findsOneWidget);
     expect(find.text('A/C#'), findsNWidgets(2));
     await tester.tap(find.byTooltip('Baixar meio tom'));
     await tester.pumpAndSettle();
     expect(find.text('Ab/C'), findsNWidgets(2));
-    expect(find.byType(AppNotice), findsNothing);
+    expect(find.textContaining('como foi escrita'), findsNothing);
   });
 
   testWidgets('sem o tom escrito, mantém a cifra original e avisa',
@@ -90,7 +94,10 @@ void main() {
     const song =
         Song(id: '1', title: 'Em tua casa', chords: sheet, defaultKey: 'E');
     await _open(tester, const SongLyricsScreen(song: song, chordMode: true));
-    expect(find.byType(AppNotice), findsOneWidget);
+    expect(
+      find.text('O tom em que a cifra foi escrita não foi informado.'),
+      findsOneWidget,
+    );
     expect(find.text('A/C#'), findsNWidgets(2));
     expect(
       tester
@@ -143,7 +150,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Próxima: Segunda'));
     await tester.pumpAndSettle();
-    expect(find.text('Cifra · 2 de 3'), findsOneWidget);
+    expect(find.text('2 de 3'), findsOneWidget);
     expect(find.text('F/A'), findsOneWidget);
     await tester.tap(find.text('Próxima: Terceira'));
     await tester.pumpAndSettle();
