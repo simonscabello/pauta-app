@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +7,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/read_cache.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
+import '../../songs/data/song_repository.dart';
 import '../domain/event_change.dart';
 import '../domain/event_models.dart';
 import '../domain/service_moments.dart';
@@ -301,6 +304,29 @@ class EventRepository {
     });
   }
 
+  /// O tom que vale em cada música da escala, por `culto:música`. Leve de
+  /// propósito: o leitor de cifra pergunta a cada poucos segundos no ensaio.
+  Future<Map<String, String?>> songKeys(String eventId) async {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>('/events/$eventId/songs');
+      return {
+        for (final item in response.data!.cast<Map<String, dynamic>>())
+          '${item['serviceId']}:${item['songId']}': item['key'] as String?,
+      };
+    });
+  }
+
+  /// Muda só o tom de uma música desta escala, sem avisar a equipe no celular
+  /// — quem está com a cifra aberta vê mudar sozinho.
+  Future<void> setSongKey(String eventId, EventSong song, String? key) async {
+    return _guard(() async {
+      await _dio.patch<void>(
+        '/events/$eventId/songs/${song.songId}',
+        data: {'serviceId': song.serviceId, 'keyOverride': key},
+      );
+    });
+  }
+
   Future<T> _guard<T>(Future<T> Function() request) async {
     try {
       return await request();
@@ -349,7 +375,18 @@ final eventHistoryProvider =
 
 final eventProvider =
     FutureProvider.autoDispose.family<CachedValue<Event>, String>(
-  (ref, eventId) {
-    return ref.watch(eventRepositoryProvider).find(eventId);
+  (ref, eventId) async {
+    final result = await ref.watch(eventRepositoryProvider).find(eventId);
+    // Com a escala aberta e a rede de pé, a cifra e a letra das músicas dela
+    // vão para o aparelho em segundo plano: é no ensaio que a rede cai.
+    if (!result.fromCache && result.data.songs.isNotEmpty) {
+      unawaited(
+        ref.read(songRepositoryProvider).prefetch(
+              result.data.teamId,
+              result.data.songs.map((song) => song.songId),
+            ),
+      );
+    }
+    return result;
   },
 );

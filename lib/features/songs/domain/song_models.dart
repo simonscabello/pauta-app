@@ -18,6 +18,9 @@ class Song {
     this.originalKey,
     this.bpm,
     this.lyrics,
+    this.chords,
+    this.chordsKey,
+    this.chordsSource,
     this.lyricsUrl,
     this.chordsUrl,
     this.youtubeUrl,
@@ -47,6 +50,11 @@ class Song {
   final int? bpm;
 
   final String? lyrics;
+  final String? chords;
+  final String? chordsKey;
+
+  /// De onde veio a cifra guardada. Só o detalhe traz; nulo sem cifra.
+  final ChordsSource? chordsSource;
   final String? lyricsUrl;
   final String? chordsUrl;
   final String? youtubeUrl;
@@ -92,6 +100,11 @@ class Song {
 
   bool get hasLyrics => lyrics != null && lyrics!.trim().isNotEmpty;
 
+  bool get hasChords => chords?.trim().isNotEmpty ?? false;
+
+  String get displayTitle =>
+      hymnal == null ? title : '${hymnal!.number} · $title';
+
   String get subtitle {
     final parts = [artist, composer].where((p) => p != null && p.isNotEmpty);
     return parts.isEmpty ? 'Sem artista' : parts.first!;
@@ -109,6 +122,11 @@ class Song {
       originalKey: json['originalKey'] as String?,
       bpm: json['bpm'] as int?,
       lyrics: json['lyrics'] as String?,
+      chords: json['chords'] as String?,
+      chordsKey: json['chordsKey'] as String?,
+      chordsSource: json['chordsSource'] == null
+          ? null
+          : ChordsSource.fromJson(json['chordsSource'] as Map<String, dynamic>),
       lyricsUrl: json['lyricsUrl'] as String?,
       chordsUrl: json['chordsUrl'] as String?,
       youtubeUrl: json['youtubeUrl'] as String?,
@@ -210,4 +228,38 @@ class ExternalCandidate {
       year: json['year'] as String?,
     );
   }
+}
+
+/// Por que a equipe diz que pode guardar a cifra, nas palavras da tela.
+const chordRightsBasisLabels = {
+  'TEAM_ARRANGEMENT': 'Arranjo da equipe',
+  'PUBLIC_DOMAIN': 'Domínio público',
+  'PERMISSION': 'Permissão do autor ou da editora',
+  'SOURCE_LICENSE': 'Licença da fonte',
+};
+
+/// De onde veio a cifra guardada e quem declarou que a equipe pode guardá-la.
+class ChordsSource {
+  const ChordsSource({
+    required this.kind,
+    required this.rightsBasis,
+    required this.importedAt,
+    required this.importedByName,
+    this.sourceHost,
+  });
+
+  /// `URL`, `TEXT` ou `FILE`.
+  final String kind;
+  final String rightsBasis;
+  final DateTime importedAt;
+  final String importedByName;
+  final String? sourceHost;
+
+  factory ChordsSource.fromJson(Map<String, dynamic> json) => ChordsSource(
+        kind: json['kind'] as String,
+        rightsBasis: json['rightsBasis'] as String,
+        importedAt: DateTime.parse(json['importedAt'] as String),
+        importedByName: json['importedByName'] as String,
+        sourceHost: json['sourceHost'] as String?,
+      );
 }

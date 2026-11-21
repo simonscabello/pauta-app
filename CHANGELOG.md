@@ -7,6 +7,23 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.44.0 — 20/11/2026
+
+### Novidades
+- Cifra no Pauta: quem lidera cola a cifra em Editar música › Dados da
+  música — com os acordes em cima da letra, em ChordPro ou o `.txt` baixado
+  do Cifra Club — e a equipe lê no app, já no tom da escala.
+- − e + mudam o tom só para você. Quem lidera usa "Usar F para todos" no
+  ensaio, e a cifra muda sozinha na tela de quem está com ela aberta.
+- Rolagem automática na letra e na cifra, com quatro velocidades.
+- A cifra e a letra das músicas da escala abrem sem internet.
+
+### Melhorias
+- "Abrir no Cifra Club", "Colar cifra" e "Ver como fica" no cadastro da
+  cifra.
+- Cada cifra nova diz de onde veio, com a confirmação de que a equipe pode
+  guardá-la.
+
 ## 0.43.0 — 29/10/2026
 
 ### Novidades

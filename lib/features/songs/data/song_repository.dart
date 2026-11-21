@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/date/report_period.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/storage/read_cache.dart';
+import '../../../core/storage/shared_preferences_provider.dart';
+import '../domain/chord_import.dart';
 import '../domain/moment_suggestion.dart';
 import '../domain/repertoire_health.dart';
 import '../domain/song_history.dart';
@@ -13,9 +16,12 @@ import '../domain/song_models.dart';
 import '../domain/song_usage.dart';
 
 class SongRepository {
-  const SongRepository(this._dio);
+  const SongRepository(this._dio, {ReadCache? cache}) : _cache = cache;
 
   final Dio _dio;
+
+  /// Nulo sem armazenamento (testes): aí a música só vem da rede.
+  final ReadCache? _cache;
 
   Future<List<Song>> list(
     String teamId, {
@@ -58,13 +64,57 @@ class SongRepository {
     });
   }
 
-  /// Única chamada que traz a letra.
-  Future<Song> find(String teamId, String songId) async {
-    return _guard(() async {
+  /// Única chamada que traz a letra e a cifra.
+  ///
+  /// Passa pelo cache de leitura: com rede grava, e sem rede devolve a última
+  /// cópia — a cifra precisa abrir quando o Wi-Fi da igreja cai no ensaio.
+  /// Resposta do servidor com 4xx não é falta de rede: a música apagada ou a
+  /// equipe que a pessoa deixou não reaparecem pelo cache.
+  Future<CachedValue<Song>> find(String teamId, String songId) async {
+    try {
       final response =
           await _dio.get<Map<String, dynamic>>('/teams/$teamId/songs/$songId');
-      return Song.fromJson(response.data!);
-    });
+      final map = response.data!;
+      try {
+        await _cache?.saveSong(songId, map);
+      } catch (_) {
+        // Armazenamento cheio (o `localStorage` da Web tem teto) não pode
+        // derrubar a leitura que deu certo.
+      }
+      return CachedValue(data: Song.fromJson(map), fromCache: false);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final cached =
+          status == null || status >= 500 ? _cache?.readSong(songId) : null;
+      if (cached != null) {
+        return CachedValue(
+          data: Song.fromJson(cached.data),
+          fromCache: true,
+          cachedAt: cached.cachedAt,
+        );
+      }
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// Guarda no aparelho as músicas de uma escala, uma de cada vez, para a
+  /// cifra e a letra já estarem lá quando a rede cair. Pula a que foi guardada
+  /// há pouco: a equipe inteira abre a mesma escala no mesmo Wi-Fi, e o limite
+  /// de requisições da API conta por IP. Falha é silenciosa.
+  Future<void> prefetch(String teamId, Iterable<String> songIds) async {
+    for (final songId in songIds.toSet()) {
+      final cached = _cache?.readSong(songId);
+      if (cached != null &&
+          DateTime.now().toUtc().difference(cached.cachedAt) <
+              const Duration(hours: 1)) {
+        continue;
+      }
+      try {
+        await find(teamId, songId);
+      } catch (_) {
+        // Sem rede ou sem a música: fica para a próxima vez que a escala abrir.
+      }
+    }
   }
 
   Future<Song> create(String teamId, Map<String, dynamic> body) async {
@@ -88,6 +138,33 @@ class SongRepository {
         data: body,
       );
       return Song.fromJson(response.data!);
+    });
+  }
+
+  /// Os sites de onde o importador sabe ler cifra, e se cada um está liberado.
+  Future<List<ChordSourceInfo>> chordSources(String teamId) async {
+    return _guard(() async {
+      final response =
+          await _dio.get<List<dynamic>>('/teams/$teamId/songs/chord-sources');
+      return [
+        for (final item in response.data!)
+          ChordSourceInfo.fromJson(item as Map<String, dynamic>),
+      ];
+    });
+  }
+
+  /// Lê a cifra de um link para a prévia. O servidor não grava nada.
+  Future<ChordPreview> previewChords(
+    String teamId,
+    String songId,
+    String url,
+  ) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/songs/$songId/chords/preview',
+        data: {'url': url},
+      );
+      return ChordPreview.fromJson(response.data!);
     });
   }
 
@@ -260,7 +337,13 @@ class SongRepository {
 }
 
 final songRepositoryProvider = Provider<SongRepository>((ref) {
-  return SongRepository(ref.watch(dioProvider));
+  ReadCache? cache;
+  try {
+    cache = ReadCache(ref.watch(sharedPreferencesProvider));
+  } catch (_) {
+    cache = null;
+  }
+  return SongRepository(ref.watch(dioProvider), cache: cache);
 });
 
 /// Filtro da lista. **São dois acervos, não um.**
@@ -420,8 +503,16 @@ final learningSongsProvider =
   (ref, teamId) => ref.watch(songRepositoryProvider).learning(teamId),
 );
 
+/// A música inteira, com letra e cifra. `fromCache` quando veio do aparelho.
+/// Some para quem não lidera (a API responde 403) e sem rede: aí o
+/// formulário só não oferece "Trazer de um link".
+final chordSourcesProvider = FutureProvider.autoDispose
+    .family<List<ChordSourceInfo>, String>((ref, teamId) {
+  return ref.watch(songRepositoryProvider).chordSources(teamId);
+});
+
 final songProvider = FutureProvider.autoDispose
-    .family<Song, ({String teamId, String songId})>((ref, args) {
+    .family<CachedValue<Song>, ({String teamId, String songId})>((ref, args) {
   return ref.watch(songRepositoryProvider).find(args.teamId, args.songId);
 });
 

@@ -269,9 +269,10 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
       // Busca a música inteira: a sugestão só carrega título e artista, e o
       // item da escala precisa do tom da equipe e dos links -- os mesmos que o
       // seletor põe quando a escolha vem de lá.
-      final song = await ref
-          .read(songRepositoryProvider)
-          .find(widget.teamId, songId);
+      final song = (await ref
+              .read(songRepositoryProvider)
+              .find(widget.teamId, songId))
+          .data;
       if (!mounted) return;
       setState(() => _lista(culto.id).add(_novoItem(culto, song)));
     } on ApiException catch (error) {

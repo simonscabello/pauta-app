@@ -47,6 +47,7 @@ List<SongResource> songResources(
   required String? youtubeUrl,
   required String? spotifyUrl,
   VoidCallback? onOpenLyrics,
+  VoidCallback? onOpenChords,
 }) {
   SongResource link(IconData icon, String label, String? url, String action) =>
       SongResource(
@@ -57,7 +58,14 @@ List<SongResource> songResources(
       );
 
   return [
-    link(SongResourceIcons.chords, 'Cifra', chordsUrl, 'Abrir cifra'),
+    onOpenChords != null
+        ? SongResource(
+            icon: SongResourceIcons.chords,
+            label: 'Cifra',
+            status: 'Ler no Pauta',
+            onTap: onOpenChords,
+          )
+        : link(SongResourceIcons.chords, 'Cifra', chordsUrl, 'Abrir cifra'),
     onOpenLyrics != null
         ? SongResource(
             icon: SongResourceIcons.lyrics,

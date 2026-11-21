@@ -39,9 +39,20 @@ const helpFaq = <FaqEntry>[
   FaqEntry(
     question: 'Onde encontro letras e cifras?',
     answer: 'Toque em uma música, na escala ou no **Repertório**. Ali aparecem '
-        '**Cifra**, **Letra**, **YouTube** e **Spotify**. Quando a letra está '
-        'guardada no Pauta, ela abre no próprio aplicativo; os outros abrem no '
-        'site ou no aplicativo de cada um.\n\n'
+        '**Cifra**, **Letra**, **YouTube** e **Spotify**. Quando a letra ou a '
+        'cifra está guardada no Pauta, ela abre no próprio aplicativo; os '
+        'outros abrem no site ou no aplicativo de cada um.\n\n'
+        'A cifra guardada abre no tom combinado para a escala (ou no tom da '
+        'equipe, pelo Repertório). Os botões **−** e **+** sobem e descem meio '
+        'tom só para você. Quem lidera guarda a cifra em **Editar música**, '
+        'em **Dados da música**, dizendo de onde ela vem. Com o link da cifra '
+        'na música, **Abrir no Cifra Club** leva ao site: copie a cifra lá, '
+        'volte e toque em **Colar cifra**.\n\n'
+        'Aberta pela escala, a cifra muda sozinha quando quem lidera troca o '
+        'tom (quem lidera faz isso no próprio leitor, em **Usar … para '
+        'todos**). O botão de tocar, no canto, rola a letra sozinho. A escala '
+        'que você abriu com internet leva as letras e cifras para o celular, e '
+        'elas abrem mesmo sem conexão.\n\n'
         'Se aparecer "Sem link", a equipe ainda não cadastrou aquele material.',
   ),
   FaqEntry(

@@ -19,10 +19,11 @@ import '../../suggestions/data/suggestion_repository.dart';
 import '../data/song_repository.dart';
 import '../domain/song_history.dart';
 import '../domain/song_models.dart';
-import '../../../shared/widgets/open_link.dart';
 import 'song_resources.dart';
 import 'song_theme_picker.dart';
 import 'lyrics_reader.dart';
+
+export 'lyrics_reader.dart' show SongLyricsScreen;
 
 class SongDetailScreen extends ConsumerWidget {
   const SongDetailScreen({
@@ -37,7 +38,8 @@ class SongDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final args = (teamId: teamId, songId: songId);
-    final song = ref.watch(songProvider(args));
+    final cached = ref.watch(songProvider(args));
+    final song = cached.whenData((value) => value.data);
     // A equipe DESTA música, e não a primeira da lista: quem participa de duas
     // veria o lápis de editar num repertório onde é apenas membro.
     final canManage = ref
@@ -106,6 +108,7 @@ class SongDetailScreen extends ConsumerWidget {
               song: value,
               teamId: teamId,
               showHistory: canManage,
+              cachedAt: cached.valueOrNull?.cachedAt,
             ),
           ),
         ),
@@ -268,10 +271,14 @@ class _Body extends StatelessWidget {
     required this.song,
     required this.teamId,
     required this.showHistory,
+    this.cachedAt,
   });
 
   final Song song;
   final String teamId;
+
+  /// Quando a música veio do aparelho, sem rede: o leitor avisa.
+  final DateTime? cachedAt;
 
   /// Só para quem lidera: o histórico é relatório, e o servidor o recusa ao
   /// integrante. Pedir e esconder o erro seria uma requisição à toa.
@@ -299,12 +306,12 @@ class _Body extends StatelessWidget {
           SongThemeChips(themes: song.themes),
         ],
         const SizedBox(height: AppSpacing.xl),
-        _Preparation(song: song),
+        _Preparation(song: song, cachedAt: cachedAt),
         if (song.hasLyrics) ...[
           // Menos que entre os outros blocos: o cabeçalho da letra tem a altura
           // do botão "Ver completa", e a folga dele já faz parte do respiro.
           const SizedBox(height: AppSpacing.md),
-          _LyricsPreview(song: song),
+          _LyricsPreview(song: song, cachedAt: cachedAt),
         ],
         if (showHistory) _SongHistorySection(teamId: teamId, songId: song.id),
       ],
@@ -312,14 +319,20 @@ class _Body extends StatelessWidget {
   }
 }
 
-/// "142 · Pão da Vida": o número antes do nome, como o hinário e o púlpito
-/// dizem — "cento e quarenta e dois, Pão da Vida".
-String _displayTitle(Song song) =>
-    song.hymnal != null ? '${song.hymnal!.number} · ${song.title}' : song.title;
-
-void _openLyrics(BuildContext context, Song song) {
+void _openLyrics(
+  BuildContext context,
+  Song song, {
+  bool chordMode = false,
+  DateTime? cachedAt,
+}) {
   Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => SongLyricsScreen(song: song)),
+    MaterialPageRoute<void>(
+      builder: (_) => SongLyricsScreen(
+        song: song,
+        chordMode: chordMode,
+        cachedAt: cachedAt,
+      ),
+    ),
   );
 }
 
@@ -335,7 +348,7 @@ class _Header extends StatelessWidget {
     final theme = Theme.of(context);
 
     return AppDetailHeader(
-      title: _displayTitle(song),
+      title: song.displayTitle,
       badges: [
         if (song.isNew)
           const AppBadge(
@@ -422,13 +435,12 @@ class _Facts extends StatelessWidget {
 
 /// Cifra, letra, YouTube e Spotify: o que se abre para ensaiar.
 ///
-/// A letra é a única que tem duas fontes: guardada no banco ela abre aqui
-/// dentro (sem rede, sem site fora do ar); sem ela, vale o link. Quando há os
-/// dois, o link continua a um toque, no topo da tela da letra.
+/// Cifra e letra guardadas abrem no leitor do Pauta.
 class _Preparation extends StatelessWidget {
-  const _Preparation({required this.song});
+  const _Preparation({required this.song, this.cachedAt});
 
   final Song song;
+  final DateTime? cachedAt;
 
   @override
   Widget build(BuildContext context) {
@@ -448,8 +460,17 @@ class _Preparation extends StatelessWidget {
             lyricsUrl: song.lyricsUrl,
             youtubeUrl: song.youtubeUrl,
             spotifyUrl: song.spotifyUrl,
-            onOpenLyrics:
-                song.hasLyrics ? () => _openLyrics(context, song) : null,
+            onOpenChords: song.hasChords
+                ? () => _openLyrics(
+                      context,
+                      song,
+                      chordMode: true,
+                      cachedAt: cachedAt,
+                    )
+                : null,
+            onOpenLyrics: song.hasLyrics
+                ? () => _openLyrics(context, song, cachedAt: cachedAt)
+                : null,
           ),
         ),
       ],
@@ -467,9 +488,10 @@ class _Preparation extends StatelessWidget {
 /// Curta, aparece inteira e selecionável, sem "Ver completa" para abrir o
 /// mesmo texto.
 class _LyricsPreview extends StatelessWidget {
-  const _LyricsPreview({required this.song});
+  const _LyricsPreview({required this.song, this.cachedAt});
 
   final Song song;
+  final DateTime? cachedAt;
 
   static const _previewLines = 6;
 
@@ -517,7 +539,11 @@ class _LyricsPreview extends StatelessWidget {
                         ? Align(
                             alignment: AlignmentDirectional.centerEnd,
                             child: TextButton.icon(
-                              onPressed: () => _openLyrics(context, song),
+                              onPressed: () => _openLyrics(
+                                context,
+                                song,
+                                cachedAt: cachedAt,
+                              ),
                               iconAlignment: IconAlignment.end,
                               icon: const Icon(
                                 Icons.chevron_right_rounded,
@@ -538,7 +564,9 @@ class _LyricsPreview extends StatelessWidget {
               ),
             ),
             AppCard(
-              onTap: long ? () => _openLyrics(context, song) : null,
+              onTap: long
+                  ? () => _openLyrics(context, song, cachedAt: cachedAt)
+                  : null,
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: long
                   ? Text(
@@ -552,65 +580,6 @@ class _LyricsPreview extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// A letra inteira, sem nada em volta.
-///
-/// É a tela de quem está ensaiando com o celular na estante: título para
-/// saber que é a música certa, e o texto em corpo maior. O link do site da
-/// letra, quando existe, fica no topo — a letra guardada é a preferida, mas o
-/// link continua sendo um recurso da música.
-class SongLyricsScreen extends StatelessWidget {
-  const SongLyricsScreen({super.key, required this.song});
-
-  final Song song;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final url = song.lyricsUrl;
-
-    return KeepScreenOn(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Letra'),
-          actions: [
-            // Modo leitura: tamanho da letra e tela sempre ligada.
-            const LyricsFontButtons(),
-            if (_filled(url))
-              IconButton(
-                tooltip: 'Abrir no site',
-                icon: const Icon(Icons.open_in_new_rounded),
-                onPressed: () => openExternalLink(context, url!),
-              ),
-          ],
-        ),
-        body: SafeArea(
-          top: false,
-          child: AppContentWidth.reading(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenPadding,
-                AppSpacing.lg,
-                AppSpacing.screenPadding,
-                AppSpacing.xxl,
-              ),
-              children: [
-                Text(_displayTitle(song), style: theme.textTheme.headlineMedium),
-                const SizedBox(height: AppSpacing.xs),
-                SmallCapsLine(song.subtitle),
-                const SizedBox(height: AppSpacing.lg),
-                Divider(height: 1, color: scheme.outlineVariant),
-                const SizedBox(height: AppSpacing.lg),
-                LyricsText(lyrics: song.lyrics ?? ''),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

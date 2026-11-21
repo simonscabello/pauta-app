@@ -1376,6 +1376,7 @@ class _SongsSection extends StatelessWidget {
                   ],
                   _ServiceSongsSection(
                     teamId: event.teamId,
+                    eventId: event.id,
                     service: grupos[i].service,
                     songs: grupos[i].songs,
                     timezone: timezone,
@@ -1426,6 +1427,7 @@ bool _jaPassou(DateTime diaDoCulto) {
 class _ServiceSongsSection extends StatelessWidget {
   const _ServiceSongsSection({
     required this.teamId,
+    required this.eventId,
     required this.service,
     required this.songs,
     required this.timezone,
@@ -1433,6 +1435,7 @@ class _ServiceSongsSection extends StatelessWidget {
   });
 
   final String teamId;
+  final String eventId;
   final EventService service;
   final List<EventSong> songs;
   final String timezone;
@@ -1493,6 +1496,7 @@ class _ServiceSongsSection extends StatelessWidget {
           for (var i = 0; i < songs.length; i++)
             _SongRow(
               teamId: teamId,
+              eventId: eventId,
               song: songs[i],
               position: i + 1,
               serviceSongs: songs,
@@ -1521,12 +1525,14 @@ String? _subtitleOf(EventSong song) {
 class _SongRow extends StatelessWidget {
   const _SongRow({
     required this.teamId,
+    required this.eventId,
     required this.song,
     required this.position,
     this.serviceSongs = const [],
   });
 
   final String teamId;
+  final String eventId;
   final EventSong song;
   final int position;
 
@@ -1554,6 +1560,7 @@ class _SongRow extends StatelessWidget {
         onTap: () => showEventSongSheet(
           context: context,
           teamId: teamId,
+          eventId: eventId,
           song: song,
           serviceSongs: serviceSongs,
         ),

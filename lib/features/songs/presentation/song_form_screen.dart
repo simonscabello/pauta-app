@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/open_link.dart';
+import '../../../shared/domain/person_fields.dart';
 import '../../../shared/widgets/unsaved_changes_guard.dart';
 import '../data/song_repository.dart';
+import '../domain/chord_sheet.dart';
 import '../domain/hymnal_models.dart';
 import '../domain/musical_keys.dart';
 import '../domain/song_models.dart';
 import '../domain/song_themes.dart';
+import '../domain/chord_import.dart';
+import 'chord_import_sheet.dart';
 import 'hymnal_refs_field.dart';
+import 'lyrics_reader.dart';
 import 'musical_key_picker.dart';
 import 'song_theme_picker.dart';
 
@@ -55,16 +63,28 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
   final _title = TextEditingController();
   final _artist = TextEditingController();
   final _composer = TextEditingController();
+  final _chords = TextEditingController();
   final _lyrics = TextEditingController();
   final _lyricsUrl = TextEditingController();
   final _chordsUrl = TextEditingController();
   final _youtubeUrl = TextEditingController();
   final _spotifyUrl = TextEditingController();
+  final _rightsNote = TextEditingController();
 
   /// Nulo é "sem tom". Pode ser anotação de antes da lista ("G (capo 2)"):
   /// ela volta ao servidor intacta enquanto ninguém escolher outro tom.
   String? _defaultKey;
   String? _originalKey;
+  String? _chordsKey;
+
+  /// A declaração da cifra nova. Fora da assinatura de alterações: sozinha,
+  /// sem cifra nova, não há o que salvar.
+  String? _rightsBasis;
+  bool _rightsAuthorized = false;
+
+  /// O link de onde "Trazer de um link" leu a cifra que está no campo. Vai na
+  /// declaração como `URL`; sem ele, a cifra foi colada.
+  String? _importedFrom;
   String? _kind;
   String? _pace;
   Set<String> _themes = {};
@@ -85,10 +105,12 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
       _artist,
       _composer,
       _lyrics,
+      _chords,
       _lyricsUrl,
       _chordsUrl,
       _youtubeUrl,
       _spotifyUrl,
+      _rightsNote,
     ]) {
       controller.dispose();
     }
@@ -107,6 +129,8 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
     _artist.text = song.artist ?? '';
     _composer.text = song.composer ?? '';
     _originalKey = _keyOrNull(song.originalKey);
+    _chords.text = song.chords ?? '';
+    _chordsKey = _keyOrNull(song.chordsKey);
     _lyrics.text = song.lyrics ?? '';
     _lyricsUrl.text = song.lyricsUrl ?? '';
     _chordsUrl.text = song.chordsUrl ?? '';
@@ -127,6 +151,8 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
           _spotifyUrl,
         ])
           c.text.trim(),
+        _chords.text,
+        _chordsKey,
         _defaultKey,
         _originalKey,
         _kind,
@@ -149,6 +175,35 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
     final title = _title.text.trim();
     if (title.length < 2) {
       setState(() => _error = 'Informe o nome da música.');
+      return;
+    }
+
+    final raw = _chords.text;
+    final savedChords = song.hasChords ? song.chords : null;
+    final chords = raw.trim().isEmpty
+        ? null
+        : raw == savedChords
+            ? savedChords
+            : normalizeChordSheet(raw);
+    final chordsKey = chords == null && savedChords != null ? null : _chordsKey;
+    final missingKey = normalizeMusicalKey(chordsKey) == null;
+    if (chords != null &&
+        (missingKey || chords.runes.length > maxChordSheetLength)) {
+      setState(() {
+        _showExternal = true;
+        _error = missingKey
+            ? 'Escolha o tom em que a cifra foi escrita.'
+            : 'A cifra pode ter até 30 mil caracteres depois da conversão.';
+      });
+      return;
+    }
+    final newChords = chords != null && chords != savedChords;
+    if (newChords && (_rightsBasis == null || !_rightsAuthorized)) {
+      setState(() {
+        _showExternal = true;
+        _error =
+            'Diga de onde vem a cifra e confirme que a equipe pode guardá-la.';
+      });
       return;
     }
 
@@ -183,9 +238,19 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
           'chordsUrl': _chordsUrl.text.trim(),
           'youtubeUrl': _youtubeUrl.text.trim(),
           'spotifyUrl': _spotifyUrl.text.trim(),
-          // A letra só vai quando mudou. São até 20 mil caracteres, e
-          // reenviá-los a cada ajuste de tom é peso puro na rede da igreja.
-          if (_lyrics.text != (song.lyrics ?? '')) 'lyrics': _lyrics.text.trim(),
+          // Os textos longos só vão quando mudam.
+          if (chords != savedChords) 'chords': chords,
+          if (newChords)
+            'chordsImport': {
+              'kind': _importedFrom == null ? 'TEXT' : 'URL',
+              if (_importedFrom != null) 'sourceUrl': _importedFrom,
+              'rightsBasis': _rightsBasis,
+              'rightsNote': _rightsNote.text.trim(),
+              'authorized': true,
+            },
+          if (chordsKey != song.chordsKey) 'chordsKey': chordsKey,
+          if (_lyrics.text != (song.lyrics ?? ''))
+            'lyrics': _lyrics.text.trim(),
         },
       );
 
@@ -217,6 +282,103 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
     }
   }
 
+  /// Cola a cifra que a pessoa copiou no site. É o caminho da cifra que o
+  /// Pauta não traz sozinho: quem abre a página é o navegador dela.
+  Future<void> _pasteChords() async {
+    String? copied;
+    var unreadable = false;
+    try {
+      copied = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    } catch (_) {
+      // O navegador pode negar a leitura; colar no campo continua valendo.
+      unreadable = true;
+    }
+    if (!mounted) return;
+    // Só as linhas vazias do começo saem: o espaço antes do primeiro acorde
+    // é a coluna dele.
+    final text =
+        (copied ?? '').replaceFirst(RegExp(r'^(?:[ \t]*\r?\n)+'), '').trimRight();
+    if (text.trim().isEmpty) {
+      showAppSnackBar(
+        context,
+        unreadable
+            ? 'Não foi possível ler o que você copiou. Toque no campo Cifra e '
+                'cole por lá.'
+            : 'Nada copiado ainda. Copie a cifra no site e toque em "Colar '
+                'cifra" de novo.',
+      );
+      return;
+    }
+    setState(() {
+      _chords.text = text;
+      _importedFrom = null;
+      _error = null;
+    });
+  }
+
+  /// Lê a cifra de um link e põe no campo, sem salvar: a pessoa confere,
+  /// corrige e declara de onde ela veio antes de "Salvar".
+  Future<void> _importChords(List<ChordSourceInfo> sources) async {
+    final result = await showAdaptiveSheet<ChordImportResult>(
+      context: context,
+      builder: (_) => ChordImportSheet(
+        teamId: widget.teamId,
+        songId: widget.songId,
+        sources: sources,
+        initialUrl: _chordsUrl.text.trim(),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _error = null;
+      if (result.preview case final preview?) {
+        _chords.text = normalizeChordSheet(preview.sheet);
+        _chordsKey = normalizeMusicalKey(preview.key) ?? _chordsKey;
+        _importedFrom = preview.sourceUrl;
+        if (_chordsUrl.text.trim().isEmpty) _chordsUrl.text = preview.sourceUrl;
+        // Cifra nova, declaração nova.
+        _rightsBasis = null;
+        _rightsAuthorized = false;
+      } else if (result.keepLink case final link? when link.isNotEmpty) {
+        _chordsUrl.text = link;
+      }
+    });
+  }
+
+  /// A cifra como vai aparecer para a equipe, antes de salvar.
+  void _previewChords() {
+    final key = _chordsKey ?? chordSheetKey(_chords.text);
+    final sheet = normalizeChordSheet(_chords.text);
+    showAdaptiveSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenPadding,
+            0,
+            AppSpacing.screenPadding,
+            AppSpacing.xl,
+          ),
+          // Largura cheia: sem ela a folha encolhe até a linha mais longa.
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Como a cifra vai aparecer',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                ChordSheetView(chords: sheet, sourceKey: key, targetKey: key),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final song = widget.song ??
@@ -224,7 +386,8 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
             .watch(
               songProvider((teamId: widget.teamId, songId: widget.songId)),
             )
-            .valueOrNull;
+            .valueOrNull
+            ?.data;
 
     if (song == null) {
       return Scaffold(
@@ -236,6 +399,12 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
     if (!_populated) _populate(song);
     markUnsavedBaseline();
     final recordingKey = normalizeMusicalKey(song.originalKey);
+    final hasChordsText = _chords.text.trim().isNotEmpty;
+    final chordsChanged =
+        hasChordsText && _chords.text != (song.hasChords ? song.chords : null);
+    final origin = song.hasChords ? song.chordsSource : null;
+    final chordSources =
+        ref.watch(chordSourcesProvider(widget.teamId)).valueOrNull ?? const [];
 
     return FormScaffold(
       isDirty: hasUnsavedChanges,
@@ -245,10 +414,17 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
       appBar: AppBar(title: const Text('Editar música')),
       // Preso embaixo: com "Dados da música" aberto (quatro links e a letra),
       // o botão ficava duas telas abaixo de onde a pessoa mexeu.
-      bottomAction: AppSubmitButton(
-        label: 'Salvar',
-        loading: _saving,
-        onPressed: () => _save(song),
+      bottomAction: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) FormErrorBanner(message: _error!),
+          AppSubmitButton(
+            label: 'Salvar',
+            loading: _saving,
+            onPressed: () => _save(song),
+          ),
+        ],
       ),
       children: [
         TextField(
@@ -340,16 +516,48 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
           composer: _composer,
           originalKey: _originalKey,
           onOriginalKeyChanged: (key) => setState(() => _originalKey = key),
+          chords: _chords,
+          chordsKey: _chordsKey,
+          // O tom que o próprio arquivo declara vem antes dos da música.
+          suggestedKey: chordSheetKey(_chords.text) ??
+              normalizeMusicalKey(_defaultKey) ??
+              normalizeMusicalKey(_originalKey),
+          onPreviewChords: hasChordsText ? _previewChords : null,
+          onPasteChords: _pasteChords,
+          // Só quando algum site está liberado: um botão que sempre responde
+          // "não dá" não é caminho.
+          onImportChords: chordSources.any((source) => source.canImport)
+              ? () => _importChords(chordSources)
+              : null,
+          chordsFooter: chordsChanged
+              ? _ChordsDeclaration(
+                  basis: _rightsBasis,
+                  authorized: _rightsAuthorized,
+                  note: _rightsNote,
+                  enabled: !_saving,
+                  onBasisChanged: (basis) => setState(() {
+                    _rightsBasis = basis;
+                    _error = null;
+                  }),
+                  onAuthorizedChanged: (value) => setState(() {
+                    _rightsAuthorized = value;
+                    _error = null;
+                  }),
+                )
+              : origin == null
+                  ? null
+                  : _ChordsOrigin(source: origin),
+          onChordsKeyChanged: (key) => setState(() {
+            _chordsKey = key;
+            _error = null;
+          }),
+          onChordsChanged: (_) => setState(() => _error = null),
           lyrics: _lyrics,
           lyricsUrl: _lyricsUrl,
           chordsUrl: _chordsUrl,
           youtubeUrl: _youtubeUrl,
           spotifyUrl: _spotifyUrl,
         ),
-        if (_error != null) ...[
-          const SizedBox(height: AppSpacing.xl),
-          FormErrorBanner(message: _error!),
-        ],
       ],
     );
   }
@@ -369,6 +577,15 @@ class _ExternalFields extends StatelessWidget {
     required this.composer,
     required this.originalKey,
     required this.onOriginalKeyChanged,
+    required this.chords,
+    required this.chordsKey,
+    required this.suggestedKey,
+    required this.onChordsKeyChanged,
+    required this.onChordsChanged,
+    required this.onPreviewChords,
+    required this.onPasteChords,
+    required this.onImportChords,
+    required this.chordsFooter,
     required this.lyrics,
     required this.lyricsUrl,
     required this.chordsUrl,
@@ -383,6 +600,17 @@ class _ExternalFields extends StatelessWidget {
   final TextEditingController composer;
   final String? originalKey;
   final ValueChanged<String?> onOriginalKeyChanged;
+  final TextEditingController chords;
+  final String? chordsKey;
+  final String? suggestedKey;
+  final ValueChanged<String?> onChordsKeyChanged;
+  final ValueChanged<String> onChordsChanged;
+  final VoidCallback? onPreviewChords;
+  final VoidCallback onPasteChords;
+  final VoidCallback? onImportChords;
+
+  /// A declaração da cifra nova, ou a origem da que já está guardada.
+  final Widget? chordsFooter;
   final TextEditingController lyrics;
   final TextEditingController lyricsUrl;
   final TextEditingController chordsUrl;
@@ -391,7 +619,8 @@ class _ExternalFields extends StatelessWidget {
 
   String get _resumo {
     final tem = [
-      if (chordsUrl.text.trim().isNotEmpty) 'cifra',
+      if (chords.text.trim().isNotEmpty) 'cifra no Pauta',
+      if (chordsUrl.text.trim().isNotEmpty) 'link da cifra',
       if (lyricsUrl.text.trim().isNotEmpty || lyrics.text.trim().isNotEmpty)
         'letra',
       if (youtubeUrl.text.trim().isNotEmpty) 'YouTube',
@@ -425,10 +654,7 @@ class _ExternalFields extends StatelessWidget {
                         style: theme.textTheme.titleSmall,
                       ),
                       Text(
-                        expanded
-                            ? 'Preenchidos automaticamente. Corrija se algo '
-                                'veio errado.'
-                            : _resumo,
+                        expanded ? 'Créditos, letra, cifra e links' : _resumo,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -470,6 +696,83 @@ class _ExternalFields extends StatelessWidget {
             onChanged: onOriginalKeyChanged,
           ),
           const SizedBox(height: AppSpacing.lg),
+          TextField(
+            controller: chords,
+            enabled: enabled,
+            onChanged: onChordsChanged,
+            minLines: 4,
+            maxLines: 12,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              labelText: 'Cifra',
+              alignLabelWithHint: true,
+              helperText:
+                  'Cole a cifra com os acordes em cima da letra, ou em ChordPro.',
+              helperMaxLines: 2,
+            ),
+          ),
+          // "Abrir no site" acompanha o link da cifra, que fica mais abaixo.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: chordsUrl,
+            builder: (context, link, _) {
+              final site = link.text.trim();
+              return Wrap(
+                spacing: AppSpacing.sm,
+                children: [
+                  if (site.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: enabled
+                          ? () => openExternalLink(context, site)
+                          : null,
+                      icon: const Icon(Icons.open_in_new_rounded),
+                      label: Text(
+                        Uri.tryParse(site)?.host.contains('cifraclub') ?? false
+                            ? 'Abrir no Cifra Club'
+                            : 'Abrir no site',
+                      ),
+                    ),
+                  TextButton.icon(
+                    onPressed: enabled ? onPasteChords : null,
+                    icon: const Icon(Icons.content_paste_rounded),
+                    label: const Text('Colar cifra'),
+                  ),
+                  if (onImportChords != null)
+                    TextButton.icon(
+                      onPressed: enabled ? onImportChords : null,
+                      icon: const Icon(Icons.link_rounded),
+                      label: const Text('Trazer de um link'),
+                    ),
+                  if (onPreviewChords != null)
+                    TextButton.icon(
+                      onPressed: enabled ? onPreviewChords : null,
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Ver como fica'),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          MusicalKeyField(
+            label: 'Tom da cifra',
+            value: chordsKey,
+            enabled: enabled,
+            helperText: 'O tom em que os acordes foram escritos',
+            onChanged: onChordsKeyChanged,
+          ),
+          if (chordsKey == null && suggestedKey != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            ActionChip(
+              label: Text('Usar $suggestedKey na cifra'),
+              onPressed:
+                  enabled ? () => onChordsKeyChanged(suggestedKey) : null,
+            ),
+          ],
+          if (chordsFooter != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            chordsFooter!,
+          ],
+          const SizedBox(height: AppSpacing.lg),
           _LinkField(
             controller: chordsUrl,
             enabled: enabled,
@@ -510,6 +813,89 @@ class _ExternalFields extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// A cifra nova diz de onde veio. O Pauta guarda o que a pessoa declarou; não
+/// confere licença nenhuma.
+class _ChordsDeclaration extends StatelessWidget {
+  const _ChordsDeclaration({
+    required this.basis,
+    required this.authorized,
+    required this.note,
+    required this.enabled,
+    required this.onBasisChanged,
+    required this.onAuthorizedChanged,
+  });
+
+  final String? basis;
+  final bool authorized;
+  final TextEditingController note;
+  final bool enabled;
+  final ValueChanged<String?> onBasisChanged;
+  final ValueChanged<bool> onAuthorizedChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ChipField(
+          label: 'De onde vem esta cifra',
+          value: basis,
+          options: chordRightsBasisLabels,
+          onChanged: enabled ? onBasisChanged : null,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: note,
+          enabled: enabled,
+          maxLength: 300,
+          decoration: const InputDecoration(
+            labelText: 'Detalhes (opcional)',
+            helperText: 'De onde veio, quem autorizou',
+          ),
+        ),
+        CheckboxListTile(
+          value: authorized,
+          onChanged: enabled ? (v) => onAuthorizedChanged(v ?? false) : null,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text(
+            'Confirmo que a equipe tem autorização para guardar esta cifra '
+            'no Pauta.',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// "Guardada em 20/11/2026 por Samuel · Arranjo da equipe".
+String chordsOriginText(ChordsSource source) {
+  final where = source.kind == 'URL' && source.sourceHost != null
+      ? 'Trazida de ${source.sourceHost}'
+      : 'Guardada';
+  final basis =
+      chordRightsBasisLabels[source.rightsBasis] ?? source.rightsBasis;
+  return '$where em ${formatFullDate(source.importedAt.toLocal())} por '
+      '${source.importedByName} · $basis';
+}
+
+class _ChordsOrigin extends StatelessWidget {
+  const _ChordsOrigin({required this.source});
+
+  final ChordsSource source;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      chordsOriginText(source),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
     );
   }
 }

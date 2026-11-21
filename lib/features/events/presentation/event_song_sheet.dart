@@ -43,6 +43,7 @@ Future<void> showEventSongSheet({
   required String teamId,
   required EventSong song,
   List<EventSong>? serviceSongs,
+  String? eventId,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -50,6 +51,7 @@ Future<void> showEventSongSheet({
     showDragHandle: true,
     builder: (_) => _EventSongSheet(
       teamId: teamId,
+      eventId: eventId,
       song: song,
       serviceSongs: serviceSongs ?? [song],
     ),
@@ -61,7 +63,11 @@ class _EventSongSheet extends ConsumerWidget {
     required this.teamId,
     required this.song,
     required this.serviceSongs,
+    this.eventId,
   });
+
+  /// A escala, para o leitor de cifra acompanhar o tom ao vivo.
+  final String? eventId;
 
   final List<EventSong> serviceSongs;
 
@@ -74,6 +80,25 @@ class _EventSongSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final temTom = song.key?.isNotEmpty ?? false;
+
+    final detail = ref
+        .watch(songProvider((teamId: teamId, songId: song.songId)))
+        .whenData((cached) => cached.data);
+    void openReader({bool chordMode = false}) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => EventLyricsScreen(
+            teamId: teamId,
+            songs: serviceSongs,
+            initialIndex: serviceSongs
+                .indexWhere((s) => s.songId == song.songId)
+                .clamp(0, serviceSongs.length - 1),
+            chordMode: chordMode,
+            eventId: eventId,
+          ),
+        ),
+      );
+    }
 
     return DraggableScrollableSheet(
       expand: false,
@@ -156,15 +181,6 @@ class _EventSongSheet extends ConsumerWidget {
             _NoteBand(note: song.note!),
           ],
           const SizedBox(height: AppSpacing.lg),
-          // Os quatro, sempre, como na tela da música: "está sem cifra" é
-          // justamente o que a equipe precisa ver para ir atrás dela. A letra
-          // guardada aparece inteira logo abaixo; o ladrilho abre o site.
-          //
-          // **"Letra" abre a letra guardada, no app**, como na tela da música.
-          // Aqui ela abria o site (com anúncios) mesmo com o texto guardado
-          // logo abaixo — o mesmo rótulo com dois comportamentos. O site
-          // continua a um toque, no topo da tela da letra. Só sem letra
-          // guardada o ladrilho vai direto ao link.
           SongResourceRow(
             resources: songResources(
               context,
@@ -172,19 +188,15 @@ class _EventSongSheet extends ConsumerWidget {
               lyricsUrl: song.lyricsUrl,
               youtubeUrl: song.youtubeUrl,
               spotifyUrl: song.spotifyUrl,
-              onOpenLyrics: _semLetraGuardada(ref)
+              // Enquanto carrega, o leitor acompanha a mesma consulta.
+              onOpenLyrics: detail.valueOrNull?.hasLyrics == false
                   ? null
-                  : () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => EventLyricsScreen(
-                            teamId: teamId,
-                            songs: serviceSongs,
-                            initialIndex: serviceSongs
-                                .indexWhere((s) => s.songId == song.songId)
-                                .clamp(0, serviceSongs.length - 1),
-                          ),
-                        ),
-                      ),
+                  : () => openReader(),
+              // Ao contrário da letra, o palpite enquanto carrega é "sem
+              // cifra": é o caso da maioria, e o ladrilho não troca de papel.
+              onOpenChords: (detail.valueOrNull?.hasChords ?? false)
+                  ? () => openReader(chordMode: true)
+                  : null,
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -195,18 +207,6 @@ class _EventSongSheet extends ConsumerWidget {
         ],
       ),
     );
-  }
-}
-
-extension on _EventSongSheet {
-  /// A música já veio do servidor e não tem letra guardada: aí o ladrilho
-  /// "Letra" vai ao site. Enquanto carrega, o palpite é que há letra — a tela
-  /// da letra sabe esperar e dizer que não há.
-  bool _semLetraGuardada(WidgetRef ref) {
-    final full = ref
-        .watch(songProvider((teamId: teamId, songId: song.songId)))
-        .valueOrNull;
-    return full != null && (full.lyrics?.trim().isEmpty ?? true);
   }
 }
 
@@ -301,7 +301,9 @@ class _Lyrics extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final song = ref.watch(songProvider((teamId: teamId, songId: songId)));
+    final song = ref
+        .watch(songProvider((teamId: teamId, songId: songId)))
+        .whenData((cached) => cached.data);
 
     return song.when(
       loading: () => const Center(

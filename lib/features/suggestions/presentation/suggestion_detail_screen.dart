@@ -314,9 +314,10 @@ class _SuggestionDetailScreenState
             .read(suggestionRepositoryProvider)
             .accept(widget.teamId, s.id, songId: songId);
         if (jaEsta) return;
-        final musica = await ref
-            .read(songRepositoryProvider)
-            .find(widget.teamId, songId);
+        final musica = (await ref
+                .read(songRepositoryProvider)
+                .find(widget.teamId, songId))
+            .data;
         await ref.read(eventRepositoryProvider).replaceSongs(atual.id, [
           ...atual.songs,
           EventSong(

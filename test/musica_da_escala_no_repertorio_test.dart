@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:louvor_app/core/storage/read_cache.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/event_song_sheet.dart';
@@ -43,6 +44,14 @@ void main() {
     expect(find.text('a escala'), findsOneWidget);
   });
 
+  testWidgets('Cifra na folha abre o leitor no tom da escala', (tester) async {
+    await _abrirFolha(tester, chords: '[G/B]Canto');
+    expect(find.text('Canto'), findsNothing);
+    await tester.tap(find.text('Cifra'));
+    await tester.pumpAndSettle();
+    expect(find.text('D/F#'), findsOneWidget);
+  });
+
   testWidgets('MEMBER também tem o caminho, e ele diz "Ver"', (tester) async {
     await _abrirFolha(tester);
 
@@ -70,7 +79,7 @@ Future<String?> _abrirEToqueNoAtalho(WidgetTester tester) async {
   return rotas.last;
 }
 
-Future<List<String>> _abrirFolha(WidgetTester tester) async {
+Future<List<String>> _abrirFolha(WidgetTester tester, {String? chords}) async {
   tester.view.physicalSize = const Size(400, 900);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -103,11 +112,16 @@ Future<List<String>> _abrirFolha(WidgetTester tester) async {
         // A letra é buscada só quando alguém abre a folha; aqui ela vem sem
         // letra, que é justamente o caso em que o atalho existe.
         songProvider.overrideWith(
-          (ref, args) async => Song.fromJson({
-            'id': args.songId,
-            'teamId': args.teamId,
-            'title': 'Meu Deus, meu Rei',
-          }),
+          (ref, args) async => CachedValue(
+            fromCache: false,
+            data: Song.fromJson({
+              'id': args.songId,
+              'teamId': args.teamId,
+              'chords': chords,
+              'chordsKey': chords == null ? null : 'C',
+              'title': 'Meu Deus, meu Rei',
+            }),
+          ),
         ),
       ],
       child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),

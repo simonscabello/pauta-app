@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/core/network/api_exception.dart';
+import 'package:louvor_app/core/storage/read_cache.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
@@ -72,6 +73,7 @@ final _letraLonga = List.generate(
 Song _musica({
   String? defaultKey = 'A',
   String? lyrics,
+  String? chords,
   String? lyricsUrl,
   String? chordsUrl = 'https://www.cifraclub.com.br/novo-canto/cristo-venceu/',
   String? youtubeUrl,
@@ -87,6 +89,8 @@ Song _musica({
       'defaultKey': defaultKey,
       'originalKey': 'G',
       'lyrics': lyrics,
+      'chords': chords,
+      'chordsKey': chords == null ? null : 'D',
       'lyricsUrl': lyricsUrl,
       'chordsUrl': chordsUrl,
       'youtubeUrl': youtubeUrl,
@@ -113,7 +117,9 @@ Future<void> _abrir(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        songProvider.overrideWith((ref, args) async => song),
+        songProvider.overrideWith(
+          (ref, args) async => CachedValue(data: song, fromCache: false),
+        ),
         songHistoryProvider.overrideWith((ref, teamId) async => history),
         if (musicas != null) songRepositoryProvider.overrideWithValue(musicas),
         authControllerProvider.overrideWith(
@@ -260,6 +266,19 @@ void main() {
     expect(find.textContaining('verso 12'), findsOneWidget);
     // O link do site continua a um toque, agora na tela da letra.
     expect(find.byTooltip('Abrir no site'), findsOneWidget);
+  });
+
+  testWidgets('Cifra abre o texto guardado no tom da equipe', (tester) async {
+    await _abrir(
+      tester,
+      song: _musica(chords: '[A/C#]Canto', defaultKey: 'E'),
+      size: const Size(390, 2000),
+    );
+    expect(find.text('Canto'), findsNothing);
+    await tester.tap(find.text('Cifra'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SongLyricsScreen), findsOneWidget);
+    expect(find.text('B/D#'), findsOneWidget);
   });
 
   testWidgets('a porta "Letra" abre a letra guardada', (tester) async {
