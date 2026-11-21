@@ -17,14 +17,21 @@ final _repeat = RegExp(r'^\(?(?:x\d+|\d+x)\)?$');
 final _separator = RegExp(r'^(?:[|():]+|\(?(?:x\d+|\d+x)\)?)$');
 
 /// Sílaba esticada para caber o acorde, como os sites escrevem: "te___ste",
-/// "ver---so", "pou--[C]--co". Hífen simples fica: "dispensou-me" é letra.
+/// "ver---so", "pou--[C]--co", "me[Bb]---do". Hífen simples fica:
+/// "dispensou-me" é letra.
 final _stretch =
-    RegExp(r'(\p{L})(-+)((?:\[[^\]]*\])?)(-*)(?=\p{L})', unicode: true);
+    RegExp(r'(\p{L})((?:-|\[[^\]]*\])+)(?=\p{L})', unicode: true);
 String _unstretch(String line) =>
     line.replaceAll('_', '').replaceAllMapped(
           _stretch,
-          (m) => m[2]!.length + m[4]!.length >= 2 ? '${m[1]}${m[3]}' : m[0]!,
+          // Só os traços fora do colchete contam: "[A5-]" é acorde.
+          (m) => m[2]!.replaceAll(_brackets, '').length >= 2
+              ? '${m[1]}${_brackets.allMatches(m[2]!).map((b) => b[0]).join()}'
+              : m[0]!,
         );
+
+/// Tablatura ("D|-0--2--|"): os traços são as cordas, e não sílaba esticada.
+final _tabLine = RegExp(r'^\s*[A-Ga-g][#b]?\|');
 
 bool isChord(String token) => _chord.hasMatch(token);
 
@@ -33,7 +40,9 @@ Iterable<RegExpMatch> _chordMarkers(String text) =>
 
 List<List<ChordSegment>> parseChordSheet(String sheet) {
   return [
-    for (final line in sheet.split(RegExp(r'\r\n?|\n'))) _parseLine(line),
+    // A limpeza também na leitura: vale para a cifra já guardada.
+    for (final line in sheet.split(RegExp(r'\r\n?|\n')))
+      _parseLine(_tabLine.hasMatch(line) ? line : _unstretch(line)),
   ];
 }
 

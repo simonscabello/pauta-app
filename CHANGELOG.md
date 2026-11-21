@@ -7,6 +7,12 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.45.1 — 21/11/2026
+
+### Correções
+- A cifra não mostra mais os traços da sílaba esticada ("me---do",
+  "co---ro"), inclusive nas cifras já guardadas.
+
 ## 0.45.0 — 21/11/2026
 
 ### Novidades

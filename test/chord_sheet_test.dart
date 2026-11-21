@@ -181,6 +181,18 @@ void main() {
     );
   });
 
+  test('sílaba esticada some na leitura, mesmo na cifra já guardada', () {
+    String text(String sheet) => parseChordSheet(sheet)
+        .map((line) => line.map((s) => '${s.chord ?? ''}|${s.text}').join())
+        .join('\n');
+    expect(text('ter me[Bb]---d[Bb9]o'), '|ter me' 'Bb|d' 'Bb9|o');
+    expect(text('a[Bb9]-----m[Bb]e'), '|a' 'Bb9|m' 'Bb|e');
+    expect(text('o santo co---ro'), '|o santo coro');
+    expect(text('dispensou-me [A5-]agora'), '|dispensou-me ' 'A5-|agora');
+    const tab = 'D|-0--X--2--|';
+    expect(text(tab), '|$tab');
+  });
+
   test('o .txt do Cifra Club colado: sem cabeçalho, tom e tabela de acordes',
       () {
     // Inventado no formato do "Baixar cifra"; nenhuma letra de verdade.
