@@ -85,8 +85,14 @@ void main() {
   });
 
   test('ChordPro com qualquer acorde válido passa intacto', () {
-    const raw = '\t[Refrão]  \r\n[D]Ao único [F#m7(b5)/A]digno\r\nD    A\n';
+    const raw = '  [Refrão]  \n[D]Ao único [F#m7(b5)/A]digno\n[Bm]\n';
     expect(normalizeChordSheet(raw), raw);
+    // Linha de acordes esquecida sem colchete ganha colchete, e não é
+    // misturada a um verso que já tem os dele.
+    expect(
+      normalizeChordSheet('D    A\n[D]Ao único [A]digno'),
+      '[D]    [A]\n[D]Ao único [A]digno',
+    );
   });
 
   test('D → E preserva extensões e transpõe baixo e raiz', () {
@@ -245,5 +251,23 @@ void main() {
       expect(transposeChordSheet(sheet, invalid, 'D'), sheet);
       expect(transposeChordSheet(sheet, 'D', invalid), sheet);
     }
+  });
+
+  test('cifra colada com caractere invisível, "Aº" e "(intro)" vira ChordPro',
+      () {
+    expect(
+      normalizeChordSheet(
+        '​[Intro] C  G\n​ C       G\n​Deus, está aqui',
+      ),
+      '[Intro] [C]  [G]\nD[C]eus, est[G]á aqui',
+    );
+    // Linha solta numa cifra que já tem colchetes também é arrumada.
+    expect(
+      normalizeChordSheet(
+        '(intro) Gm  Aº\nJe[Gm]sus tomou o pão\n  Cm      Aº\nTomai e comei',
+      ),
+      '(intro) [Gm]  [Aº]\nJe[Gm]sus tomou o pão\nTo[Cm]mai e co[Aº]mei',
+    );
+    expect(transposeChord('Aº', 2), 'Bº');
   });
 }

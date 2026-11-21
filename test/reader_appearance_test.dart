@@ -31,6 +31,16 @@ void main() {
         );
       }
     }
+    // "Do app": o fundo do próprio tema, com as mesmas cores de acorde.
+    for (final theme in [AppTheme.light, AppTheme.dark]) {
+      for (final c in ChordColor.all) {
+        expect(
+          _contrast(theme.scaffoldBackgroundColor, c.on(theme.brightness)),
+          greaterThan(4.5),
+          reason: '${c.label} sobre o tema ${theme.brightness.name}',
+        );
+      }
+    }
   });
 
   testWidgets('fundo e cor dos acordes escolhidos valem no leitor e ficam',
@@ -63,8 +73,8 @@ void main() {
         Theme.of(tester.element(find.byType(Scaffold))).scaffoldBackgroundColor;
     Color chord() => tester.widget<Text>(find.text('A')).style!.color!;
 
-    // Sem escolha: acompanha o app (claro), acordes em laranja.
-    expect(background(), ReaderPalette.light.background);
+    // Sem escolha: o fundo de sempre do app; só os acordes ganham cor.
+    expect(background(), AppTheme.light.scaffoldBackgroundColor);
     expect(chord(), ChordColor.all.first.onLight);
 
     await tester.tap(find.byTooltip('Aparência da leitura'));

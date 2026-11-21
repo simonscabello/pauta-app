@@ -7,6 +7,15 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.45.2 — 21/11/2026
+
+### Correções
+- Cifras que apareciam sem os acordes coloridos, com os acordes numa linha
+  à parte, agora saem certas: as coladas de outro app com caracteres
+  invisíveis, as com acorde diminuto escrito "Aº" e as com "(intro)".
+- "Do app" na aparência da leitura mantém o fundo de sempre do app; só a cor
+  dos acordes muda.
+
 ## 0.45.1 — 21/11/2026
 
 ### Correções

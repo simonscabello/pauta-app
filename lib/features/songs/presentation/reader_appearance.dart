@@ -143,15 +143,22 @@ final readerAppearanceProvider =
   return ReaderAppearanceController(prefs);
 });
 
-/// O fundo escolhido, ou o escuro/claro que acompanha o tema do app.
+/// O fundo escolhido, ou as cores do próprio tema do app ("Do app").
 ReaderPalette resolveReaderPalette(
   BuildContext context,
   ReaderPalette? chosen,
-) =>
-    chosen ??
-    (Theme.of(context).brightness == Brightness.dark
-        ? ReaderPalette.dark
-        : ReaderPalette.light);
+) {
+  if (chosen != null) return chosen;
+  final theme = Theme.of(context);
+  return ReaderPalette(
+    'app',
+    'Do app',
+    brightness: theme.brightness,
+    background: theme.scaffoldBackgroundColor,
+    text: theme.colorScheme.onSurface,
+    muted: theme.colorScheme.onSurfaceVariant,
+  );
+}
 
 /// O tema do app com as cores do leitor: as barras e o texto acompanham o fundo.
 ThemeData readerTheme(ReaderPalette palette) {
@@ -194,7 +201,11 @@ class _ReaderAppearanceSheet extends ConsumerWidget {
     final appearance = ref.watch(readerAppearanceProvider);
     final controller = ref.read(readerAppearanceProvider.notifier);
     final theme = Theme.of(context);
-    final palette = resolveReaderPalette(context, appearance.palette);
+    // "Do app" é o tema de fora do leitor: a folha abriu com o fundo anterior.
+    final palette = resolveReaderPalette(
+      Navigator.of(context, rootNavigator: true).context,
+      appearance.palette,
+    );
 
     Widget heading(String text) => Padding(
           padding: const EdgeInsets.only(

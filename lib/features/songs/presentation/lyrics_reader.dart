@@ -461,10 +461,9 @@ class _ReaderThemed extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chosen = ref.watch(readerAppearanceProvider).palette;
-    return Theme(
-      data: readerTheme(resolveReaderPalette(context, chosen)),
-      child: child,
-    );
+    // "Do app": o leitor fica com o fundo de sempre; só os acordes mudam.
+    if (chosen == null) return child;
+    return Theme(data: readerTheme(chosen), child: child);
   }
 }
 
@@ -517,7 +516,10 @@ class ChordSheetView extends ConsumerWidget {
         ],
       );
     }
-    final sheet = transposeChordSheet(chords!, sourceKey, targetKey);
+    // A arrumação também na leitura: corrige a cifra já guardada sem passar
+    // pelo formulário (acorde em linha própria, "Aº", caractere invisível).
+    final sheet =
+        transposeChordSheet(normalizeChordSheet(chords!), sourceKey, targetKey);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

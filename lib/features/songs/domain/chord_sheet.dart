@@ -6,7 +6,8 @@ const maxChordSheetLength = 30000;
 const _note = r'[A-G][#b]?';
 // Extensões brasileiras também aparecem como 7M, 5-, 7(9,13) e 6/9.
 const _degree = r'[#b]?(?:13|11|[245679])(?:[M+-]|#(?![0-9]))?';
-const _quality = r'(?:dim|aug|sus|m|°|ø|\+)?';
+// "Aº": o ordinal do teclado brasileiro no lugar do °.
+const _quality = r'(?:dim|aug|sus|m|°|º|ø|\+)?';
 const _extension = '(?:(?:maj|Maj|sus|add|/)?$_degree|'
     '\\($_degree(?:[,/]?$_degree)*\\))';
 final _chord = RegExp('^($_note)($_quality$_extension*)(?:/($_note))?\$');
@@ -97,7 +98,8 @@ String _expandTabs(String line) {
   return result.toString();
 }
 
-final _labelPrefix = RegExp(r'\s*(?:[^:\[\]]{1,30}:|\[[^\]]+\])\s*(?=\S)');
+final _labelPrefix =
+    RegExp(r'\s*(?:[^:\[\]]{1,30}:|\[[^\]]+\]|\([^)]{1,30}\))\s*(?=\S)');
 
 String _bracketChords(String line) => line.replaceAllMapped(_tokens, (m) {
       final token = m[0]!;
@@ -196,9 +198,14 @@ String _withoutFileExtras(String raw) {
   return kept.join('\n').replaceFirst(RegExp(r'^\s*\n'), '').trimRight();
 }
 
+/// Caracteres invisíveis que vêm na cópia de sites e apps ("\u200B" no começo
+/// de cada linha): com eles o acorde não é reconhecido.
+final _invisible = RegExp('[\u200B-\u200D\u2060\uFEFF]');
+
 String normalizeChordSheet(String raw) {
-  raw = _withoutDirectives(_withoutFileExtras(raw));
-  if (_chordMarkers(raw).isNotEmpty) return raw;
+  raw = _withoutDirectives(
+    _withoutFileExtras(raw.replaceAll(_invisible, '').replaceAll('\u00A0', ' ')),
+  );
 
   final lines = raw.split(RegExp(r'\r\n?|\n')).map(_expandTabs).toList();
   final result = <String>[];
@@ -218,7 +225,9 @@ String normalizeChordSheet(String raw) {
     final next = i + 1 < lines.length ? lines[i + 1] : '';
     if (next.trim().isEmpty ||
         isChordSectionLabel(next) ||
-        _isChordLine(next)) {
+        _isChordLine(next) ||
+        // Verso que já tem colchetes não recebe outra linha de acordes.
+        _chordMarkers(next).isNotEmpty) {
       result.add(_bracketChords(line));
       continue;
     }
