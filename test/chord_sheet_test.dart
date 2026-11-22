@@ -270,4 +270,18 @@ void main() {
     );
     expect(transposeChord('Aº', 2), 'Bº');
   });
+
+  test('graus do tom e distância entre tons', () {
+    expect(chordDegree('C#m7', 'E'), 'VIm7');
+    expect(chordDegree('E/G#', 'E'), 'I/III');
+    expect(chordDegree('Bb', 'C'), 'bVII');
+    expect(chordDegree('Am', 'Am'), 'Im');
+    expect(chordDegree('G', null), 'G');
+
+    expect(keyDistance('C', 'G'), 1);
+    expect(keyDistance('C', 'Am'), 0);
+    expect(keyDistance('G', 'Bb'), 3);
+    expect(keyDistance('C', 'F#'), 6);
+    expect(keyDistance('C', null), isNull);
+  });
 }

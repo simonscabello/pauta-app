@@ -486,7 +486,10 @@ class ChordSheetView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scale = ref.watch(lyricsScaleProvider);
-    final chordColor = ref.watch(readerAppearanceProvider).chordColor;
+    final appearance = ref.watch(readerAppearanceProvider);
+    final chordColor = appearance.chordColor;
+    // O grau é do tom que está na tela; sem tom conhecido, ficam as notas.
+    final degreeKey = appearance.degrees ? targetKey ?? sourceKey : null;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final base = theme.textTheme.bodyLarge!;
@@ -538,7 +541,19 @@ class ChordSheetView extends ConsumerWidget {
             ),
           ),
         for (final line in parseChordSheet(sheet))
-          _chordLine(line, lyricsStyle, chordStyle, scheme.onSurfaceVariant),
+          _chordLine(
+            [
+              for (final s in line)
+                (
+                  chord:
+                      s.chord == null ? null : chordDegree(s.chord!, degreeKey),
+                  text: s.text,
+                ),
+            ],
+            lyricsStyle,
+            chordStyle,
+            scheme.onSurfaceVariant,
+          ),
       ],
     );
   }
@@ -559,9 +574,15 @@ class ChordSheetView extends ConsumerWidget {
     if (!line.any((s) => s.chord != null)) return lyricText(text);
 
     // Intro, solo, "Intro: D A | Bm x2": sem letra embaixo, tudo numa linha só.
-    final instrumental = line
-        .where((s) => s.chord != null)
-        .every((s) => _noLyrics.hasMatch(s.text));
+    // Verso com o acorde só no fim ("Em santidade servirei [F#m]") é verso:
+    // antes do primeiro acorde, só rótulo ou nada.
+    final lead = line.first.chord == null ? line.first.text.trim() : '';
+    final instrumental = (_noLyrics.hasMatch(lead) ||
+            isChordSectionLabel(lead) ||
+            (lead.startsWith('(') && lead.endsWith(')'))) &&
+        line
+            .where((s) => s.chord != null)
+            .every((s) => _noLyrics.hasMatch(s.text));
     return Semantics(
       container: true,
       excludeSemantics: true,

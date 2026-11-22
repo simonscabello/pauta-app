@@ -20,16 +20,14 @@ final _separator = RegExp(r'^(?:[|():]+|\(?(?:x\d+|\d+x)\)?)$');
 /// Sílaba esticada para caber o acorde, como os sites escrevem: "te___ste",
 /// "ver---so", "pou--[C]--co", "me[Bb]---do". Hífen simples fica:
 /// "dispensou-me" é letra.
-final _stretch =
-    RegExp(r'(\p{L})((?:-|\[[^\]]*\])+)(?=\p{L})', unicode: true);
-String _unstretch(String line) =>
-    line.replaceAll('_', '').replaceAllMapped(
-          _stretch,
-          // Só os traços fora do colchete contam: "[A5-]" é acorde.
-          (m) => m[2]!.replaceAll(_brackets, '').length >= 2
-              ? '${m[1]}${_brackets.allMatches(m[2]!).map((b) => b[0]).join()}'
-              : m[0]!,
-        );
+final _stretch = RegExp(r'(\p{L})((?:-|\[[^\]]*\])+)(?=\p{L})', unicode: true);
+String _unstretch(String line) => line.replaceAll('_', '').replaceAllMapped(
+      _stretch,
+      // Só os traços fora do colchete contam: "[A5-]" é acorde.
+      (m) => m[2]!.replaceAll(_brackets, '').length >= 2
+          ? '${m[1]}${_brackets.allMatches(m[2]!).map((b) => b[0]).join()}'
+          : m[0]!,
+    );
 
 /// Tablatura ("D|-0--2--|"): os traços são as cordas, e não sílaba esticada.
 final _tabLine = RegExp(r'^\s*[A-Ga-g][#b]?\|');
@@ -137,12 +135,20 @@ String? _directiveLine(String name, String? value) {
   }
 
   return switch (name.toLowerCase()) {
-    'comment' || 'c' || 'comment_italic' || 'ci' || 'comment_box' || 'cb' ||
+    'comment' ||
+    'c' ||
+    'comment_italic' ||
+    'ci' ||
+    'comment_box' ||
+    'cb' ||
     'highlight' =>
       text.isEmpty ? null : label(text),
     'start_of_chorus' || 'soc' => label('Refrão'),
     'start_of_bridge' || 'sob' => label('Ponte'),
-    'start_of_verse' || 'sov' || 'start_of_tab' || 'sot' =>
+    'start_of_verse' ||
+    'sov' ||
+    'start_of_tab' ||
+    'sot' =>
       text.isEmpty ? null : label(text),
     'capo' => _capoLabel(text),
     _ => null,
@@ -169,7 +175,8 @@ String _withoutDirectives(String raw) {
 
 // O .txt do "Baixar cifra" do Cifra Club: "Artista - Música" na primeira
 // linha, "Tom: C" às vezes, e a tabela dos desenhos no fim.
-final _diagramsMarker = RegExp(r'^\s*-{3,}\s*acordes\s*-{3,}\s*$', caseSensitive: false);
+final _diagramsMarker =
+    RegExp(r'^\s*-{3,}\s*acordes\s*-{3,}\s*$', caseSensitive: false);
 final _keyLine = RegExp(r'^\s*tom:\s*(\S+)\s*$', caseSensitive: false);
 
 /// Tira do texto colado o que não é cifra: a tabela de desenhos dos acordes,
@@ -204,7 +211,9 @@ final _invisible = RegExp('[\u200B-\u200D\u2060\uFEFF]');
 
 String normalizeChordSheet(String raw) {
   raw = _withoutDirectives(
-    _withoutFileExtras(raw.replaceAll(_invisible, '').replaceAll('\u00A0', ' ')),
+    _withoutFileExtras(
+      raw.replaceAll(_invisible, '').replaceAll('\u00A0', ' '),
+    ),
   );
 
   final lines = raw.split(RegExp(r'\r\n?|\n')).map(_expandTabs).toList();
@@ -307,15 +316,45 @@ String transposeChord(String chord, int semitones, {bool preferFlats = false}) {
 /// A grafia é a de costume do tom de chegada: D sobe para Eb, e não D#.
 String shiftMusicalKey(String key, int semitones) => semitones % 12 == 0
     ? key
-    : (isMinorKey(key) ? _usualMinorKeys : _usualMajorKeys)[
-        (_pitch(key) + semitones) % 12];
+    : (isMinorKey(key)
+        ? _usualMinorKeys
+        : _usualMajorKeys)[(_pitch(key) + semitones) % 12];
 
 const _usualMajorKeys = [
   'C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B', //
 ];
 const _usualMinorKeys = [
-  'Cm', 'C#m', 'Dm', 'Ebm', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm', //
+  'Cm', 'C#m', 'Dm', 'Ebm', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm',
+  'Bm', //
 ];
+
+const _degrees = [
+  'I', 'bII', 'II', 'bIII', 'III', 'IV', '#IV', 'V', 'bVI', 'VI', 'bVII',
+  'VII', //
+];
+
+/// O acorde como grau do tom: C#m7 em E vira VIm7, e E/G# vira I/III. O que
+/// vem depois da nota fica como está. Em tom menor, o grau I é a própria
+/// tônica menor.
+String chordDegree(String chord, String? key) {
+  final tonic = normalizeMusicalKey(key);
+  final match = _chord.firstMatch(chord);
+  if (tonic == null || match == null) return chord;
+  String degree(String note) => _degrees[(_pitch(note) - _pitch(tonic)) % 12];
+  final bass = match[3];
+  return '${degree(match[1]!)}${match[2]}${bass == null ? '' : '/${degree(bass)}'}';
+}
+
+/// Quantas quintas separam dois tons no círculo (0 a 6); o tom menor conta
+/// pelo relativo maior. Até 2 é vizinho: de C para G, D, F ou Bb.
+int? keyDistance(String? a, String? b) {
+  final from = normalizeMusicalKey(a);
+  final to = normalizeMusicalKey(b);
+  if (from == null || to == null) return null;
+  int major(String key) => _pitch(key) + (isMinorKey(key) ? 3 : 0);
+  final fifths = (major(to) - major(from)) * 7 % 12;
+  return fifths > 6 ? 12 - fifths : fifths;
+}
 
 String transposeChordSheet(String sheet, String? sourceKey, String? targetKey) {
   final source = normalizeMusicalKey(sourceKey);

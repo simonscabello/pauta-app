@@ -28,6 +28,8 @@ import '../../../shared/widgets/share_action.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../songs/domain/chord_sheet.dart';
+import '../application/played_songs.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -1501,9 +1503,49 @@ class _ServiceSongsSection extends StatelessWidget {
               position: i + 1,
               serviceSongs: songs,
             ),
+        if (_keyMap(songs) case final map?)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text.rich(
+              TextSpan(
+                text: 'Tons: ${map.keys.join(' → ')}',
+                children: [
+                  if (map.jumps.isNotEmpty)
+                    TextSpan(
+                      text: '\nSalto de tom: ${map.jumps.join(', ')}',
+                      style: TextStyle(
+                        color: AppStatusColors.of(context).warning.foreground,
+                      ),
+                    ),
+                ],
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
       ],
     );
   }
+}
+
+/// Os tons do culto na ordem em que se toca, e as passagens entre tons
+/// distantes (três quintas ou mais), que pedem uma ponte ou uma pausa. Nulo
+/// com menos de duas músicas com tom.
+({List<String> keys, List<String> jumps})? _keyMap(List<EventSong> songs) {
+  final keys = [
+    for (final song in songs)
+      if (song.key?.trim().isNotEmpty ?? false) song.key!.trim(),
+  ];
+  if (keys.length < 2) return null;
+  return (
+    keys: keys,
+    jumps: [
+      for (var i = 1; i < keys.length; i++)
+        if ((keyDistance(keys[i - 1], keys[i]) ?? 0) >= 3)
+          '${keys[i - 1]} → ${keys[i]}',
+    ],
+  );
 }
 
 /// A linha de apoio da música na escala: "314 CC · Dízimos e Ofertas".
@@ -1522,7 +1564,7 @@ String? _subtitleOf(EventSong song) {
   return partes.isEmpty ? null : partes.join(' · ');
 }
 
-class _SongRow extends StatelessWidget {
+class _SongRow extends ConsumerWidget {
   const _SongRow({
     required this.teamId,
     required this.eventId,
@@ -1540,10 +1582,17 @@ class _SongRow extends StatelessWidget {
   final List<EventSong> serviceSongs;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final hasKey = song.key != null && song.key!.isNotEmpty;
+    ref.watch(playedSongsProvider);
+    final played = ref.read(playedSongsProvider.notifier);
+    final isPlayed = played.isPlayed(eventId, song);
+    // A próxima: a primeira ainda não tocada, depois que alguma já foi.
+    final isNext = !isPlayed &&
+        serviceSongs.any((s) => played.isPlayed(eventId, s)) &&
+        serviceSongs.firstWhere((s) => !played.isPlayed(eventId, s)) == song;
 
     // `Material` transparente em volta: o [AppCard] é uma superfície pintada,
     // e sem isto a onda do toque ia parar no `Material` do `Scaffold`, atrás
@@ -1564,12 +1613,20 @@ class _SongRow extends StatelessWidget {
           song: song,
           serviceSongs: serviceSongs,
         ),
-        leading: Text(
-          '$position',
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-          ),
+        // O número marca a música como tocada, só neste aparelho.
+        leading: IconButton(
+          tooltip: isPlayed ? 'Desmarcar como tocada' : 'Marcar como tocada',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => played.toggle(eventId, song),
+          icon: isPlayed
+              ? const Icon(Icons.check_circle_rounded)
+              : Text(
+                  '$position',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: isNext ? scheme.primary : scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
         ),
         // A etiqueta fica ao lado do título, e não no `trailing`: ali já está o
         // tom, e dois selos disputando a mesma ponta espremiam os dois numa
@@ -1581,7 +1638,11 @@ class _SongRow extends StatelessWidget {
                 song.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyLarge,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: isPlayed ? scheme.onSurfaceVariant : null,
+                  decoration: isPlayed ? TextDecoration.lineThrough : null,
+                  fontWeight: isNext ? FontWeight.w700 : null,
+                ),
               ),
             ),
             if (song.isNew) ...[

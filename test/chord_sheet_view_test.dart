@@ -71,6 +71,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('acorde só no fim do verso fica em cima, e não na mesma linha',
+      (tester) async {
+    const song = Song(
+      id: '1',
+      title: 'Te adorar',
+      chords: '[Intro] [E]  [B]\nEm ti  [F#m]',
+    );
+    await _open(tester, const SongLyricsScreen(song: song, chordMode: true));
+
+    double top(String text) => tester.getTopLeft(find.text(text)).dy;
+    expect(top('E'), closeTo(top('[Intro]'), 3));
+    expect(top('F#m'), lessThan(top('Em ti  ')));
+  });
+
+  testWidgets('acordes em graus pela folha de aparência', (tester) async {
+    const song = Song(
+      id: '1',
+      title: 'Em tua casa',
+      chordsKey: 'D',
+      defaultKey: 'E',
+      chords: sheet,
+    );
+    await _open(tester, const SongLyricsScreen(song: song, chordMode: true));
+
+    await tester.tap(find.byTooltip('Aparência da leitura'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Acordes em graus'));
+    await tester.tap(find.text('Acordes em graus'));
+    await tester.pumpAndSettle();
+    expect(find.text('V/VII'), findsWidgets);
+    expect(find.text('B/D#'), findsNothing);
+  });
+
   testWidgets('destino anotado permite ajustar a partir do tom escrito',
       (tester) async {
     const song = Song(

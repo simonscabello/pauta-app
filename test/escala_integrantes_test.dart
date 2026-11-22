@@ -61,6 +61,30 @@ void main() {
     expect(find.text('Meu Deus, meu Rei'), findsOneWidget);
   });
 
+  testWidgets('mapa de tons avisa o salto, e a música tocada fica marcada',
+      (tester) async {
+    await _pumpEscala(
+      tester,
+      _evento(nomes: ['Ana'], musicas: {'Um': 'G', 'Dois': 'Bb', 'Três': 'C'}),
+    );
+
+    expect(
+      find.textContaining('Tons: G → Bb → C', findRichText: true),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Salto de tom: G → Bb', findRichText: true),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Marcar como tocada').first);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Desmarcar como tocada'), findsOneWidget);
+    await tester.tap(find.byTooltip('Desmarcar como tocada'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Marcar como tocada'), findsNWidgets(3));
+  });
+
   testWidgets('"Ver mais" abre a lista e vira "Ver menos"', (tester) async {
     await _pumpEscala(tester, _evento(nomes: _nomes(12)));
 
@@ -147,6 +171,7 @@ List<String> _nomes(int quantos) =>
 Event _evento({
   required List<String> nomes,
   Map<String, String> fotos = const {},
+  Map<String, String> musicas = const {'Meu Deus, meu Rei': 'G'},
 }) {
   return Event.fromJson({
     'id': 'e1',
@@ -186,15 +211,16 @@ Event _evento({
       },
     ],
     'songs': [
-      {
-        'songId': 'mus1',
-        'serviceId': 's1',
-        'title': 'Meu Deus, meu Rei',
-        'artist': null,
-        'key': 'G',
-        'note': null,
-        'isNew': false,
-      },
+      for (final (i, musica) in musicas.entries.indexed)
+        {
+          'songId': 'mus${i + 1}',
+          'serviceId': 's1',
+          'title': musica.key,
+          'artist': null,
+          'key': musica.value,
+          'note': null,
+          'isNew': false,
+        },
     ],
   });
 }

@@ -7,6 +7,21 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.46.0 — 22/11/2026
+
+### Novidades
+- **Acordes em graus.** Na aparência da leitura (a paleta no topo da cifra),
+  "Acordes em graus" mostra I, IV, VIm no lugar das notas, pelo tom que está
+  na tela.
+- **Marcar como tocada.** Na escala, tocar no número da música risca a que já
+  foi e destaca a próxima; tocar de novo desfaz. Vale só no seu aparelho.
+- **Tons do culto.** Embaixo das músicas de cada culto aparece a sequência de
+  tons, com aviso quando há um salto de tom entre uma música e a seguinte.
+
+### Correções
+- Verso com o acorde só no fim ("Em santidade servirei  F#m") saía numa linha
+  só, em cinza; o acorde volta para cima do verso.
+
 ## 0.45.2 — 21/11/2026
 
 ### Correções

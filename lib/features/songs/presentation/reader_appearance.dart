@@ -87,13 +87,20 @@ class ChordColor {
 
 /// Fundo e cor dos acordes do leitor, guardados no aparelho como o tamanho da
 /// letra. `palette == null` acompanha o tema do app (escuro ou claro).
-typedef ReaderAppearance = ({ReaderPalette? palette, ChordColor chordColor});
+typedef ReaderAppearance = ({
+  ReaderPalette? palette,
+  ChordColor chordColor,
+
+  /// Acordes como graus do tom (I, IV, VIm) no lugar das notas.
+  bool degrees,
+});
 
 class ReaderAppearanceController extends StateNotifier<ReaderAppearance> {
   ReaderAppearanceController(this._prefs) : super(_read(_prefs));
 
   static const _paletteKey = 'reader_palette';
   static const _chordKey = 'reader_chord_color';
+  static const _degreesKey = 'reader_degrees';
 
   final SharedPreferences? _prefs;
 
@@ -106,11 +113,16 @@ class ReaderAppearanceController extends StateNotifier<ReaderAppearance> {
         (c) => c.id == chord,
         orElse: () => ChordColor.all.first,
       ),
+      degrees: prefs?.getBool(_degreesKey) ?? false,
     );
   }
 
   Future<void> setPalette(ReaderPalette? palette) async {
-    state = (palette: palette, chordColor: state.chordColor);
+    state = (
+      palette: palette,
+      chordColor: state.chordColor,
+      degrees: state.degrees
+    );
     try {
       if (palette == null) {
         await _prefs?.remove(_paletteKey);
@@ -122,8 +134,21 @@ class ReaderAppearanceController extends StateNotifier<ReaderAppearance> {
     }
   }
 
+  Future<void> setDegrees(bool degrees) async {
+    state = (
+      palette: state.palette,
+      chordColor: state.chordColor,
+      degrees: degrees,
+    );
+    try {
+      await _prefs?.setBool(_degreesKey, degrees);
+    } catch (_) {
+      // Preferência que não gravou vale só para esta sessão.
+    }
+  }
+
   Future<void> setChordColor(ChordColor color) async {
-    state = (palette: state.palette, chordColor: color);
+    state = (palette: state.palette, chordColor: color, degrees: state.degrees);
     try {
       await _prefs?.setString(_chordKey, color.id);
     } catch (_) {
@@ -271,7 +296,18 @@ class _ReaderAppearanceSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-            _Preview(palette: palette, chordColor: appearance.chordColor),
+            _Preview(
+              palette: palette,
+              chordColor: appearance.chordColor,
+              degrees: appearance.degrees,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Acordes em graus'),
+              subtitle: const Text('I, IV, VIm no lugar de G, C, Em'),
+              value: appearance.degrees,
+              onChanged: controller.setDegrees,
+            ),
           ],
         ),
       ),
@@ -304,10 +340,15 @@ class _Swatch extends StatelessWidget {
 }
 
 class _Preview extends StatelessWidget {
-  const _Preview({required this.palette, required this.chordColor});
+  const _Preview({
+    required this.palette,
+    required this.chordColor,
+    required this.degrees,
+  });
 
   final ReaderPalette palette;
   final ChordColor chordColor;
+  final bool degrees;
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +366,7 @@ class _Preview extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'G            D/F#',
+              degrees ? 'I             V/VII' : 'G            D/F#',
               style: style.copyWith(
                 color: chordColor.on(palette.brightness),
                 fontWeight: FontWeight.bold,
