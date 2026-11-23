@@ -228,12 +228,32 @@ class EventRepository {
 
   /// O endereço público da escala, só de leitura. Cria o link na primeira
   /// vez e devolve o mesmo nas seguintes.
-  Future<String> publicLink(String eventId) async {
+  ///
+  /// [showNames] muda se a página mostra quem serve; nulo mantém como está.
+  Future<({String url, bool showNames})> publicLink(
+    String eventId, {
+    bool? showNames,
+  }) async {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
         '/events/$eventId/public-link',
+        data: {if (showNames != null) 'showNames': showNames},
       );
-      return '${AppConfig.apiBaseUrl}/e/${response.data!['token']}';
+      return (
+        url: '${AppConfig.apiBaseUrl}/e/${response.data!['token']}',
+        showNames: response.data!['showNames'] != false,
+      );
+    });
+  }
+
+  /// "Vou" ou "não vou" ao ensaio da escala.
+  Future<Event> answerRehearsal(String eventId, {required bool attending}) {
+    return _guard(() async {
+      final response = await _dio.put<Map<String, dynamic>>(
+        '/events/$eventId/rehearsal-attendance',
+        data: {'attending': attending},
+      );
+      return Event.fromJson(response.data!);
     });
   }
 
@@ -452,22 +472,28 @@ final eventsProvider = FutureProvider.autoDispose
   final repo = ref.watch(eventRepositoryProvider);
   final result = repo.list(teamId, scope: scope);
   if (scope == 'upcoming') {
-    // Modo culto sem rede: a escala mais próxima (até uma semana) vai para o
+    // Modo culto sem rede: as escalas mais próximas (até uma semana) vão para o
     // aparelho com a letra e a cifra, mesmo que ninguém a tenha aberto.
     unawaited(
       result.then((list) async {
-        final next = list.data.where((e) => !e.isDraft).firstOrNull;
-        if (list.fromCache ||
-            next == null ||
-            next.startsAt.difference(DateTime.now()).inDays > 7) {
-          return;
+        if (list.fromCache) return;
+        // As três mais próximas: cobre o domingo com manhã e noite e o culto
+        // do meio da semana sem multiplicar as chamadas.
+        final next = list.data
+            .where(
+              (e) =>
+                  !e.isDraft &&
+                  e.startsAt.difference(DateTime.now()).inDays <= 7,
+            )
+            .take(3);
+        for (final item in next) {
+          final event = await repo.find(item.id);
+          if (event.fromCache) return;
+          await ref.read(songRepositoryProvider).prefetch(
+                teamId,
+                event.data.songs.map((song) => song.songId),
+              );
         }
-        final event = await repo.find(next.id);
-        if (event.fromCache) return;
-        await ref.read(songRepositoryProvider).prefetch(
-              teamId,
-              event.data.songs.map((song) => song.songId),
-            );
       }).catchError((_) {}),
     );
   }

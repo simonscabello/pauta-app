@@ -247,6 +247,54 @@ void main() {
       expect(find.text('Desistir'), findsOneWidget);
     });
 
+    testWidgets('com ensaio por vir, pergunta do ensaio e mostra quem vai',
+        (tester) async {
+      final json = _evento(nomes: ['Ana', 'Bruno'], quando: futuro);
+      final evento = Event.fromJson({
+        'id': json.id,
+        'teamId': json.teamId,
+        'title': null,
+        'startsAt': futuro,
+        'rehearsalAt': DateTime.now()
+            .toUtc()
+            .add(const Duration(days: 2))
+            .toIso8601String(),
+        'location': null,
+        'notes': null,
+        'colorPalette': null,
+        'status': 'PUBLISHED',
+        'timezone': 'America/Sao_Paulo',
+        'services': [
+          {'id': 's1', 'label': 'Manhã', 'startsAt': futuro, 'sortOrder': 0},
+        ],
+        'assignments': [
+          {
+            'positionId': 'p1',
+            'positionName': 'Vocalista',
+            'sortOrder': 0,
+            'members': [
+              for (final (i, nome) in ['Ana', 'Bruno'].indexed)
+                {
+                  'id': 'a$i',
+                  'membershipId': 'm$i',
+                  'displayName': nome,
+                  'note': null,
+                  'isRegisteredForPosition': true,
+                },
+            ],
+          },
+        ],
+        'songs': const <Object>[],
+        'rehearsalAttendance': [
+          {'membershipId': 'm1', 'attending': false},
+        ],
+      });
+      await _pumpEscala(tester, evento, souEu: 'm0', papel: 'MEMBER');
+      expect(find.text('Você vai ao ensaio?'), findsOneWidget);
+      expect(find.text('Vou'), findsOneWidget);
+      expect(find.text('Não vai: Bruno'), findsOneWidget);
+    });
+
     testWidgets('escala que já passou não pergunta nada', (tester) async {
       await _pumpEscala(tester, _evento(nomes: ['Ana']), souEu: 'm0');
       expect(find.text('Você confirma presença?'), findsNothing);

@@ -238,8 +238,9 @@ class EventDetailScreen extends ConsumerWidget {
   ) async {
     final repo = ref.read(eventRepositoryProvider);
     final String url;
+    bool showNames;
     try {
-      url = await repo.publicLink(event.id);
+      (:url, :showNames) = await repo.publicLink(event.id);
     } on ApiException catch (error) {
       if (context.mounted) {
         showAppSnackBar(context, error.message, tone: AppTone.danger);
@@ -272,7 +273,31 @@ class EventDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             SelectableText(url),
-            const SizedBox(height: AppSpacing.lg),
+            StatefulBuilder(
+              builder: (context, setState) => SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Mostrar quem serve'),
+                subtitle: const Text(
+                  'Desligado, a página traz só os horários e as músicas.',
+                ),
+                value: showNames,
+                onChanged: (value) async {
+                  setState(() => showNames = value);
+                  try {
+                    await repo.publicLink(event.id, showNames: value);
+                  } on ApiException catch (error) {
+                    if (!context.mounted) return;
+                    setState(() => showNames = !value);
+                    showAppSnackBar(
+                      context,
+                      error.message,
+                      tone: AppTone.danger,
+                    );
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             FilledButton.icon(
               onPressed: () => shareText(sheetContext, url),
               icon: const Icon(Icons.share_outlined, size: 18),
@@ -523,6 +548,14 @@ class _EventDetailBody extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
+              if (event.acceptsRehearsalAnswer && youPositions.isNotEmpty) ...[
+                _RehearsalBand(
+                  event: event,
+                  timezone: timezone,
+                  answer: event.rehearsalAttendance[myMembershipId],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               if (event.acceptsConfirmation)
                 for (final p in event.declined)
                   // Quem lidera decide a troca; quem está fora da escala pode
@@ -706,7 +739,8 @@ class _EventNotes extends StatelessWidget {
     final hasPalette = event.colorPalette?.isNotEmpty ?? false;
     final hasNotes = event.notes?.isNotEmpty ?? false;
     final hasRehearsal = event.rehearsalNotes?.isNotEmpty ?? false;
-    if (!hasPalette && !hasNotes && !hasRehearsal) {
+    final attendance = event.rehearsalAttendanceSummary;
+    if (!hasPalette && !hasNotes && !hasRehearsal && attendance == null) {
       return const SizedBox.shrink();
     }
 
@@ -738,6 +772,14 @@ class _EventNotes extends StatelessWidget {
                 icon: Icons.checklist_rounded,
                 text: 'Pauta do ensaio: ${event.rehearsalNotes}',
                 maxLines: 12,
+              ),
+            if (attendance != null && (hasPalette || hasNotes || hasRehearsal))
+              const SizedBox(height: AppSpacing.sm),
+            if (attendance != null)
+              _MetaLine(
+                icon: Icons.groups_outlined,
+                text: attendance,
+                maxLines: 6,
               ),
           ],
         ),
@@ -903,6 +945,92 @@ class _PresenceBandState extends ConsumerState<_PresenceBand> {
             style: AppButtonStyles.compactText,
             onPressed: onTap == null ? null : () => onTap(true),
             child: const Text('Agora posso'),
+          ),
+        ),
+    };
+  }
+}
+
+/// "Você vai ao ensaio?", para quem está escalado, até o ensaio começar.
+/// Separada da presença no culto: quem confirma o domingo pode faltar ao
+/// ensaio, e é isso que quem lidera precisa saber antes.
+class _RehearsalBand extends ConsumerStatefulWidget {
+  const _RehearsalBand({
+    required this.event,
+    required this.timezone,
+    required this.answer,
+  });
+
+  final Event event;
+  final String timezone;
+
+  /// `true` vai, `false` não vai, nulo ainda não respondeu.
+  final bool? answer;
+
+  @override
+  ConsumerState<_RehearsalBand> createState() => _RehearsalBandState();
+}
+
+class _RehearsalBandState extends ConsumerState<_RehearsalBand> {
+  bool _sending = false;
+
+  Future<void> _answer(bool attending) async {
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(eventRepositoryProvider)
+          .answerRehearsal(widget.event.id, attending: attending);
+      ref.invalidate(eventProvider(widget.event.id));
+    } on ApiException catch (error) {
+      if (mounted) showAppSnackBar(context, error.message, tone: AppTone.danger);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final event = widget.event;
+    final when = formatRehearsalTime(
+      event.rehearsalAt!,
+      event.startsAt,
+      widget.timezone,
+    );
+    VoidCallback? tap(bool attending) =>
+        _sending ? null : () => _answer(attending);
+
+    return switch (widget.answer) {
+      null => AppNotice(
+          tone: AppTone.info,
+          icon: Icons.schedule_rounded,
+          title: 'Você vai ao ensaio?',
+          message: 'Ensaio: $when.',
+          action: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              FilledButton.tonal(
+                style: AppButtonStyles.compact,
+                onPressed: tap(true),
+                child: const Text('Vou'),
+              ),
+              TextButton(
+                style: AppButtonStyles.compactText,
+                onPressed: tap(false),
+                child: const Text('Não vou'),
+              ),
+            ],
+          ),
+        ),
+      final going => AppNotice(
+          tone: going ? AppTone.success : AppTone.warning,
+          icon: Icons.schedule_rounded,
+          title: going ? 'Você vai ao ensaio' : 'Você não vai ao ensaio',
+          message: 'Ensaio: $when.',
+          action: TextButton(
+            style: AppButtonStyles.compactText,
+            onPressed: tap(!going),
+            child: Text(going ? 'Não vou mais' : 'Agora vou'),
           ),
         ),
     };

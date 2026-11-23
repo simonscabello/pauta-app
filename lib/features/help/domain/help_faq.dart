@@ -79,7 +79,10 @@ const helpFaq = <FaqEntry>[
         'Se você tocar em **Não posso**, quem lidera recebe o aviso e procura '
         'alguém no seu lugar. Você continua na escala até ser substituído.\n\n'
         'Dá para mudar a resposta na mesma faixa até o culto começar. A equipe '
-        'vê quem confirmou e quem não pode.',
+        'vê quem confirmou e quem não pode. Quem não respondeu recebe um '
+        'lembrete dois dias antes.\n\n'
+        'Se a escala tem ensaio, logo abaixo aparece **Você vai ao ensaio?**, '
+        'com **Vou** e **Não vou**.',
   ),
   FaqEntry(
     question: 'Um colega não pode servir. Posso entrar no lugar?',
@@ -224,6 +227,8 @@ const leaderHelpFaq = <FaqEntry>[
     answer: 'Abra a escala publicada, toque nos três pontinhos e em **Link '
         'público**. O link abre no navegador, sem conta, com quem serve, os '
         'horários e as músicas, e dá para imprimir por ele.\n\n'
+        'Para não mostrar os nomes de quem serve, desligue **Mostrar quem '
+        'serve**: a página fica só com os horários e as músicas.\n\n'
         'Ele sempre mostra a escala como está agora e para de abrir uma '
         'semana depois do culto. Para fechar antes, toque em **Desativar '
         'link**.',

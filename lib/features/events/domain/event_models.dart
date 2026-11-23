@@ -421,6 +421,7 @@ class Event {
     this.unavailable = const [],
     this.confirmations = const {},
     this.coverOffers = const {},
+    this.rehearsalAttendance = const {},
     this.warnings = const EventWarnings(),
     this.updatedAt,
   });
@@ -471,6 +472,11 @@ class Event {
         for (final c in (json['confirmations'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>())
           c['membershipId'] as String: c['status'] == 'CONFIRMED',
+      },
+      rehearsalAttendance: {
+        for (final r in (json['rehearsalAttendance'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>())
+          r['membershipId'] as String: r['attending'] == true,
       },
       coverOffers: {
         for (final c in (json['confirmations'] as List<dynamic>? ?? const [])
@@ -625,6 +631,36 @@ class Event {
   /// Quem já respondeu se vem: membershipId -> confirmou (`true`) ou não pode
   /// (`false`). Sem entrada = ainda não respondeu.
   final Map<String, bool> confirmations;
+
+  /// Quem respondeu se vai ao ensaio: membershipId -> vai. Sem entrada = não
+  /// respondeu.
+  final Map<String, bool> rehearsalAttendance;
+
+  /// Dá para responder do ensaio enquanto ele não começou.
+  bool get acceptsRehearsalAnswer =>
+      !isDraft && (rehearsalAt?.isAfter(DateTime.now()) ?? false);
+
+  /// "Vão: Ana e Bruno · Não vai: Maria", para a equipe ler na escala. Nulo
+  /// enquanto ninguém respondeu.
+  String? get rehearsalAttendanceSummary {
+    final names = <String, String>{
+      for (final group in assignments)
+        for (final m in group.members) m.membershipId: m.displayName,
+    };
+    List<String> who(bool going) => [
+          for (final e in rehearsalAttendance.entries)
+            if (e.value == going && names.containsKey(e.key)) names[e.key]!,
+        ];
+    final vao = who(true);
+    final naoVao = who(false);
+    if (vao.isEmpty && naoVao.isEmpty) return null;
+    return [
+      if (vao.isNotEmpty)
+        '${vao.length == 1 ? 'Vai' : 'Vão'} ao ensaio: ${vao.join(', ')}',
+      if (naoVao.isNotEmpty)
+        '${naoVao.length == 1 ? 'Não vai' : 'Não vão'}: ${naoVao.join(', ')}',
+    ].join(' · ');
+  }
 
   /// Quem se ofereceu para cobrir cada recusa: quem recusou -> quem cobre.
   final Map<String, ({String id, String name})> coverOffers;
