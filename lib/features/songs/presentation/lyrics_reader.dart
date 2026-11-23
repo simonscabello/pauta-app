@@ -23,6 +23,7 @@ import '../data/song_repository.dart';
 import '../domain/chord_sheet.dart';
 import '../domain/musical_keys.dart';
 import '../domain/song_models.dart';
+import 'chord_versions.dart';
 import 'reader_appearance.dart';
 import '../../../shared/widgets/open_link.dart';
 
@@ -453,6 +454,50 @@ List<Widget> _readerHeader(BuildContext context, String title, String details) {
   ];
 }
 
+/// "Cifra: Original ▾": troca de versão da cifra no leitor. Aparece quando há
+/// versões, ou para quem lidera ([manageTeamId]) poder criar a primeira.
+class _ChordVersionButton extends ConsumerWidget {
+  const _ChordVersionButton({
+    required this.song,
+    required this.selectedId,
+    required this.onPicked,
+    this.manageTeamId,
+  });
+
+  final Song song;
+  final String? selectedId;
+  final String? manageTeamId;
+  final void Function(String? versionId, Song song) onPicked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!song.hasChords ||
+        (song.chordVersions.isEmpty && manageTeamId == null)) {
+      return const SizedBox.shrink();
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      heightFactor: 1,
+      child: TextButton.icon(
+        onPressed: () async {
+          final picked = await showChordVersionPicker(
+            context,
+            ref,
+            song: song,
+            selectedId: selectedId,
+            teamId: manageTeamId,
+          );
+          if (picked != null) onPicked(picked.versionId, picked.song);
+        },
+        icon: const Icon(Icons.layers_outlined),
+        label: Text(
+          'Cifra: ${song.chordVersion(selectedId)?.name ?? 'Original'}',
+        ),
+      ),
+    );
+  }
+}
+
 /// O leitor com o fundo que a pessoa escolheu (ou o escuro/claro do app).
 class _ReaderThemed extends ConsumerWidget {
   const _ReaderThemed({required this.child});
@@ -477,7 +522,12 @@ class ChordSheetView extends ConsumerWidget {
     required this.sourceKey,
     required this.targetKey,
     this.chordsUrl,
+    this.baseChords,
   });
+
+  /// A cifra original, quando [chords] é uma versão: as linhas que a versão
+  /// mudou ganham uma barra à esquerda.
+  final String? baseChords;
 
   final String? chords;
   final String? sourceKey;
@@ -522,8 +572,23 @@ class ChordSheetView extends ConsumerWidget {
     }
     // A arrumação também na leitura: corrige a cifra já guardada sem passar
     // pelo formulário (acorde em linha própria, "Aº", caractere invisível).
-    final sheet =
-        transposeChordSheet(normalizeChordSheet(chords!), sourceKey, targetKey);
+    final written = normalizeChordSheet(chords!);
+    final sheet = transposeChordSheet(written, sourceKey, targetKey);
+    final newline = RegExp(r'\r\n?|\n');
+    final original = baseChords == null
+        ? null
+        : {
+            for (final line in normalizeChordSheet(baseChords!).split(newline))
+              line.trim(),
+          };
+    // Comparado antes de transpor: a transposição não mexe no número de linhas.
+    final changed = [
+      for (final line in written.split(newline))
+        original != null &&
+            line.trim().isNotEmpty &&
+            !original.contains(line.trim()),
+    ];
+    final lines = parseChordSheet(sheet);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -541,21 +606,48 @@ class ChordSheetView extends ConsumerWidget {
               ),
             ),
           ),
-        for (final line in parseChordSheet(sheet))
-          _chordLine(
-            [
-              for (final s in line)
-                (
-                  chord:
-                      s.chord == null ? null : chordDegree(s.chord!, degreeKey),
-                  text: s.text,
-                ),
-            ],
-            lyricsStyle,
-            chordStyle,
-            scheme.onSurfaceVariant,
+        for (final (i, line) in lines.indexed)
+          _changedMark(
+            original != null,
+            changed[i],
+            scheme.primary,
+            _chordLine(
+              [
+                for (final s in line)
+                  (
+                    chord: s.chord == null
+                        ? null
+                        : chordDegree(s.chord!, degreeKey),
+                    text: s.text,
+                  ),
+              ],
+              lyricsStyle,
+              chordStyle,
+              scheme.onSurfaceVariant,
+            ),
           ),
       ],
+    );
+  }
+
+  /// Numa versão, a barra marca a linha alterada; as outras recebem o mesmo
+  /// recuo, para a cifra não dançar.
+  Widget _changedMark(bool versioned, bool changed, Color color, Widget line) {
+    if (!versioned) return line;
+    return Semantics(
+      label: changed ? 'Linha alterada nesta versão' : null,
+      child: Container(
+        padding: const EdgeInsets.only(left: AppSpacing.sm),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              width: 3,
+              color: changed ? color : Colors.transparent,
+            ),
+          ),
+        ),
+        child: line,
+      ),
     );
   }
 
@@ -670,10 +762,49 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
   String? _keyOf(EventSong song) =>
       _liveKeys.containsKey(_slot(song)) ? _liveKeys[_slot(song)] : song.key;
 
+  /// A versão da cifra que esta pessoa escolheu para a música aberta; nulo
+  /// segue a da escala. O registro separa "escolhi a original" de "não mexi".
+  ({String? id})? _version;
+
+  /// As versões gravadas para todos desde que a tela abriu, por `culto:música`.
+  final _savedVersions = <String, String?>{};
+
+  String? _scheduleVersion(EventSong song) =>
+      _savedVersions.containsKey(_slot(song))
+          ? _savedVersions[_slot(song)]
+          : song.chordVersionId;
+
   void _move(int delta) => setState(() {
         _index += delta;
         _steps = null;
+        _version = null;
       });
+
+  Future<void> _useVersionForAll(EventSong song, String? versionId) async {
+    setState(() => _savingKey = true);
+    try {
+      await ref
+          .read(eventRepositoryProvider)
+          .setSongChordVersion(widget.eventId!, song, versionId);
+      if (!mounted) return;
+      setState(() {
+        _savedVersions[_slot(song)] = versionId;
+        _version = null;
+      });
+      ref.invalidate(eventProvider(widget.eventId!));
+      showAppSnackBar(
+        context,
+        'Esta versão da cifra vale para todos nesta escala.',
+        tone: AppTone.success,
+      );
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    } finally {
+      if (mounted) setState(() => _savingKey = false);
+    }
+  }
 
   late int _index = widget.initialIndex.clamp(0, widget.songs.length - 1);
 
@@ -702,15 +833,19 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
     }
     _checking = true;
     try {
-      final keys =
-          await ref.read(eventRepositoryProvider).songKeys(widget.eventId!);
+      final live =
+          await ref.read(eventRepositoryProvider).liveSongs(widget.eventId!);
       if (!mounted) return;
       final atual = widget.songs[_index];
       final before = _keyOf(atual);
       setState(() {
         for (final song in widget.songs) {
-          if (keys.containsKey(_slot(song))) {
-            _liveKeys[_slot(song)] = keys[_slot(song)];
+          final now = live[_slot(song)];
+          if (now == null) continue;
+          _liveKeys[_slot(song)] = now.key;
+          // A versão combinada também chega sozinha; a escolha pessoal fica.
+          if (now.hasChordVersion) {
+            _savedVersions[_slot(song)] = now.chordVersionId;
           }
         }
         // O tom combinado mudou: a transposição pessoal deixa de valer.
@@ -806,7 +941,11 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
     final title = widget.chordMode ? 'Cifra' : 'Letra';
     final song = full.valueOrNull?.data;
     final cachedAt = full.valueOrNull?.cachedAt;
-    final sourceKey = normalizeMusicalKey(song?.chordsKey);
+    final scheduleVersion = _scheduleVersion(atual);
+    final versionId = _version != null ? _version!.id : scheduleVersion;
+    final version = song?.chordVersion(versionId);
+    final sourceKey =
+        normalizeMusicalKey(version?.chordsKey ?? song?.chordsKey);
     final target = _readerTarget(atualKey, sourceKey, _steps);
     // Papel da equipe DA ESCALA, não da equipe ativa (armadilha 10).
     final canManage = widget.chordMode &&
@@ -824,6 +963,10 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
             target != normalizeMusicalKey(atualKey)
         ? target
         : null;
+    // Só oferece gravar o que existe: a versão apagada cai na original.
+    final offerVersion = canManage &&
+        _version != null &&
+        version?.id != song?.chordVersion(scheduleVersion)?.id;
     final detalhes = [
       if (widget.songs.length > 1) '${_index + 1} de ${widget.songs.length}',
       if (atual.hymnal != null) atual.hymnal!.label,
@@ -871,6 +1014,32 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
                     ),
                   ),
                 ),
+              if (offerVersion)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.xs,
+                    AppSpacing.md,
+                    0,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    heightFactor: 1,
+                    child: TextButton.icon(
+                      onPressed: _savingKey
+                          ? null
+                          : () => _useVersionForAll(atual, version?.id),
+                      icon: const Icon(Icons.groups_outlined),
+                      label: Text(
+                        version == null
+                            ? 'Usar a original para todos'
+                            : 'Usar "${version.name}" para todos',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ),
               Expanded(
                 child: _AutoScrollList(
                   restartKey: atual.songId,
@@ -901,12 +1070,31 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
                         ),
                       ),
                       data: (cached) => widget.chordMode
-                          ? ChordSheetView(
-                              chords: cached.data.chords,
-                              sourceKey: cached.data.chordsKey,
-                              targetKey: target,
-                              chordsUrl:
-                                  cached.data.chordsUrl ?? atual.chordsUrl,
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _ChordVersionButton(
+                                  song: cached.data,
+                                  selectedId: version?.id,
+                                  manageTeamId:
+                                      canManage ? widget.teamId : null,
+                                  onPicked: (id, _) => setState(() {
+                                    _version = (id: id);
+                                    _steps = null;
+                                  }),
+                                ),
+                                ChordSheetView(
+                                  baseChords: version == null
+                                      ? null
+                                      : cached.data.chords,
+                                  chords: version?.chords ?? cached.data.chords,
+                                  sourceKey: version?.chordsKey ??
+                                      cached.data.chordsKey,
+                                  targetKey: target,
+                                  chordsUrl:
+                                      cached.data.chordsUrl ?? atual.chordsUrl,
+                                ),
+                              ],
                             )
                           : cached.data.hasLyrics
                               ? LyricsText(lyrics: cached.data.lyrics!)
@@ -974,6 +1162,7 @@ class SongLyricsScreen extends StatefulWidget {
     required this.song,
     this.chordMode = false,
     this.cachedAt,
+    this.manageTeamId,
   });
 
   final Song song;
@@ -982,6 +1171,9 @@ class SongLyricsScreen extends StatefulWidget {
   /// Quando a música veio do aparelho, sem rede.
   final DateTime? cachedAt;
 
+  /// A equipe, só para quem lidera: libera criar e editar versões da cifra.
+  final String? manageTeamId;
+
   @override
   State<SongLyricsScreen> createState() => _SongLyricsScreenState();
 }
@@ -989,11 +1181,16 @@ class SongLyricsScreen extends StatefulWidget {
 class _SongLyricsScreenState extends State<SongLyricsScreen> {
   int? _steps;
 
+  /// A música como está agora: muda quando uma versão é criada ou editada.
+  late Song _song = widget.song;
+  String? _versionId;
+
   @override
   Widget build(BuildContext context) {
-    final song = widget.song;
+    final song = _song;
+    final version = song.chordVersion(_versionId);
     final url = widget.chordMode ? song.chordsUrl : song.lyricsUrl;
-    final sourceKey = normalizeMusicalKey(song.chordsKey);
+    final sourceKey = normalizeMusicalKey(version?.chordsKey ?? song.chordsKey);
     final target = _readerTarget(song.defaultKey, sourceKey, _steps);
 
     return KeepScreenOn(
@@ -1027,9 +1224,21 @@ class _SongLyricsScreenState extends State<SongLyricsScreen> {
                             song.subtitle,
                           ),
                           if (widget.chordMode)
+                            _ChordVersionButton(
+                              song: song,
+                              selectedId: version?.id,
+                              manageTeamId: widget.manageTeamId,
+                              onPicked: (id, updated) => setState(() {
+                                _song = updated;
+                                _versionId = id;
+                                _steps = null;
+                              }),
+                            ),
+                          if (widget.chordMode)
                             ChordSheetView(
-                              chords: song.chords,
-                              sourceKey: song.chordsKey,
+                              baseChords: version == null ? null : song.chords,
+                              chords: version?.chords ?? song.chords,
+                              sourceKey: version?.chordsKey ?? song.chordsKey,
                               targetKey: target,
                               chordsUrl: song.chordsUrl,
                             )

@@ -7,6 +7,18 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.47.0 — 22/11/2026
+
+### Novidades
+- **Versões da cifra.** Na cifra, **Cifra: Original** abre as versões da
+  música. Quem lidera cria uma versão a partir da que está aberta
+  ("Correção", "Arranjo do ensaio"), sem mexer na original, e pode editar ou
+  apagar depois. As linhas que a versão mudou aparecem com uma barra ao lado.
+- **A versão da escala.** Aberta pela escala, a versão escolhida por quem
+  lidera ganha **Usar para todos**: a equipe passa a abrir a cifra daquela
+  escala nela, e quem já está com a cifra aberta vê a troca em instantes.
+  Cada pessoa ainda pode trocar de versão só para si.
+
 ## 0.46.1 — 22/11/2026
 
 ### Melhorias

@@ -222,4 +222,70 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Marcar como tocada'), findsOneWidget);
   });
+
+  group('versões da cifra', () {
+    const song = Song(
+      id: '1',
+      title: 'Digno',
+      chordsKey: 'D',
+      chords: '[D]Digno',
+      chordVersions: [
+        ChordVersion(
+          id: 'v1',
+          name: 'Correção',
+          chords: '[Em]Digno',
+          createdByName: 'Samuel',
+        ),
+      ],
+    );
+
+    testWidgets('no repertório abre na original e troca pela folha',
+        (tester) async {
+      await _open(tester, const SongLyricsScreen(song: song, chordMode: true));
+      expect(find.text('D'), findsWidgets);
+      expect(find.text('Em'), findsNothing);
+
+      await tester.tap(find.text('Cifra: Original'));
+      await tester.pumpAndSettle();
+      // Quem não lidera não cria versão.
+      expect(find.text('Nova versão a partir desta'), findsNothing);
+      await tester.tap(find.text('Correção'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cifra: Correção'), findsOneWidget);
+      expect(find.text('Em'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('Linha alterada nesta versão')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('na escala abre na versão escolhida para todos',
+        (tester) async {
+      await _open(
+        tester,
+        const EventLyricsScreen(
+          teamId: 'equipe',
+          songs: [
+            EventSong(
+              songId: '1',
+              serviceId: 'culto',
+              title: 'Digno',
+              key: 'D',
+              chordVersionId: 'v1',
+            ),
+          ],
+          initialIndex: 0,
+          chordMode: true,
+        ),
+        overrides: [
+          songProvider.overrideWith(
+            (ref, args) async =>
+                const CachedValue(fromCache: false, data: song),
+          ),
+        ],
+      );
+      expect(find.text('Cifra: Correção'), findsOneWidget);
+      expect(find.text('Em'), findsOneWidget);
+    });
+  });
 }

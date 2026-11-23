@@ -306,7 +306,11 @@ class _Body extends StatelessWidget {
           SongThemeChips(themes: song.themes),
         ],
         const SizedBox(height: AppSpacing.xl),
-        _Preparation(song: song, cachedAt: cachedAt),
+        _Preparation(
+          song: song,
+          cachedAt: cachedAt,
+          manageTeamId: showHistory ? teamId : null,
+        ),
         if (song.hasLyrics) ...[
           // Menos que entre os outros blocos: o cabeçalho da letra tem a altura
           // do botão "Ver completa", e a folga dele já faz parte do respiro.
@@ -324,6 +328,7 @@ void _openLyrics(
   Song song, {
   bool chordMode = false,
   DateTime? cachedAt,
+  String? manageTeamId,
 }) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -331,6 +336,7 @@ void _openLyrics(
         song: song,
         chordMode: chordMode,
         cachedAt: cachedAt,
+        manageTeamId: manageTeamId,
       ),
     ),
   );
@@ -437,10 +443,13 @@ class _Facts extends StatelessWidget {
 ///
 /// Cifra e letra guardadas abrem no leitor do Pauta.
 class _Preparation extends StatelessWidget {
-  const _Preparation({required this.song, this.cachedAt});
+  const _Preparation({required this.song, this.cachedAt, this.manageTeamId});
 
   final Song song;
   final DateTime? cachedAt;
+
+  /// A equipe, só para quem lidera: libera criar e editar versões da cifra.
+  final String? manageTeamId;
 
   @override
   Widget build(BuildContext context) {
@@ -465,6 +474,7 @@ class _Preparation extends StatelessWidget {
                       context,
                       song,
                       chordMode: true,
+                      manageTeamId: manageTeamId,
                       cachedAt: cachedAt,
                     )
                 : null,

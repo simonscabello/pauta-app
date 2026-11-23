@@ -35,8 +35,9 @@ class _Escala extends EventRepository {
   final saved = <String?>[];
 
   @override
-  Future<Map<String, String?>> songKeys(String eventId) async =>
-      {'culto:1': key};
+  Future<Map<String, LiveSong>> liveSongs(String eventId) async => {
+        'culto:1': (key: key, hasChordVersion: false, chordVersionId: null),
+      };
 
   @override
   Future<void> setSongKey(String eventId, EventSong song, String? key) async {

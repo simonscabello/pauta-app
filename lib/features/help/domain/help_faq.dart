@@ -44,7 +44,7 @@ const helpFaq = <FaqEntry>[
         'outros abrem no site ou no aplicativo de cada um.\n\n'
         'A cifra guardada abre no tom combinado para a escala (ou no tom da '
         'equipe, pelo Repertório). Os botões **−** e **+** sobem e descem meio '
-        'tom só para você, e a paleta no topo tem **Acordes em graus**. Quem lidera guarda a cifra em **Editar música**, '
+        'tom só para você, e a paleta no topo tem **Acordes em graus**. Quando a música tem mais de uma versão da cifra, **Cifra: Original** troca entre elas; quem lidera cria versões ali mesmo, sem mexer na original. Quem lidera guarda a cifra em **Editar música**, '
         'em **Dados da música**, dizendo de onde ela vem. Com o link da cifra '
         'na música, **Abrir no Cifra Club** leva ao site: copie a cifra lá, '
         'volte e toque em **Colar cifra**.\n\n'

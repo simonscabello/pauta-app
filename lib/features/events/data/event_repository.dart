@@ -304,14 +304,20 @@ class EventRepository {
     });
   }
 
-  /// O tom que vale em cada música da escala, por `culto:música`. Leve de
-  /// propósito: o leitor de cifra pergunta a cada poucos segundos no ensaio.
-  Future<Map<String, String?>> songKeys(String eventId) async {
+  /// O tom e a versão da cifra que valem em cada música da escala, por
+  /// `culto:música`. Leve de propósito: o leitor de cifra pergunta a cada
+  /// poucos segundos no ensaio.
+  Future<Map<String, LiveSong>> liveSongs(String eventId) async {
     return _guard(() async {
       final response = await _dio.get<List<dynamic>>('/events/$eventId/songs');
       return {
         for (final item in response.data!.cast<Map<String, dynamic>>())
-          '${item['serviceId']}:${item['songId']}': item['key'] as String?,
+          '${item['serviceId']}:${item['songId']}': (
+            key: item['key'] as String?,
+            // A API anterior às versões não manda o campo.
+            hasChordVersion: item.containsKey('chordVersionId'),
+            chordVersionId: item['chordVersionId'] as String?,
+          ),
       };
     });
   }
@@ -327,6 +333,20 @@ class EventRepository {
     });
   }
 
+  /// A versão da cifra de uma música desta escala (nulo = a original).
+  Future<void> setSongChordVersion(
+    String eventId,
+    EventSong song,
+    String? versionId,
+  ) async {
+    return _guard(() async {
+      await _dio.patch<void>(
+        '/events/$eventId/songs/${song.songId}/chord-version',
+        data: {'serviceId': song.serviceId, 'chordVersionId': versionId},
+      );
+    });
+  }
+
   Future<T> _guard<T>(Future<T> Function() request) async {
     try {
       return await request();
@@ -335,6 +355,9 @@ class EventRepository {
     }
   }
 }
+
+/// O que o leitor aberto confere de cada música da escala.
+typedef LiveSong = ({String? key, bool hasChordVersion, String? chordVersionId});
 
 class GeneratedSchedules {
   const GeneratedSchedules({

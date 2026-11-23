@@ -141,6 +141,39 @@ class SongRepository {
     });
   }
 
+  /// Cria (`versionId` nulo) ou edita uma versão da cifra. Devolve a música
+  /// inteira, com as versões.
+  Future<Song> saveChordVersion(
+    String teamId,
+    String songId,
+    String? versionId,
+    Map<String, dynamic> body,
+  ) async {
+    return _guard(() async {
+      final path = '/teams/$teamId/songs/$songId/chord-versions';
+      final response = versionId == null
+          ? await _dio.post<Map<String, dynamic>>(path, data: body)
+          : await _dio.patch<Map<String, dynamic>>(
+              '$path/$versionId',
+              data: body,
+            );
+      return Song.fromJson(response.data!);
+    });
+  }
+
+  Future<Song> removeChordVersion(
+    String teamId,
+    String songId,
+    String versionId,
+  ) async {
+    return _guard(() async {
+      final response = await _dio.delete<Map<String, dynamic>>(
+        '/teams/$teamId/songs/$songId/chord-versions/$versionId',
+      );
+      return Song.fromJson(response.data!);
+    });
+  }
+
   /// Os sites de onde o importador sabe ler cifra, e se cada um está liberado.
   Future<List<ChordSourceInfo>> chordSources(String teamId) async {
     return _guard(() async {

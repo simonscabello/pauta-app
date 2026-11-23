@@ -58,6 +58,7 @@ class EventSong {
     this.keyOverride,
     this.defaultKey,
     this.note,
+    this.chordVersionId,
     this.isNew = false,
     this.moment,
     this.momentLabel,
@@ -90,6 +91,9 @@ class EventSong {
 
   /// Recado da música ("entra só o teclado", "repetir o refrão").
   final String? note;
+
+  /// A versão da cifra que vale nesta escala; nulo é a original.
+  final String? chordVersionId;
 
   /// A equipe ainda não tocou esta música: "chegue sabendo".
   ///
@@ -166,6 +170,7 @@ class EventSong {
         keyOverride: keyOverride,
         defaultKey: defaultKey,
         note: note,
+        chordVersionId: chordVersionId,
         isNew: isNew,
         moment: choice?.moment,
         momentLabel: choice?.momentLabel,
@@ -191,6 +196,7 @@ class EventSong {
       keyOverride: json['keyOverride'] as String?,
       defaultKey: json['defaultKey'] as String?,
       note: json['note'] as String?,
+      chordVersionId: json['chordVersionId'] as String?,
       // Falso quando ausente: é o que o cache gravado antes desta versão
       // significa, e é o que a maioria das músicas será para sempre.
       isNew: json['isNew'] as bool? ?? false,

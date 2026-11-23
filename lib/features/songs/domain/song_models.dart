@@ -6,6 +6,37 @@ import 'hymnal_models.dart';
 /// centenas de músicas e a letra só importa na tela de uma delas), então o
 /// campo fica nulo lá. `hasLyrics` diferencia "não tem letra" de "a lista não
 /// carregou a letra".
+/// Uma versão nomeada da cifra ("correção", "arranjo do ensaio 22/11"). A
+/// original continua em [Song.chords].
+class ChordVersion {
+  const ChordVersion({
+    required this.id,
+    required this.name,
+    required this.chords,
+    this.chordsKey,
+    this.createdByName,
+    this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String chords;
+
+  /// Nulo usa o tom da cifra original.
+  final String? chordsKey;
+  final String? createdByName;
+  final DateTime? createdAt;
+
+  factory ChordVersion.fromJson(Map<String, dynamic> json) => ChordVersion(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        chords: json['chords'] as String,
+        chordsKey: json['chordsKey'] as String?,
+        createdByName: json['createdByName'] as String?,
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      );
+}
+
 class Song {
   const Song({
     required this.id,
@@ -21,6 +52,7 @@ class Song {
     this.chords,
     this.chordsKey,
     this.chordsSource,
+    this.chordVersions = const [],
     this.lyricsUrl,
     this.chordsUrl,
     this.youtubeUrl,
@@ -55,6 +87,12 @@ class Song {
 
   /// De onde veio a cifra guardada. Só o detalhe traz; nulo sem cifra.
   final ChordsSource? chordsSource;
+
+  /// As versões da cifra além da original. Só o detalhe traz.
+  final List<ChordVersion> chordVersions;
+
+  ChordVersion? chordVersion(String? id) =>
+      chordVersions.where((v) => v.id == id).firstOrNull;
   final String? lyricsUrl;
   final String? chordsUrl;
   final String? youtubeUrl;
@@ -127,6 +165,10 @@ class Song {
       chordsSource: json['chordsSource'] == null
           ? null
           : ChordsSource.fromJson(json['chordsSource'] as Map<String, dynamic>),
+      chordVersions: [
+        for (final v in json['chordVersions'] as List<dynamic>? ?? const [])
+          ChordVersion.fromJson(v as Map<String, dynamic>),
+      ],
       lyricsUrl: json['lyricsUrl'] as String?,
       chordsUrl: json['chordsUrl'] as String?,
       youtubeUrl: json['youtubeUrl'] as String?,
