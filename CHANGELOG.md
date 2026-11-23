@@ -7,6 +7,12 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.46.1 — 22/11/2026
+
+### Melhorias
+- No fim da letra e da cifra de uma música da escala há o botão **Marcar
+  como tocada**, o mesmo do número na lista da escala.
+
 ## 0.46.0 — 22/11/2026
 
 ### Novidades

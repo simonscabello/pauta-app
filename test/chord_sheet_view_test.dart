@@ -195,4 +195,31 @@ void main() {
     expect(teams, ['equipe', 'equipe', 'equipe']);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('no fim da letra da escala dá para marcar a música como tocada',
+      (tester) async {
+    await _open(
+      tester,
+      const EventLyricsScreen(
+        teamId: 'equipe',
+        eventId: 'escala',
+        songs: [EventSong(songId: '1', serviceId: 'culto', title: 'Primeira')],
+        initialIndex: 0,
+      ),
+      overrides: [
+        songProvider.overrideWith(
+          (ref, args) async => CachedValue(
+            fromCache: false,
+            data: Song(id: args.songId, title: 'Primeira', lyrics: 'Canto'),
+          ),
+        ),
+      ],
+    );
+    await tester.tap(find.text('Marcar como tocada'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tocada. Desmarcar'), findsOneWidget);
+    await tester.tap(find.text('Tocada. Desmarcar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Marcar como tocada'), findsOneWidget);
+  });
 }

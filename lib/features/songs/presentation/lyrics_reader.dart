@@ -16,6 +16,7 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../events/application/played_songs.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_models.dart';
 import '../data/song_repository.dart';
@@ -917,6 +918,39 @@ class _EventLyricsScreenState extends ConsumerState<EventLyricsScreen> {
                                   ),
                                 ),
                     ),
+                    // No fim da música, e não no "Próxima": passar as cifras
+                    // no ensaio não pode riscar o repertório do culto.
+                    if (widget.eventId != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        heightFactor: 1,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.lg),
+                          child: Consumer(
+                            builder: (context, ref, _) {
+                              ref.watch(playedSongsProvider);
+                              final played =
+                                  ref.read(playedSongsProvider.notifier);
+                              final isPlayed =
+                                  played.isPlayed(widget.eventId!, atual);
+                              return TextButton.icon(
+                                onPressed: () =>
+                                    played.toggle(widget.eventId!, atual),
+                                icon: Icon(
+                                  isPlayed
+                                      ? Icons.check_circle_rounded
+                                      : Icons.check_circle_outline_rounded,
+                                ),
+                                label: Text(
+                                  isPlayed
+                                      ? 'Tocada. Desmarcar'
+                                      : 'Marcar como tocada',
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
