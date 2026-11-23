@@ -63,7 +63,8 @@ class CompactScheduleTile extends StatelessWidget {
     final facts = ScheduleFacts.of(event, timezone);
     // Rascunho fala do que falta para publicar; escala publicada sem
     // repertório fala do repertório. Uma das duas, ou nenhuma.
-    final temEstado = event.warnings.unavailableAssigned.isNotEmpty ||
+    final temEstado = event.presenceCounts != null ||
+        event.warnings.unavailableAssigned.isNotEmpty ||
         event.isDraft ||
         event.servicesWithoutSongs.isNotEmpty ||
         event.isRepertoireOnTheFly;
@@ -321,11 +322,35 @@ class ScheduleStatusLines extends StatelessWidget {
     final naHora = event.isRepertoireOnTheFly;
 
     final naoPodem = event.warnings.unavailableAssigned;
+    final presenca = event.presenceCounts;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: alignment,
       children: [
+        // Quem respondeu, sem abrir a escala: é por esta linha que quem lidera
+        // vê onde falta gente. Vermelha só quando alguém não pode.
+        if (presenca != null) ...[
+          _StatusLine(
+            icon: presenca.declined > 0
+                ? Icons.event_busy_rounded
+                : Icons.how_to_reg_outlined,
+            text: [
+              if (presenca.declined > 0)
+                presenca.declined == 1
+                    ? '1 não pode'
+                    : '${presenca.declined} não podem',
+              '${presenca.confirmed} de ${presenca.total} '
+                  '${presenca.confirmed == 1 ? 'confirmou' : 'confirmaram'}',
+            ].join(' · '),
+            palette: presenca.declined > 0 ? cores.danger : cores.info,
+          ),
+          if (naoPodem.isNotEmpty ||
+              event.isDraft ||
+              naHora ||
+              semRepertorio.isNotEmpty)
+            const SizedBox(height: AppSpacing.xs),
+        ],
         // **Quem está escalado e avisou que não pode**, antes de tudo. A
         // linha da escala não mudava, e o líder só descobria abrindo aquele
         // domingo. Só quem lidera recebe este dado da API.

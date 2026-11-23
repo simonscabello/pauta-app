@@ -42,6 +42,8 @@ class WorkloadMember {
     this.freeCount = 0,
     this.markedDays = 0,
     this.positionIds = const [],
+    this.declinedCount = 0,
+    this.unansweredCount = 0,
   });
 
   factory WorkloadMember.fromJson(Map<String, dynamic> json) {
@@ -54,6 +56,11 @@ class WorkloadMember {
       unavailableCount: json['unavailableCount'] as int? ?? 0,
       freeCount: json['freeCount'] as int? ?? 0,
       markedDays: json['markedDays'] as int? ?? 0,
+      declinedCount:
+          (json['presence'] as Map<String, dynamic>?)?['declined'] as int? ?? 0,
+      unansweredCount:
+          (json['presence'] as Map<String, dynamic>?)?['unanswered'] as int? ??
+              0,
       lastScheduledAt: json['lastScheduledAt'] == null
           ? null
           : DateTime.parse(json['lastScheduledAt'] as String).toUtc(),
@@ -82,6 +89,12 @@ class WorkloadMember {
   /// Escalas em que não serviu e não tinha avisado nada: estava livre e
   /// ninguém chamou. É a pergunta que a contagem sozinha não respondia.
   final int freeCount;
+
+  /// Escalas em que estava escalada e respondeu "não posso".
+  final int declinedCount;
+
+  /// Escalas em que estava escalada e não respondeu se ia.
+  final int unansweredCount;
 
   /// Dias marcados como indisponível no período, com ou sem escala.
   final int markedDays;

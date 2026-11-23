@@ -52,6 +52,9 @@ enum HomeNoticeKind {
   /// descobria no próprio domingo.
   unavailableAssigned,
 
+  /// (liderança) alguém respondeu "não posso" a uma escala publicada.
+  presenceDeclined,
+
   /// (liderança) escalas em rascunho, que a equipe ainda não vê.
   pendingDrafts,
 
@@ -108,6 +111,9 @@ class HomeNotice {
           '/agenda/${event!.id}/escalar?substituir=${person!.membershipId}',
         // Já filtrada: o aviso fala dos rascunhos, e a agenda inteira os
         // escondia entre as publicadas.
+        // A escala, e não a escalação: é nela que estão "Substituir" e, se
+        // alguém se ofereceu, "Aprovar".
+        HomeNoticeKind.presenceDeclined => '/agenda/${event!.id}',
         HomeNoticeKind.pendingDrafts => '/agenda?filtro=rascunhos',
         HomeNoticeKind.unstaffedSchedule => '/agenda/${event!.id}/escalar',
         HomeNoticeKind.setlistMissing => '/agenda/${event!.id}/repertorio',
@@ -279,6 +285,20 @@ class HomeSummary {
             event: conflito,
             person: conflito.warnings.unavailableAssigned.first,
             count: conflito.warnings.unavailableAssigned.length,
+          ),
+        );
+      }
+
+      // Recusa em escala publicada, se não for a mesma do aviso acima.
+      final recusa = events
+          .where((e) => e.id != conflito?.id && (e.presenceCounts?.declined ?? 0) > 0)
+          .firstOrNull;
+      if (recusa != null) {
+        notices.add(
+          HomeNotice(
+            kind: HomeNoticeKind.presenceDeclined,
+            event: recusa,
+            count: recusa.presenceCounts!.declined,
           ),
         );
       }

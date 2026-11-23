@@ -665,6 +665,23 @@ class Event {
   /// Quem se ofereceu para cobrir cada recusa: quem recusou -> quem cobre.
   final Map<String, ({String id, String name})> coverOffers;
 
+  /// Quantos confirmaram, quantos não podem e quantos são, contando cada
+  /// pessoa uma vez. Nulo quando não há o que responder (rascunho, escala
+  /// passada ou vazia).
+  ({int confirmed, int declined, int total})? get presenceCounts {
+    if (!acceptsConfirmation) return null;
+    final ids = {
+      for (final group in assignments)
+        for (final m in group.members) m.membershipId,
+    };
+    if (ids.isEmpty) return null;
+    return (
+      confirmed: ids.where((id) => confirmations[id] == true).length,
+      declined: ids.where((id) => confirmations[id] == false).length,
+      total: ids.length,
+    );
+  }
+
   /// Quem respondeu "não posso", na ordem da escala.
   List<({String id, String name})> get declined {
     final vistos = <String>{};

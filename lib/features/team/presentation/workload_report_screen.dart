@@ -303,6 +303,9 @@ class _WorkloadRow extends StatelessWidget {
       if (positions.isNotEmpty) positions,
       last,
       if (member.unavailableCount > 0) 'não pôde em ${member.unavailableCount}',
+      if (member.declinedCount > 0) 'recusou ${member.declinedCount}',
+      if (member.unansweredCount > 0)
+        'não respondeu em ${member.unansweredCount}',
     ].join(' · ');
 
     return Semantics(

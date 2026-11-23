@@ -602,6 +602,16 @@ class _HomeNotices extends StatelessWidget {
             'Toque para substituir.',
           ].join(' '),
         ),
+      HomeNoticeKind.presenceDeclined => (
+          icon: Icons.event_busy_rounded,
+          title: notice.count > 1
+              ? '${notice.count} responderam que não podem ${quando(event!)}'
+              : '${event!.declined.first.name} respondeu que não pode '
+                  '${quando(event)}',
+          message: event.coverOffers.isEmpty
+              ? 'Toque para substituir.'
+              : 'Já há quem se ofereceu para cobrir. Toque para aprovar.',
+        ),
       HomeNoticeKind.pendingDrafts => (
           icon: Icons.edit_note_rounded,
           title: notice.count == 1
