@@ -72,6 +72,16 @@ const helpFaq = <FaqEntry>[
         'escalado num dia em que não pode.',
   ),
   FaqEntry(
+    question: 'Como confirmo que vou servir?',
+    answer: 'Abra a escala em que você está: logo abaixo da data aparece '
+        '**Você confirma presença?**. Toque em **Confirmo** ou em '
+        '**Não posso**.\n\n'
+        'Se você tocar em **Não posso**, quem lidera recebe o aviso e procura '
+        'alguém no seu lugar. Você continua na escala até ser substituído.\n\n'
+        'Dá para mudar a resposta na mesma faixa até o culto começar. A equipe '
+        'vê quem confirmou e quem não pode.',
+  ),
+  FaqEntry(
     question: 'Como acompanho os compromissos da equipe?',
     answer: 'Na **Agenda**. Os dias pintados no calendário têm compromisso: as '
         'escalas, com o horário do ensaio quando houver, e os eventos da '
@@ -196,7 +206,9 @@ const leaderHelpFaq = <FaqEntry>[
         'Toque nele (ou em **Substituir**, dentro da escala): a escalação abre '
         'com a pessoa em destaque. Toque em **Tirar de todas as funções**, '
         'escolha quem entra e salve.\n\n'
-        'Se a pessoa ministrava, lembre de escolher quem ministra no lugar.',
+        'Se a pessoa ministrava, lembre de escolher quem ministra no lugar.\n\n'
+        'Vale o mesmo para quem respondeu **Não posso** na escala publicada: '
+        'você recebe o aviso e a escala mostra **Substituir**.',
   ),
   FaqEntry(
     question: 'Como uso as mesmas músicas de manhã e à noite?',

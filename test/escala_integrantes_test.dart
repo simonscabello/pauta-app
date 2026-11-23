@@ -151,6 +151,64 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  group('confirmação de presença', () {
+    final futuro =
+        DateTime.now().toUtc().add(const Duration(days: 3)).toIso8601String();
+
+    testWidgets('quem está escalado e não respondeu vê a pergunta',
+        (tester) async {
+      await _pumpEscala(
+        tester,
+        _evento(nomes: ['Ana', 'Bruno'], quando: futuro),
+        souEu: 'm0',
+        papel: 'MEMBER',
+      );
+      expect(find.text('Você confirma presença?'), findsOneWidget);
+      expect(find.text('Confirmo'), findsOneWidget);
+      expect(find.text('Não posso'), findsOneWidget);
+    });
+
+    testWidgets('quem respondeu vê a resposta, e a lista marca cada um',
+        (tester) async {
+      await _pumpEscala(
+        tester,
+        _evento(
+          nomes: ['Ana', 'Bruno'],
+          quando: futuro,
+          respostas: {'m0': 'CONFIRMED', 'm1': 'DECLINED'},
+        ),
+        souEu: 'm0',
+        papel: 'MEMBER',
+      );
+      expect(find.text('Você confirmou presença'), findsOneWidget);
+      expect(find.byTooltip('Confirmou presença'), findsOneWidget);
+      expect(find.text('Não pode'), findsOneWidget);
+      // Trocar gente é de quem lidera.
+      expect(find.text('Substituir Bruno'), findsNothing);
+    });
+
+    testWidgets('quem lidera vê a recusa com o atalho para substituir',
+        (tester) async {
+      await _pumpEscala(
+        tester,
+        _evento(
+          nomes: ['Ana', 'Bruno'],
+          quando: futuro,
+          respostas: {'m1': 'DECLINED'},
+        ),
+      );
+      expect(find.text('Bruno respondeu que não pode'), findsOneWidget);
+      expect(find.text('Substituir Bruno'), findsOneWidget);
+      // Fora da escala, ninguém pergunta se ele vem.
+      expect(find.text('Você confirma presença?'), findsNothing);
+    });
+
+    testWidgets('escala que já passou não pergunta nada', (tester) async {
+      await _pumpEscala(tester, _evento(nomes: ['Ana']), souEu: 'm0');
+      expect(find.text('Você confirma presença?'), findsNothing);
+    });
+  });
+
   for (final width in [320.0, 375.0, 1280.0]) {
     testWidgets('não estoura em ${width.toInt()}px', (tester) async {
       await _pumpEscala(tester, _evento(nomes: _nomes(12)), size: Size(width, 900));
@@ -172,12 +230,18 @@ Event _evento({
   required List<String> nomes,
   Map<String, String> fotos = const {},
   Map<String, String> musicas = const {'Meu Deus, meu Rei': 'G'},
+  String quando = '2026-08-09T12:00:00.000Z',
+  Map<String, String> respostas = const {},
 }) {
   return Event.fromJson({
     'id': 'e1',
     'teamId': 't1',
     'title': null,
-    'startsAt': '2026-08-09T12:00:00.000Z',
+    'startsAt': quando,
+    'confirmations': [
+      for (final r in respostas.entries)
+        {'membershipId': r.key, 'status': r.value},
+    ],
     'rehearsalAt': null,
     'location': null,
     'notes': null,
@@ -188,7 +252,7 @@ Event _evento({
       {
         'id': 's1',
         'label': 'Manhã',
-        'startsAt': '2026-08-09T12:00:00.000Z',
+        'startsAt': quando,
         'sortOrder': 0,
       },
     ],
@@ -229,6 +293,8 @@ Future<void> _pumpEscala(
   WidgetTester tester,
   Event event, {
   Size size = const Size(400, 1600),
+  String souEu = 'm-lider',
+  String papel = 'OWNER',
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -261,14 +327,14 @@ Future<void> _pumpEscala(
                 email: 'samuel@teste.com',
                 mustChangePassword: false,
               ),
-              const [
+              [
                 TeamSummary(
                   // Fora da escala: o "(você)" da própria linha não entra
                   // nestes testes, que são sobre a lista.
-                  membershipId: 'm-lider',
+                  membershipId: souEu,
                   teamId: 't1',
                   name: 'Ministerio de Louvor',
-                  role: 'OWNER',
+                  role: papel,
                   displayName: 'Samuel',
                 ),
               ],

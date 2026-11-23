@@ -209,6 +209,17 @@ class EventRepository {
     });
   }
 
+  /// "Confirmo" ou "não posso" de quem está escalado.
+  Future<Event> respond(String eventId, {required bool confirmed}) async {
+    return _guard(() async {
+      final response = await _dio.put<Map<String, dynamic>>(
+        '/events/$eventId/confirmation',
+        data: {'status': confirmed ? 'CONFIRMED' : 'DECLINED'},
+      );
+      return Event.fromJson(response.data!);
+    });
+  }
+
   Future<Event> duplicate(String eventId, {required String startsAt}) async {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(

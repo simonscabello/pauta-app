@@ -396,6 +396,7 @@ class _HomeBody extends StatelessWidget {
           : MyNextScheduleCard(
               event: myNext,
               positions: summary.myPositions,
+              needsAnswer: summary.myNextNeedsAnswer,
               following: summary.myFollowing,
               daysAway: summary.myNextDaysAway,
               sameDay: summary.mySameDay,

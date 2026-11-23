@@ -131,6 +131,7 @@ class HomeSummary {
     required this.myNext,
     required this.myNextDaysAway,
     required this.myPositions,
+    this.myNextNeedsAnswer = false,
     required this.myFollowing,
     required this.notices,
     required this.hasSchedules,
@@ -170,6 +171,9 @@ class HomeSummary {
   /// O que ela faz em [myNext] — "Ministra" primeiro, depois as funções (ver
   /// `Event.personalRolesFor`). Vazio quando não há [myNext].
   final List<String> myPositions;
+
+  /// A minha próxima escala ainda espera o meu "confirmo" ou "não posso".
+  final bool myNextNeedsAnswer;
 
   /// A escala seguinte a [myNext] -- **também sua**.
   ///
@@ -222,6 +226,9 @@ class HomeSummary {
       myNext: myNext,
       myNextDaysAway: myNext == null ? null : daysUntilEvent(myNext, now),
       myPositions: myNext?.personalRolesFor(membershipId) ?? const [],
+      myNextNeedsAnswer: myNext != null &&
+          myNext.acceptsConfirmation &&
+          !myNext.confirmations.containsKey(membershipId),
       // A segunda em que eu entro, e não a segunda da equipe: a manchete abriu
       // o fio de "quando eu toco", e "e depois?" continua o mesmo fio.
       myFollowing: depois,

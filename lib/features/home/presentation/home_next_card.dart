@@ -49,7 +49,11 @@ class MyNextScheduleCard extends StatelessWidget {
     this.following,
     this.daysAway,
     this.sameDay = const [],
+    this.needsAnswer = false,
   });
+
+  /// Ainda falta responder se vem. A resposta é dada na tela da escala.
+  final bool needsAnswer;
 
   final Event event;
 
@@ -150,6 +154,11 @@ class MyNextScheduleCard extends StatelessWidget {
               ),
               if (songs != null)
                 _Fact(icon: Icons.music_note_rounded, label: songs),
+              if (needsAnswer)
+                const _Fact(
+                  icon: Icons.how_to_reg_outlined,
+                  label: 'Falta confirmar presença',
+                ),
             ],
           ),
           if (sameDay.isNotEmpty) ...[

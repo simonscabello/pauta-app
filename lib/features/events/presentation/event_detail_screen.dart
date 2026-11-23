@@ -430,6 +430,28 @@ class _EventDetailBody extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
+              if (event.acceptsConfirmation && youPositions.isNotEmpty) ...[
+                _PresenceBand(event: event, answer: event.confirmations[myMembershipId]),
+                const SizedBox(height: AppSpacing.xl),
+              ],
+              if (canManage && event.acceptsConfirmation)
+                for (final p in event.declinedWithoutNotice) ...[
+                  AppNotice(
+                    tone: AppTone.danger,
+                    icon: Icons.event_busy_rounded,
+                    title: '${p.name} respondeu que não pode',
+                    message: '${p.name} ${event.rolesPhraseFor(p.id) ?? ''}'.trim(),
+                    action: FilledButton.tonalIcon(
+                      style: AppButtonStyles.compact,
+                      onPressed: () => context.push(
+                        '/agenda/${event.id}/escalar?substituir=${p.id}',
+                      ),
+                      icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                      label: Text('Substituir ${_firstName(p.name)}'),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
               _EventNotes(event: event),
               // **O repertório vem antes da equipe.** É o que traz o músico a
               // esta tela — a cifra, o tom, a ordem —, e atrás da manchete e
@@ -684,6 +706,102 @@ class YouAssignmentBanner extends StatelessWidget {
       YouHighlight(positionNames: positionNames);
 }
 
+/// A pergunta a quem está escalado: você vem?
+///
+/// Logo abaixo da manchete, porque é a única coisa que a escala pede de quem
+/// a abre. Depois da resposta vira uma linha que deixa mudar de ideia.
+class _PresenceBand extends ConsumerStatefulWidget {
+  const _PresenceBand({required this.event, required this.answer});
+
+  final Event event;
+
+  /// `true` confirmou, `false` não pode, nulo ainda não respondeu.
+  final bool? answer;
+
+  @override
+  ConsumerState<_PresenceBand> createState() => _PresenceBandState();
+}
+
+class _PresenceBandState extends ConsumerState<_PresenceBand> {
+  bool _sending = false;
+
+  Future<void> _respond(bool confirmed) async {
+    if (!confirmed) {
+      final ok = await showConfirmDialog(
+        context,
+        title: 'Avisar que você não pode?',
+        message: 'Quem lidera recebe o aviso e procura alguém no seu lugar. '
+            'Você continua na escala até ser substituído.',
+        confirmLabel: 'Avisar que não posso',
+        cancelLabel: 'Voltar',
+      );
+      if (!ok || !mounted) return;
+    }
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(eventRepositoryProvider)
+          .respond(widget.event.id, confirmed: confirmed);
+      ref.invalidate(eventProvider(widget.event.id));
+      ref.invalidate(eventsProvider((widget.event.teamId, 'upcoming')));
+    } on ApiException catch (error) {
+      if (mounted) showAppSnackBar(context, error.message, tone: AppTone.danger);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final onTap = _sending ? null : _respond;
+    return switch (widget.answer) {
+      null => AppNotice(
+          tone: AppTone.primary,
+          icon: Icons.how_to_reg_outlined,
+          title: 'Você confirma presença?',
+          message: 'Quem lidera vê a sua resposta.',
+          action: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              FilledButton.tonal(
+                style: AppButtonStyles.compact,
+                onPressed: onTap == null ? null : () => onTap(true),
+                child: const Text('Confirmo'),
+              ),
+              TextButton(
+                style: AppButtonStyles.compactText,
+                onPressed: onTap == null ? null : () => onTap(false),
+                child: const Text('Não posso'),
+              ),
+            ],
+          ),
+        ),
+      true => AppNotice(
+          tone: AppTone.success,
+          title: 'Você confirmou presença',
+          message: 'Se algo mudar, avise por aqui.',
+          action: TextButton(
+            style: AppButtonStyles.compactText,
+            onPressed: onTap == null ? null : () => onTap(false),
+            child: const Text('Não posso mais'),
+          ),
+        ),
+      false => AppNotice(
+          tone: AppTone.warning,
+          icon: Icons.event_busy_rounded,
+          title: 'Você respondeu que não pode',
+          message: 'Quem lidera já foi avisado e vai achar alguém no seu lugar.',
+          action: TextButton(
+            style: AppButtonStyles.compactText,
+            onPressed: onTap == null ? null : () => onTap(true),
+            child: const Text('Agora posso'),
+          ),
+        ),
+    };
+  }
+}
+
 /// Faixa de alerta quando alguém escalado já tinha avisado que não pode.
 ///
 /// Fica logo acima de "Equipe escalada", e não no topo da tela: assim não
@@ -827,6 +945,8 @@ class _TeamSection extends StatelessWidget {
             minister: event.minister,
             showRegistryBadge: canManage,
             myMembershipId: myMembershipId,
+            confirmations:
+                event.isDraft ? const {} : event.confirmations,
             unavailable: {
               for (final person in event.unavailable)
                 person.membershipId: person.reason,
@@ -897,11 +1017,15 @@ class _AssignedTeamCard extends StatefulWidget {
     required this.groups,
     this.minister,
     this.unavailable = const {},
+    this.confirmations = const {},
     this.showRegistryBadge = false,
     this.myMembershipId,
   });
 
   final List<AssignmentGroup> groups;
+
+  /// membershipId -> confirmou ou não pode. Ver [Event.confirmations].
+  final Map<String, bool> confirmations;
 
   /// Para destacar as linhas de quem está olhando: na lista de doze nomes, o
   /// músico procura o próprio.
@@ -968,6 +1092,7 @@ class _AssignedTeamCardState extends State<_AssignedTeamCard> {
           group: group,
           visibleMembers: visiveis,
           unavailable: widget.unavailable,
+          confirmations: widget.confirmations,
           showRegistryBadge: widget.showRegistryBadge,
           myMembershipId: widget.myMembershipId,
         ),
@@ -1116,10 +1241,12 @@ class _AssignmentGroupSection extends StatelessWidget {
     required this.group,
     required this.visibleMembers,
     required this.unavailable,
+    this.confirmations = const {},
     this.showRegistryBadge = false,
     this.myMembershipId,
   });
 
+  final Map<String, bool> confirmations;
   final AssignmentGroup group;
   final String? myMembershipId;
 
@@ -1180,6 +1307,7 @@ class _AssignmentGroupSection extends StatelessWidget {
             isUnavailable:
                 unavailable.containsKey(visibleMembers[i].membershipId),
             showRegistryBadge: showRegistryBadge,
+            confirmed: confirmations[visibleMembers[i].membershipId],
             isMe: visibleMembers[i].membershipId == myMembershipId,
             isLast: i == visibleMembers.length - 1,
           ),
@@ -1196,8 +1324,11 @@ class _AssignedMemberRow extends StatelessWidget {
     required this.isLast,
     this.showRegistryBadge = false,
     this.isMe = false,
+    this.confirmed,
   });
 
+  /// `true` confirmou, `false` respondeu que não pode, nulo sem resposta.
+  final bool? confirmed;
   final AssignmentMember member;
   final String? unavailableReason;
   final bool isUnavailable;
@@ -1244,6 +1375,21 @@ class _AssignedMemberRow extends StatelessWidget {
               // há um problema. Uma sem a outra obriga a procurar.
               if (isUnavailable)
                 UnavailableBadge(reason: unavailableReason)
+              else if (confirmed == false)
+                const AppBadge(label: 'Não pode', tone: AppTone.danger)
+              else if (confirmed == true)
+                // Ícone, e não selo: oito "Confirmou" em fila pesam mais que
+                // o único "Não pode" que importa.
+                Tooltip(
+                  message: 'Confirmou presença',
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    size: 18,
+                    color: AppStatusColors.of(context)
+                        .resolve(AppTone.success, scheme)
+                        .foreground,
+                  ),
+                )
               else if (showRegistryBadge && !member.isRegisteredForPosition)
                 AppBadge(
                   label: 'Fora do cadastro',

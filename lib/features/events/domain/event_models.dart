@@ -412,6 +412,7 @@ class Event {
     this.services = const [],
     this.minister,
     this.unavailable = const [],
+    this.confirmations = const {},
     this.warnings = const EventWarnings(),
     this.updatedAt,
   });
@@ -457,6 +458,11 @@ class Event {
       unavailable: (json['unavailable'] as List<dynamic>? ?? const [])
           .map((e) => UnavailableMember.fromJson(e as Map<String, dynamic>))
           .toList(),
+      confirmations: {
+        for (final c in (json['confirmations'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>())
+          c['membershipId'] as String: c['status'] == 'CONFIRMED',
+      },
       warnings: EventWarnings.fromJson(
         json['warnings'] as Map<String, dynamic>?,
       ),
@@ -593,6 +599,29 @@ class Event {
 
   /// Quem avisou que não pode no dia desta escala.
   final List<UnavailableMember> unavailable;
+
+  /// Quem já respondeu se vem: membershipId -> confirmou (`true`) ou não pode
+  /// (`false`). Sem entrada = ainda não respondeu.
+  final Map<String, bool> confirmations;
+
+  /// Quem respondeu "não posso" e não está na faixa de indisponibilidade do
+  /// dia (que já oferece a troca).
+  List<({String id, String name})> get declinedWithoutNotice {
+    final avisaram = {for (final u in warnings.unavailableAssigned) u.membershipId};
+    final vistos = <String>{};
+    return [
+      for (final group in assignments)
+        for (final m in group.members)
+          if (confirmations[m.membershipId] == false &&
+              !avisaram.contains(m.membershipId) &&
+              vistos.add(m.membershipId))
+            (id: m.membershipId, name: m.displayName),
+    ];
+  }
+
+  /// Dá para responder enquanto o último culto não começou.
+  bool get acceptsConfirmation =>
+      !isDraft && displayServices.last.startsAt.isAfter(DateTime.now());
   final EventWarnings warnings;
 
   bool get isDraft => status == 'DRAFT';
