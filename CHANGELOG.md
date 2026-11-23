@@ -7,6 +7,27 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.48.0 — 23/11/2026
+
+### Novidades
+- **Confirmar presença.** Quem está numa escala publicada responde
+  **Confirmo** ou **Não posso** na própria escala. A Home avisa quem ainda
+  não respondeu, e a equipe vê quem confirmou. O "não posso" chega a quem
+  lidera, com **Substituir** na escala.
+- **Posso cobrir.** Quando alguém responde que não pode, quem está fora
+  daquela escala vê **Posso cobrir**. Quem lidera aprova com um toque, e a
+  pessoa entra nas mesmas funções.
+- **Link público.** Nos três pontinhos da escala publicada: um endereço que
+  abre a escala no navegador de quem não usa o Pauta e serve para imprimir.
+  Dá para esconder os nomes de quem serve e para desativar o link.
+- **Modo culto.** Na lista de músicas, abre a cifra na primeira música que
+  falta tocar. As escalas da semana vão para o aparelho com letra e cifra,
+  mesmo sem terem sido abertas.
+- **Ensaio.** Quem lidera escreve a **pauta do ensaio**, e quem está
+  escalado responde **Vou** ou **Não vou**.
+- **Duração das músicas.** A música ganha duração (digitada como 4:30), e a
+  escala mostra quanto tempo o repertório leva.
+
 ## 0.47.0 — 22/11/2026
 
 ### Novidades

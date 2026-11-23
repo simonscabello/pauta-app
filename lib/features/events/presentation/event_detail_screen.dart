@@ -1001,7 +1001,7 @@ class _RehearsalBandState extends ConsumerState<_RehearsalBand> {
 
     return switch (widget.answer) {
       null => AppNotice(
-          tone: AppTone.info,
+          tone: AppTone.primary,
           icon: Icons.schedule_rounded,
           title: 'Você vai ao ensaio?',
           message: 'Ensaio: $when.',
