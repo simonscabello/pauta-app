@@ -57,6 +57,8 @@ class EventSong {
     this.key,
     this.keyOverride,
     this.defaultKey,
+    this.bpm,
+    this.durationSeconds,
     this.note,
     this.chordVersionId,
     this.isNew = false,
@@ -88,6 +90,8 @@ class EventSong {
   /// Só quando esta escala mudou o tom -- a tela sinaliza a diferença.
   final String? keyOverride;
   final String? defaultKey;
+  final int? bpm;
+  final int? durationSeconds;
 
   /// Recado da música ("entra só o teclado", "repetir o refrão").
   final String? note;
@@ -195,6 +199,8 @@ class EventSong {
       key: json['key'] as String?,
       keyOverride: json['keyOverride'] as String?,
       defaultKey: json['defaultKey'] as String?,
+      bpm: json['bpm'] as int?,
+      durationSeconds: json['durationSeconds'] as int?,
       note: json['note'] as String?,
       chordVersionId: json['chordVersionId'] as String?,
       // Falso quando ausente: é o que o cache gravado antes desta versão
@@ -402,6 +408,7 @@ class Event {
     required this.rehearsalAt,
     required this.location,
     required this.notes,
+    this.rehearsalNotes,
     required this.colorPalette,
     required this.status,
     this.repertoireMode = RepertoireMode.planned,
@@ -413,6 +420,7 @@ class Event {
     this.minister,
     this.unavailable = const [],
     this.confirmations = const {},
+    this.coverOffers = const {},
     this.warnings = const EventWarnings(),
     this.updatedAt,
   });
@@ -426,6 +434,7 @@ class Event {
       rehearsalAt: _parseUtcDateTime(json['rehearsalAt']),
       location: json['location'] as String?,
       notes: json['notes'] as String?,
+      rehearsalNotes: json['rehearsalNotes'] as String?,
       colorPalette: json['colorPalette'] as String?,
       status: json['status'] as String,
       repertoireMode: RepertoireMode.fromJson(json['repertoireMode']),
@@ -463,6 +472,15 @@ class Event {
             .whereType<Map<String, dynamic>>())
           c['membershipId'] as String: c['status'] == 'CONFIRMED',
       },
+      coverOffers: {
+        for (final c in (json['confirmations'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>())
+          if (c['coverOffer'] case final Map<String, dynamic> offer)
+            c['membershipId'] as String: (
+              id: offer['membershipId'] as String,
+              name: offer['displayName'] as String,
+            ),
+      },
       warnings: EventWarnings.fromJson(
         json['warnings'] as Map<String, dynamic>?,
       ),
@@ -482,6 +500,10 @@ class Event {
   final DateTime? rehearsalAt;
   final String? location;
   final String? notes;
+
+  /// A pauta do ensaio, escrita por quem lidera.
+  final String? rehearsalNotes;
+
   /// A combinação de roupa combinada para o dia ("Preto e dourado"). O app a
   /// chama de **paleta de roupas**: "paleta de cores" fazia parecer tema visual
   /// da escala, e o que a equipe precisa saber é como se vestir.
@@ -604,16 +626,16 @@ class Event {
   /// (`false`). Sem entrada = ainda não respondeu.
   final Map<String, bool> confirmations;
 
-  /// Quem respondeu "não posso" e não está na faixa de indisponibilidade do
-  /// dia (que já oferece a troca).
-  List<({String id, String name})> get declinedWithoutNotice {
-    final avisaram = {for (final u in warnings.unavailableAssigned) u.membershipId};
+  /// Quem se ofereceu para cobrir cada recusa: quem recusou -> quem cobre.
+  final Map<String, ({String id, String name})> coverOffers;
+
+  /// Quem respondeu "não posso", na ordem da escala.
+  List<({String id, String name})> get declined {
     final vistos = <String>{};
     return [
       for (final group in assignments)
         for (final m in group.members)
           if (confirmations[m.membershipId] == false &&
-              !avisaram.contains(m.membershipId) &&
               vistos.add(m.membershipId))
             (id: m.membershipId, name: m.displayName),
     ];

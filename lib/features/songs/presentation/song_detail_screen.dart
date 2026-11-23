@@ -15,6 +15,7 @@ import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../events/domain/setlist_duration.dart';
 import '../../suggestions/data/suggestion_repository.dart';
 import '../data/song_repository.dart';
 import '../domain/song_history.dart';
@@ -431,6 +432,12 @@ class _Facts extends StatelessWidget {
           icon: Icons.speed_rounded,
           label: 'Andamento',
           value: hasPace ? paceLabel(song.pace) : '${song.bpm} bpm',
+        ),
+      if (song.durationSeconds case final seconds?)
+        AppFact(
+          icon: Icons.timer_outlined,
+          label: 'Duração',
+          value: formatDuration(seconds),
         ),
     ];
 

@@ -163,6 +163,7 @@ class _RepositorioFake extends EventRepository {
     required String title,
     required List<Map<String, String?>> services,
     String? rehearsalAt,
+    String? rehearsalNotes,
     String? location,
     String? notes,
     String? colorPalette,

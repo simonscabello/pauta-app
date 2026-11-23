@@ -29,12 +29,15 @@ import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../songs/domain/chord_sheet.dart';
+import '../../songs/presentation/lyrics_reader.dart';
 import '../application/played_songs.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import '../domain/listen_playlist.dart';
 import '../domain/schedule_share_text.dart';
+import '../domain/setlist_duration.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../../unavailability/domain/unavailability_models.dart';
 import '../../whatsapp/data/whatsapp_repository.dart';
@@ -125,6 +128,8 @@ class EventDetailScreen extends ConsumerWidget {
                           ref: ref,
                           source: event,
                         );
+                      case 'public-link':
+                        await _openPublicLink(context, ref, event);
                       case 'unpublish':
                         await _confirmUnpublish(context, ref, event);
                       case 'delete':
@@ -143,6 +148,11 @@ class EventDetailScreen extends ConsumerWidget {
                       const PopupMenuItem(
                         value: 'duplicate',
                         child: Text('Duplicar escala'),
+                      ),
+                    if (!event.isDraft)
+                      const PopupMenuItem(
+                        value: 'public-link',
+                        child: Text('Link público'),
                       ),
                     if (!event.isDraft)
                       const PopupMenuItem(
@@ -217,6 +227,81 @@ class EventDetailScreen extends ConsumerWidget {
       if (!context.mounted) return;
       showAppSnackBar(context, error.message, tone: AppTone.danger);
     }
+  }
+
+  /// O link que abre a escala no navegador de quem não tem o Pauta
+  /// (convidado, pastor, quem imprime). Mostra o mesmo texto do Compartilhar.
+  Future<void> _openPublicLink(
+    BuildContext context,
+    WidgetRef ref,
+    Event event,
+  ) async {
+    final repo = ref.read(eventRepositoryProvider);
+    final String url;
+    try {
+      url = await repo.publicLink(event.id);
+    } on ApiException catch (error) {
+      if (context.mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    await showAdaptiveSheet<void>(
+      context: context,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenPadding,
+          0,
+          AppSpacing.screenPadding,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Link público',
+              style: Theme.of(sheetContext).textTheme.titleLarge,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'Quem abrir o link vê esta escala no navegador, sem entrar no '
+              'Pauta: quem serve, os horários e as músicas. Dá para imprimir. '
+              'O link para de abrir uma semana depois do culto.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SelectableText(url),
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton.icon(
+              onPressed: () => shareText(sheetContext, url),
+              icon: const Icon(Icons.share_outlined, size: 18),
+              label: const Text('Compartilhar link'),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await repo.revokePublicLink(event.id);
+                } on ApiException catch (error) {
+                  if (sheetContext.mounted) {
+                    showAppSnackBar(
+                      sheetContext,
+                      error.message,
+                      tone: AppTone.danger,
+                    );
+                  }
+                  return;
+                }
+                if (!sheetContext.mounted) return;
+                Navigator.pop(sheetContext);
+                showAppSnackBar(context, 'Link desativado.');
+              },
+              child: const Text('Desativar link'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmUnpublish(
@@ -431,27 +516,28 @@ class _EventDetailBody extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xl),
               ],
               if (event.acceptsConfirmation && youPositions.isNotEmpty) ...[
-                _PresenceBand(event: event, answer: event.confirmations[myMembershipId]),
+                _PresenceBand(
+                  event: event,
+                  answer: event.confirmations[myMembershipId],
+                  myId: myMembershipId,
+                ),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              if (canManage && event.acceptsConfirmation)
-                for (final p in event.declinedWithoutNotice) ...[
-                  AppNotice(
-                    tone: AppTone.danger,
-                    icon: Icons.event_busy_rounded,
-                    title: '${p.name} respondeu que não pode',
-                    message: '${p.name} ${event.rolesPhraseFor(p.id) ?? ''}'.trim(),
-                    action: FilledButton.tonalIcon(
-                      style: AppButtonStyles.compact,
-                      onPressed: () => context.push(
-                        '/agenda/${event.id}/escalar?substituir=${p.id}',
-                      ),
-                      icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-                      label: Text('Substituir ${_firstName(p.name)}'),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                ],
+              if (event.acceptsConfirmation)
+                for (final p in event.declined)
+                  // Quem lidera decide a troca; quem está fora da escala pode
+                  // se oferecer. Quem recusou e os colegas escalados já têm a
+                  // informação na lista.
+                  if (canManage
+                      ? event.coverOffers.containsKey(p.id) ||
+                          !event.warnings.unavailableAssigned
+                              .any((u) => u.membershipId == p.id)
+                      : youPositions.isEmpty &&
+                          (event.coverOffers[p.id]?.id ?? myMembershipId) ==
+                              myMembershipId) ...[
+                    _DeclinedBand(event: event, person: p, canManage: canManage),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
               _EventNotes(event: event),
               // **O repertório vem antes da equipe.** É o que traz o músico a
               // esta tela — a cifra, o tom, a ordem —, e atrás da manchete e
@@ -619,7 +705,10 @@ class _EventNotes extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPalette = event.colorPalette?.isNotEmpty ?? false;
     final hasNotes = event.notes?.isNotEmpty ?? false;
-    if (!hasPalette && !hasNotes) return const SizedBox.shrink();
+    final hasRehearsal = event.rehearsalNotes?.isNotEmpty ?? false;
+    if (!hasPalette && !hasNotes && !hasRehearsal) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -641,6 +730,14 @@ class _EventNotes extends StatelessWidget {
                 icon: Icons.sticky_note_2_outlined,
                 text: event.notes!,
                 maxLines: 4,
+              ),
+            if (hasRehearsal && (hasPalette || hasNotes))
+              const SizedBox(height: AppSpacing.sm),
+            if (hasRehearsal)
+              _MetaLine(
+                icon: Icons.checklist_rounded,
+                text: 'Pauta do ensaio: ${event.rehearsalNotes}',
+                maxLines: 12,
               ),
           ],
         ),
@@ -711,9 +808,14 @@ class YouAssignmentBanner extends StatelessWidget {
 /// Logo abaixo da manchete, porque é a única coisa que a escala pede de quem
 /// a abre. Depois da resposta vira uma linha que deixa mudar de ideia.
 class _PresenceBand extends ConsumerStatefulWidget {
-  const _PresenceBand({required this.event, required this.answer});
+  const _PresenceBand({
+    required this.event,
+    required this.answer,
+    required this.myId,
+  });
 
   final Event event;
+  final String? myId;
 
   /// `true` confirmou, `false` não pode, nulo ainda não respondeu.
   final bool? answer;
@@ -791,7 +893,12 @@ class _PresenceBandState extends ConsumerState<_PresenceBand> {
           tone: AppTone.warning,
           icon: Icons.event_busy_rounded,
           title: 'Você respondeu que não pode',
-          message: 'Quem lidera já foi avisado e vai achar alguém no seu lugar.',
+          message: switch (widget.event.coverOffers[widget.myId]) {
+            null =>
+              'Quem lidera já foi avisado e vai achar alguém no seu lugar.',
+            final offer =>
+              '${offer.name} se ofereceu para cobrir. Falta quem lidera aprovar.',
+          },
           action: TextButton(
             style: AppButtonStyles.compactText,
             onPressed: onTap == null ? null : () => onTap(true),
@@ -799,6 +906,117 @@ class _PresenceBandState extends ConsumerState<_PresenceBand> {
           ),
         ),
     };
+  }
+}
+
+/// Alguém respondeu "não posso": quem lidera troca (ou aprova quem se
+/// ofereceu), e quem está fora da escala pode se oferecer para cobrir.
+class _DeclinedBand extends ConsumerStatefulWidget {
+  const _DeclinedBand({
+    required this.event,
+    required this.person,
+    required this.canManage,
+  });
+
+  final Event event;
+  final ({String id, String name}) person;
+  final bool canManage;
+
+  @override
+  ConsumerState<_DeclinedBand> createState() => _DeclinedBandState();
+}
+
+class _DeclinedBandState extends ConsumerState<_DeclinedBand> {
+  bool _sending = false;
+
+  Future<void> _run(
+    Future<Event> Function(EventRepository repo, String eventId, String forId)
+        action,
+  ) async {
+    setState(() => _sending = true);
+    try {
+      await action(
+        ref.read(eventRepositoryProvider),
+        widget.event.id,
+        widget.person.id,
+      );
+    } on ApiException catch (error) {
+      if (mounted) showAppSnackBar(context, error.message, tone: AppTone.danger);
+    } finally {
+      // Também no erro: "alguém já se ofereceu" muda o que a faixa mostra.
+      ref.invalidate(eventProvider(widget.event.id));
+      ref.invalidate(eventsProvider((widget.event.teamId, 'upcoming')));
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final event = widget.event;
+    final p = widget.person;
+    final offer = event.coverOffers[p.id];
+    final roles = joinNames(event.positionsForMembership(p.id));
+    VoidCallback? when(VoidCallback action) => _sending ? null : action;
+
+    if (!widget.canManage) {
+      return offer == null
+          ? AppNotice(
+              tone: AppTone.primary,
+              icon: Icons.volunteer_activism_outlined,
+              title: '${p.name} não pode servir neste dia',
+              message: 'Você pode cobrir $roles? Quem lidera aprova a troca.',
+              action: FilledButton.tonal(
+                style: AppButtonStyles.compact,
+                onPressed: when(() => _run((r, e, f) => r.offerCover(e, f))),
+                child: const Text('Posso cobrir'),
+              ),
+            )
+          : AppNotice(
+              tone: AppTone.info,
+              title: 'Você se ofereceu para cobrir ${p.name}',
+              message: 'Falta quem lidera aprovar.',
+              action: TextButton(
+                style: AppButtonStyles.compactText,
+                onPressed: when(() => _run((r, e, f) => r.withdrawCover(e, f))),
+                child: const Text('Desistir'),
+              ),
+            );
+    }
+
+    void substituir() =>
+        context.push('/agenda/${event.id}/escalar?substituir=${p.id}');
+    return AppNotice(
+      tone: AppTone.danger,
+      icon: Icons.event_busy_rounded,
+      title: '${p.name} respondeu que não pode',
+      message: offer == null
+          ? '${p.name} ${event.rolesPhraseFor(p.id) ?? ''}'.trim()
+          : '${offer.name} se ofereceu para cobrir $roles.',
+      action: offer == null
+          ? FilledButton.tonalIcon(
+              style: AppButtonStyles.compact,
+              onPressed: substituir,
+              icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+              label: Text('Substituir ${_firstName(p.name)}'),
+            )
+          : Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                FilledButton.tonal(
+                  style: AppButtonStyles.compact,
+                  onPressed:
+                      when(() => _run((r, e, f) => r.approveCover(e, f))),
+                  child: Text('Aprovar ${_firstName(offer.name)}'),
+                ),
+                TextButton(
+                  style: AppButtonStyles.compactText,
+                  onPressed: substituir,
+                  child: const Text('Escolher outra pessoa'),
+                ),
+              ],
+            ),
+    );
   }
 }
 
@@ -1649,6 +1867,36 @@ class _ServiceSongsSection extends StatelessWidget {
               position: i + 1,
               serviceSongs: songs,
             ),
+        // Modo culto: o leitor com a cifra, da primeira música que falta
+        // tocar em diante. É o mesmo leitor de tocar numa música; o botão só
+        // poupa escolher por onde começar.
+        if (songs.isNotEmpty)
+          Consumer(
+            builder: (context, ref, _) {
+              final played = ref.watch(playedSongsProvider.notifier);
+              ref.watch(playedSongsProvider);
+              final next = songs.indexWhere((s) => !played.isPlayed(eventId, s));
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  style: AppButtonStyles.compactText,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => EventLyricsScreen(
+                        teamId: teamId,
+                        eventId: eventId,
+                        songs: songs,
+                        initialIndex: next < 0 ? 0 : next,
+                        chordMode: true,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.play_circle_outline_rounded, size: 18),
+                  label: Text(next > 0 ? 'Continuar o culto' : 'Modo culto'),
+                ),
+              );
+            },
+          ),
         if (_keyMap(songs) case final map?)
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),
@@ -1665,6 +1913,16 @@ class _ServiceSongsSection extends StatelessWidget {
                     ),
                 ],
               ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        if (setlistDurationLabel(songs) case final total?)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text(
+              'Duração das músicas: ${total[0].toLowerCase()}${total.substring(1)}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),

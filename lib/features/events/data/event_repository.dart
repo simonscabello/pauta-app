@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/read_cache.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
@@ -100,6 +101,7 @@ class EventRepository {
     required String title,
     required List<Map<String, String?>> services,
     String? rehearsalAt,
+    String? rehearsalNotes,
     String? location,
     String? notes,
     String? colorPalette,
@@ -112,6 +114,8 @@ class EventRepository {
           'title': title,
           'services': services,
           if (rehearsalAt != null) 'rehearsalAt': rehearsalAt,
+          if (rehearsalAt != null && (rehearsalNotes?.isNotEmpty ?? false))
+            'rehearsalNotes': rehearsalNotes,
           if (location != null && location.isNotEmpty) 'location': location,
           if (notes != null && notes.isNotEmpty) 'notes': notes,
           if (colorPalette != null && colorPalette.isNotEmpty)
@@ -145,6 +149,7 @@ class EventRepository {
     List<Map<String, String?>>? services,
     String? rehearsalAt,
     bool removeRehearsalAt = false,
+    String? rehearsalNotes,
     String? location,
     String? notes,
     String? colorPalette,
@@ -161,6 +166,7 @@ class EventRepository {
           if (services != null) 'services': services,
           if (removeRehearsalAt) 'rehearsalAt': null,
           if (rehearsalAt != null) 'rehearsalAt': rehearsalAt,
+          if (rehearsalNotes != null) 'rehearsalNotes': rehearsalNotes,
           if (location != null) 'location': location,
           if (notes != null) 'notes': notes,
           if (colorPalette != null) 'colorPalette': colorPalette,
@@ -215,6 +221,50 @@ class EventRepository {
       final response = await _dio.put<Map<String, dynamic>>(
         '/events/$eventId/confirmation',
         data: {'status': confirmed ? 'CONFIRMED' : 'DECLINED'},
+      );
+      return Event.fromJson(response.data!);
+    });
+  }
+
+  /// O endereço público da escala, só de leitura. Cria o link na primeira
+  /// vez e devolve o mesmo nas seguintes.
+  Future<String> publicLink(String eventId) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/events/$eventId/public-link',
+      );
+      return '${AppConfig.apiBaseUrl}/e/${response.data!['token']}';
+    });
+  }
+
+  Future<void> revokePublicLink(String eventId) async {
+    return _guard(() async {
+      await _dio.delete<void>('/events/$eventId/public-link');
+    });
+  }
+
+  /// "Posso cobrir" quem respondeu que não pode ([forMembershipId]).
+  Future<Event> offerCover(String eventId, String forMembershipId) =>
+      _cover('put', eventId, forMembershipId);
+
+  /// Desistir da oferta (ou, para quem lidera, dispensá-la).
+  Future<Event> withdrawCover(String eventId, String forMembershipId) =>
+      _cover('delete', eventId, forMembershipId);
+
+  /// Quem lidera aceita a oferta: a pessoa entra nas mesmas funções.
+  Future<Event> approveCover(String eventId, String forMembershipId) =>
+      _cover('post', eventId, forMembershipId, suffix: '/approve');
+
+  Future<Event> _cover(
+    String method,
+    String eventId,
+    String forMembershipId, {
+    String suffix = '',
+  }) {
+    return _guard(() async {
+      final response = await _dio.request<Map<String, dynamic>>(
+        '/events/$eventId/cover/$forMembershipId$suffix',
+        options: Options(method: method),
       );
       return Event.fromJson(response.data!);
     });
@@ -399,7 +449,29 @@ typedef EventsQuery = (String teamId, String scope);
 final eventsProvider = FutureProvider.autoDispose
     .family<CachedValue<List<Event>>, EventsQuery>((ref, query) {
   final (teamId, scope) = query;
-  return ref.watch(eventRepositoryProvider).list(teamId, scope: scope);
+  final repo = ref.watch(eventRepositoryProvider);
+  final result = repo.list(teamId, scope: scope);
+  if (scope == 'upcoming') {
+    // Modo culto sem rede: a escala mais próxima (até uma semana) vai para o
+    // aparelho com a letra e a cifra, mesmo que ninguém a tenha aberto.
+    unawaited(
+      result.then((list) async {
+        final next = list.data.where((e) => !e.isDraft).firstOrNull;
+        if (list.fromCache ||
+            next == null ||
+            next.startsAt.difference(DateTime.now()).inDays > 7) {
+          return;
+        }
+        final event = await repo.find(next.id);
+        if (event.fromCache) return;
+        await ref.read(songRepositoryProvider).prefetch(
+              teamId,
+              event.data.songs.map((song) => song.songId),
+            );
+      }).catchError((_) {}),
+    );
+  }
+  return result;
 });
 
 final eventHistoryProvider =

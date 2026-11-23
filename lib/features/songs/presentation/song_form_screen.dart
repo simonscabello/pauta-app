@@ -14,6 +14,7 @@ import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/open_link.dart';
 import '../../../shared/domain/person_fields.dart';
 import '../../../shared/widgets/unsaved_changes_guard.dart';
+import '../../events/domain/setlist_duration.dart';
 import '../data/song_repository.dart';
 import '../domain/chord_sheet.dart';
 import '../domain/hymnal_models.dart';
@@ -61,6 +62,7 @@ class SongFormScreen extends ConsumerStatefulWidget {
 class _SongFormScreenState extends ConsumerState<SongFormScreen>
     with UnsavedChangesTracker {
   final _title = TextEditingController();
+  final _duration = TextEditingController();
   final _artist = TextEditingController();
   final _composer = TextEditingController();
   final _chords = TextEditingController();
@@ -102,6 +104,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
   void dispose() {
     for (final controller in [
       _title,
+      _duration,
       _artist,
       _composer,
       _lyrics,
@@ -123,6 +126,9 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
     _defaultKey = _keyOrNull(song.defaultKey);
     _kind = song.kind;
     _pace = song.pace;
+    if (song.durationSeconds case final seconds?) {
+      _duration.text = formatDuration(seconds);
+    }
     _themes = {...song.themes};
     _hymnals = [...song.hymnals];
     _isNew = song.isNew;
@@ -142,6 +148,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
   String unsavedSignature() => [
         for (final c in [
           _title,
+          _duration,
           _artist,
           _composer,
           _lyrics,
@@ -176,6 +183,21 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
     if (title.length < 2) {
       setState(() => _error = 'Informe o nome da música.');
       return;
+    }
+
+    final duration = _duration.text.trim();
+    int? durationSeconds;
+    if (duration.isNotEmpty) {
+      final match = RegExp(r'^(\d{1,2}):([0-5]\d)$').firstMatch(duration);
+      if (match == null) {
+        setState(() => _error = 'Informe a duração em m:ss, por exemplo 4:30.');
+        return;
+      }
+      durationSeconds = int.parse(match[1]!) * 60 + int.parse(match[2]!);
+      if (durationSeconds < 10 || durationSeconds > 3600) {
+        setState(() => _error = 'Informe uma duração entre 0:10 e 60:00.');
+        return;
+      }
     }
 
     final raw = _chords.text;
@@ -222,6 +244,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
           'defaultKey': _defaultKey ?? '',
           'kind': _kind,
           'pace': _pace,
+          'durationSeconds': durationSeconds,
           // Sempre enviado, inclusive vazio: `[]` é o que limpa a
           // classificação, e omitir o campo significaria "não mexi nele" — a
           // pessoa que tirou a última etiqueta não conseguiria salvar isso.
@@ -466,16 +489,36 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen>
           onChanged: _saving ? null : (v) => setState(() => _kind = v),
         ),
         const SizedBox(height: AppSpacing.lg),
-        _ChipField(
-          label: 'Andamento',
-          value: _pace,
-          options: const {
-            'CALM': 'Calma',
-            'MODERATE': 'Moderada',
-            'UPBEAT': 'Agitada',
-          },
-          hint: song.bpm != null ? 'A gravação tem ${song.bpm} bpm' : null,
-          onChanged: _saving ? null : (v) => setState(() => _pace = v),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: _ChipField(
+                label: 'Andamento',
+                value: _pace,
+                options: const {
+                  'CALM': 'Calma',
+                  'MODERATE': 'Moderada',
+                  'UPBEAT': 'Agitada',
+                },
+                hint: song.bpm != null ? 'A gravação tem ${song.bpm} bpm' : null,
+                onChanged: _saving ? null : (v) => setState(() => _pace = v),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: TextField(
+                controller: _duration,
+                enabled: !_saving,
+                keyboardType: TextInputType.datetime,
+                decoration: const InputDecoration(
+                  labelText: 'Duração',
+                  hintText: '4:30',
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.lg),
         _ThemeField(

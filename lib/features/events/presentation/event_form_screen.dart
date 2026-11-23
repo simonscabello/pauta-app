@@ -101,6 +101,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
   final _title = TextEditingController();
   final _location = TextEditingController();
   final _notes = TextEditingController();
+  final _rehearsalNotes = TextEditingController();
   final _colorPalette = TextEditingController();
 
   /// O dia da escala. Manhã e noite são o mesmo domingo, então a data é uma só
@@ -149,6 +150,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
         _title.text.trim(),
         _location.text.trim(),
         _notes.text.trim(),
+        _rehearsalNotes.text.trim(),
         _colorPalette.text.trim(),
       ].join('\n');
 
@@ -164,6 +166,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
     _title.dispose();
     _location.dispose();
     _notes.dispose();
+    _rehearsalNotes.dispose();
     _colorPalette.dispose();
     super.dispose();
   }
@@ -177,6 +180,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
     _title.text = event.title ?? '';
     _location.text = event.location ?? '';
     _notes.text = event.notes ?? '';
+    _rehearsalNotes.text = event.rehearsalNotes ?? '';
     _colorPalette.text = event.colorPalette ?? '';
     _repertoireMode = event.repertoireMode;
     _extrasExpanded = _title.text.isNotEmpty ||
@@ -595,6 +599,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
           services: services,
           rehearsalAt: rehearsalAt,
           removeRehearsalAt: _rehearsalAt == null,
+          rehearsalNotes: _rehearsalNotes.text.trim(),
           location: _location.text.trim(),
           notes: _notes.text.trim(),
           colorPalette: _colorPalette.text.trim(),
@@ -610,6 +615,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
           title: _title.text.trim(),
           services: services,
           rehearsalAt: rehearsalAt,
+          rehearsalNotes: _rehearsalNotes.text.trim(),
           location: _location.text.trim(),
           notes: _notes.text.trim(),
           colorPalette: _colorPalette.text.trim(),
@@ -816,6 +822,20 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
                   value: _rehearsalLabel(_rehearsalAt!),
                   enabled: !_loading,
                   onTap: () => _chooseRehearsal(_rehearsalDay),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: _rehearsalNotes,
+                  enabled: !_loading,
+                  minLines: 2,
+                  maxLines: 5,
+                  maxLength: 1000,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Pauta do ensaio (opcional)',
+                    hintText: 'O que vamos passar, quem chega antes, o que levar',
+                    counterText: '',
+                  ),
                 ),
               ],
               const SizedBox(height: AppSpacing.xl),

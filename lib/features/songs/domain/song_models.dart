@@ -48,6 +48,7 @@ class Song {
     this.defaultKey,
     this.originalKey,
     this.bpm,
+    this.durationSeconds,
     this.lyrics,
     this.chords,
     this.chordsKey,
@@ -80,6 +81,7 @@ class Song {
   /// O tom da gravação, lido do CifraClub. Sugestão, não decisão.
   final String? originalKey;
   final int? bpm;
+  final int? durationSeconds;
 
   final String? lyrics;
   final String? chords;
@@ -159,6 +161,7 @@ class Song {
       defaultKey: json['defaultKey'] as String?,
       originalKey: json['originalKey'] as String?,
       bpm: json['bpm'] as int?,
+      durationSeconds: json['durationSeconds'] as int?,
       lyrics: json['lyrics'] as String?,
       chords: json['chords'] as String?,
       chordsKey: json['chordsKey'] as String?,
@@ -215,6 +218,7 @@ class CatalogCandidate {
     this.composer,
     this.originalKey,
     this.bpm,
+    this.durationSeconds,
     this.hasChords = false,
     this.hasYoutube = false,
     this.hasSpotify = false,
@@ -226,6 +230,7 @@ class CatalogCandidate {
   final String? composer;
   final String? originalKey;
   final int? bpm;
+  final int? durationSeconds;
   final bool hasChords;
   final bool hasYoutube;
   final bool hasSpotify;
@@ -238,6 +243,7 @@ class CatalogCandidate {
       composer: json['composer'] as String?,
       originalKey: json['originalKey'] as String?,
       bpm: json['bpm'] as int?,
+      durationSeconds: json['durationSeconds'] as int?,
       hasChords: json['hasChords'] as bool? ?? false,
       hasYoutube: json['hasYoutube'] as bool? ?? false,
       hasSpotify: json['hasSpotify'] as bool? ?? false,

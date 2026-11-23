@@ -203,6 +203,50 @@ void main() {
       expect(find.text('Você confirma presença?'), findsNothing);
     });
 
+    testWidgets('quem está fora da escala pode se oferecer para cobrir',
+        (tester) async {
+      await _pumpEscala(
+        tester,
+        _evento(
+          nomes: ['Ana', 'Bruno'],
+          quando: futuro,
+          respostas: {'m1': 'DECLINED'},
+        ),
+        papel: 'MEMBER',
+      );
+      expect(find.text('Bruno não pode servir neste dia'), findsOneWidget);
+      expect(find.text('Posso cobrir'), findsOneWidget);
+    });
+
+    Event comOferta() => _evento(
+          nomes: ['Ana', 'Bruno'],
+          quando: futuro,
+          respostas: {'m1': 'DECLINED'},
+          cobre: {'m1': 'Carla'},
+        );
+
+    testWidgets('com oferta, quem lidera aprova', (tester) async {
+      await _pumpEscala(tester, comOferta());
+      expect(
+        find.text('Carla se ofereceu para cobrir Vocalista.'),
+        findsOneWidget,
+      );
+      expect(find.text('Aprovar Carla'), findsOneWidget);
+      expect(find.text('Escolher outra pessoa'), findsOneWidget);
+
+    });
+
+    testWidgets('com oferta, os outros não são chamados', (tester) async {
+      await _pumpEscala(tester, comOferta(), souEu: 'm-outro', papel: 'MEMBER');
+      expect(find.text('Posso cobrir'), findsNothing);
+    });
+
+    testWidgets('quem se ofereceu pode desistir', (tester) async {
+      await _pumpEscala(tester, comOferta(), souEu: 'm-Carla', papel: 'MEMBER');
+      expect(find.text('Você se ofereceu para cobrir Bruno'), findsOneWidget);
+      expect(find.text('Desistir'), findsOneWidget);
+    });
+
     testWidgets('escala que já passou não pergunta nada', (tester) async {
       await _pumpEscala(tester, _evento(nomes: ['Ana']), souEu: 'm0');
       expect(find.text('Você confirma presença?'), findsNothing);
@@ -232,6 +276,7 @@ Event _evento({
   Map<String, String> musicas = const {'Meu Deus, meu Rei': 'G'},
   String quando = '2026-08-09T12:00:00.000Z',
   Map<String, String> respostas = const {},
+  Map<String, String> cobre = const {},
 }) {
   return Event.fromJson({
     'id': 'e1',
@@ -240,7 +285,12 @@ Event _evento({
     'startsAt': quando,
     'confirmations': [
       for (final r in respostas.entries)
-        {'membershipId': r.key, 'status': r.value},
+        {
+          'membershipId': r.key,
+          'status': r.value,
+          if (cobre[r.key] case final nome?)
+            'coverOffer': {'membershipId': 'm-$nome', 'displayName': nome},
+        },
     ],
     'rehearsalAt': null,
     'location': null,

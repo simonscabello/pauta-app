@@ -82,6 +82,14 @@ const helpFaq = <FaqEntry>[
         'vê quem confirmou e quem não pode.',
   ),
   FaqEntry(
+    question: 'Um colega não pode servir. Posso entrar no lugar?',
+    answer: 'Pode se oferecer. Quando alguém responde **Não posso**, a escala '
+        'mostra, para quem não está nela, **Posso cobrir**. Toque, e quem '
+        'lidera recebe o aviso para aprovar a troca.\n\n'
+        'Você entra nas mesmas funções quando a liderança aprovar. Até lá dá '
+        'para **Desistir** na mesma faixa.',
+  ),
+  FaqEntry(
     question: 'Como acompanho os compromissos da equipe?',
     answer: 'Na **Agenda**. Os dias pintados no calendário têm compromisso: as '
         'escalas, com o horário do ensaio quando houver, e os eventos da '
@@ -208,7 +216,17 @@ const leaderHelpFaq = <FaqEntry>[
         'escolha quem entra e salve.\n\n'
         'Se a pessoa ministrava, lembre de escolher quem ministra no lugar.\n\n'
         'Vale o mesmo para quem respondeu **Não posso** na escala publicada: '
-        'você recebe o aviso e a escala mostra **Substituir**.',
+        'você recebe o aviso e a escala mostra **Substituir**. Se alguém se '
+        'ofereceu para cobrir, aparece **Aprovar** com o nome da pessoa.',
+  ),
+  FaqEntry(
+    question: 'Como mando a escala para quem não usa o Pauta?',
+    answer: 'Abra a escala publicada, toque nos três pontinhos e em **Link '
+        'público**. O link abre no navegador, sem conta, com quem serve, os '
+        'horários e as músicas, e dá para imprimir por ele.\n\n'
+        'Ele sempre mostra a escala como está agora e para de abrir uma '
+        'semana depois do culto. Para fechar antes, toque em **Desativar '
+        'link**.',
   ),
   FaqEntry(
     question: 'Como uso as mesmas músicas de manhã e à noite?',
