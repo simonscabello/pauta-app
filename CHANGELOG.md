@@ -7,6 +7,18 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.49.0 — 23/11/2026
+
+### Novidades
+- **Respostas à vista.** A linha de cada escala na Agenda diz quantos
+  confirmaram, e fica em vermelho quando alguém respondeu que não pode. Quem
+  lidera recebe na Home o aviso da recusa, que abre a escala.
+- **Presença na Participação.** O relatório mostra, por pessoa, quantas
+  escalas ela recusou e em quantas não respondeu.
+
+### Melhorias
+- No cadastro pela busca, a música já vem com a duração do vídeo.
+
 ## 0.48.0 — 23/11/2026
 
 ### Novidades
