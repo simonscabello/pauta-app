@@ -156,7 +156,13 @@ const helpFaq = <FaqEntry>[
   ),
   FaqEntry(
     question: 'Como conecto um assistente de IA, como o Claude?',
-    answer: 'No **Perfil**, abra **Assistentes de IA** e toque em **Criar '
+    answer: '**Claude no navegador e no celular, e ChatGPT**: adicione um '
+        'conector personalizado com o endereço '
+        '**https://api.pautalouvor.com.br/mcp**. O assistente abre o Pauta '
+        'para você entrar com a sua conta e permitir o acesso. Quem lidera '
+        'pode marcar **Também criar escalas** nessa tela.\n\n'
+        'Para o **Claude Code**, o Cursor e o VS Code, use uma chave: no '
+        '**Perfil**, abra **Assistentes de IA** e toque em **Criar '
         'chave**. Dê um nome, escolha a validade e confirme com a sua senha. '
         'De preferência no computador: é lá que a chave vai ser colada, e ela '
         'aparece uma vez só.\n\n'
@@ -166,13 +172,15 @@ const helpFaq = <FaqEntry>[
         '**Cursor, VS Code e outros**: adicione um servidor MCP do tipo HTTP '
         'com o endereço e o cabeçalho que o Pauta mostra.\n\n'
         'O assistente consulta o que você já vê no app. Ele só grava alguma '
-        'coisa se a chave for criada com **Também criar escalas** — opção de '
-        'quem lidera —, e mesmo assim só monta, edita e publica escalas, põe '
-        'as músicas nelas, cadastra e edita músicas do repertório e marca '
-        'quem não pode quando você pede. O Claude no navegador e no '
-        'celular e o ChatGPT ainda não aceitam chave.\n\n'
-        'Para desconectar, abra o menu da chave e toque em **Revogar chave**. '
-        'Trocar a senha desconecta todos os assistentes de uma vez.',
+        'coisa com **Também criar escalas** — opção de quem lidera —, e '
+        'mesmo assim só monta, edita e publica escalas, põe as músicas '
+        'nelas, cadastra e edita músicas do repertório e marca quem não pode '
+        'quando você pede.\n\n'
+        'Para desconectar, abra **Perfil › Segurança › Assistentes de IA**: '
+        'no menu da chave, **Revogar chave**; em **Conectados pelo '
+        'navegador**, **Desconectar**. Trocar a senha desconecta todos os '
+        'assistentes de uma vez. A liderança pode desligar os assistentes '
+        'para a equipe toda em **Equipe › Dados da equipe**.',
   ),
   FaqEntry(
     question: 'Como excluo minha conta?',
@@ -199,7 +207,9 @@ const leaderHelpFaq = <FaqEntry>[
     question: 'Como monto a escala de um domingo?',
     answer: 'Na **Agenda**, toque em **Nova** e escolha **Nova escala**. O dia já '
         'vem com a próxima data da grade de cultos. Depois de criar, o Pauta '
-        'leva você para **Escalar equipe** e, dali, para as músicas.\n\n'
+        'leva você para **Escalar equipe** e, dali, para as músicas. Ao '
+        'escolher quem serve em cada função, os **Sugeridos** aparecem no '
+        'topo, com o motivo, como há quantas semanas a pessoa não serve.\n\n'
         'Para preparar o mês de uma vez, abra **Datas sem escala** na Agenda e '
         'toque em **Criar os rascunhos destas datas**.',
   ),
@@ -241,9 +251,12 @@ const leaderHelpFaq = <FaqEntry>[
   ),
   FaqEntry(
     question: 'Posso cadastrar a escala do mês mandando uma imagem para a IA?',
-    answer: 'Pode, com um assistente de IA no computador, como o Claude Code. '
-        'No **Perfil**, abra **Assistentes de IA**, toque em **Criar chave** e '
-        'ligue **Também criar escalas**. Depois, mande ao assistente a imagem '
+    answer: 'Pode. No Claude ou no ChatGPT, conecte o Pauta pelo endereço '
+        'do servidor e marque **Também criar escalas** ao permitir o acesso. '
+        'No Claude Code, abra **Perfil › Assistentes de IA**, toque em '
+        '**Criar chave** e ligue **Também criar escalas**. Veja **Como '
+        'conecto um assistente de IA, como o Claude?**. Depois, mande ao '
+        'assistente a imagem '
         '(ou o texto) da escala do mês e peça para cadastrar.\n\n'
         'Ele confere cada nome e cada função com a equipe e pergunta o que '
         'não tiver certeza — apelidos, instrumento não informado, quem avisou '

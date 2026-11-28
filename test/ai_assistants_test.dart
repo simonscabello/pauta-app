@@ -166,7 +166,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Nenhuma chave ainda'), findsOneWidget);
-      expect(find.textContaining('o ChatGPT ainda não aceitam'), findsOneWidget);
+      expect(find.textContaining('o ChatGPT não usam chave'), findsOneWidget);
       expect(find.text('Suas chaves'), findsNothing);
 
       // "Pode" e "Não pode" chegam ao leitor de tela por extenso.
@@ -220,7 +220,7 @@ void main() {
       expect(find.text('Como conectar'), findsOneWidget);
       expect(find.text(AppConfig.mcpUrl), findsOneWidget);
       expect(
-        find.text('Trocar a senha revoga todas as chaves de uma vez.'),
+        find.text('Trocar a senha revoga todas as chaves e conexões de uma vez.'),
         findsOneWidget,
       );
     });
