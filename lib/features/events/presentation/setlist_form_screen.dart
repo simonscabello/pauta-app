@@ -31,6 +31,7 @@ import '../../songs/presentation/musical_key_picker.dart';
 import '../../songs/presentation/song_theme_picker.dart';
 import '../../suggestions/presentation/event_suggestions_band.dart';
 import '../../team/data/team_repository.dart';
+import '../data/agenda_provider.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -137,12 +138,13 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
       final todas = [
         for (final culto in _cultos) ..._lista(culto.id),
       ];
-      await ref.read(eventRepositoryProvider).replaceSongs(
+      final updated = await ref.read(eventRepositoryProvider).replaceSongs(
             widget.eventId,
             todas,
           );
 
       ref.invalidate(eventProvider(widget.eventId));
+      invalidateAgendaSchedules(ref, updated.teamId);
       if (!mounted) return;
       _salvo = _assinatura();
       _saindo = true;

@@ -24,6 +24,7 @@ import '../../../shared/widgets/on_leave_badge.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/unsaved_changes_guard.dart';
+import '../../events/data/agenda_provider.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
 import '../../events/domain/event_models.dart';
@@ -451,8 +452,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       // A agenda também mostra a escalação (o chip "VOCÊ" e a contagem de
       // escalados). Sem invalidar a lista, o cartão continuava com o número
       // de antes de salvar, contradizendo a tela de detalhe.
-      ref.invalidate(eventsProvider((updated.teamId, 'upcoming')));
-      ref.invalidate(eventsProvider((updated.teamId, 'past')));
+      invalidateAgendaSchedules(ref, updated.teamId);
       if (!mounted) return;
       _salvo = _assinatura();
 

@@ -21,7 +21,6 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../events/data/agenda_provider.dart';
-import '../../events/data/event_repository.dart';
 import '../data/copilot_repository.dart';
 import '../domain/copilot_models.dart';
 
@@ -198,8 +197,7 @@ class _ScheduleCopilotScreenState extends ConsumerState<ScheduleCopilotScreen> {
         dateKeys: chosen,
       );
       if (!mounted) return;
-      ref.invalidate(eventsProvider);
-      ref.invalidate(agendaEventsProvider);
+      invalidateAgendaSchedules(ref, widget.teamId);
       final saved = results.where((r) => r.saved).length;
       final skipped = results.where((r) => !r.saved).toList();
       if (skipped.isNotEmpty) {

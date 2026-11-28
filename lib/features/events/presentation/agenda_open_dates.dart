@@ -7,6 +7,7 @@ import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_pressable.dart';
+import '../data/agenda_provider.dart';
 import '../data/event_repository.dart';
 import '../domain/open_date.dart';
 import 'agenda_event_tile.dart';
@@ -54,7 +55,7 @@ class _AgendaOpenDatesState extends ConsumerState<AgendaOpenDates> {
 
       // A lista de datas em aberto sai da lista de escalas: invalidar uma
       // recalcula a outra, e as linhas somem sozinhas.
-      ref.invalidate(eventsProvider((widget.teamId, 'upcoming')));
+      invalidateAgendaSchedules(ref, widget.teamId);
       showAppSnackBar(
         context,
         result.createdCount == 0

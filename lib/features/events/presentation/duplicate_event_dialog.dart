@@ -11,6 +11,7 @@ import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
+import '../data/agenda_provider.dart';
 import '../domain/event_datetime.dart';
 import '../data/event_repository.dart';
 import '../domain/event_models.dart';
@@ -48,8 +49,7 @@ Future<void> showDuplicateEventDialog({
           source.id,
           startsAt: pickedLocal.toUtc().toIso8601String(),
         );
-    ref.invalidate(eventsProvider((source.teamId, 'upcoming')));
-    ref.invalidate(eventsProvider((source.teamId, 'past')));
+    invalidateAgendaSchedules(ref, source.teamId);
     if (!context.mounted) return;
     context.push('/agenda/${created.id}');
     showAppSnackBar(

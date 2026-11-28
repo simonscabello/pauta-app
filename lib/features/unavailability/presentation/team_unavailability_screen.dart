@@ -13,8 +13,10 @@ import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_month_grid.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../events/data/agenda_provider.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
+import '../../events/domain/event_models.dart';
 import '../../team/data/team_repository.dart';
 import '../data/unavailability_repository.dart';
 import '../domain/unavailability_models.dart';
@@ -404,11 +406,16 @@ class _DaySheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     // A escala que já existe neste dia, se existe: o botão leva a ela em vez
-    // de propor criar outra.
-    final escalas = [
-      for (final scope in ['upcoming', 'past'])
-        ...?ref.watch(eventsProvider((teamId, scope))).valueOrNull?.data,
-    ];
+    // de propor criar outra. Usa o recorte do mês do dia escolhido (com
+    // fallback para `upcoming` enquanto o mês carrega).
+    final month = DateTime(day.year, day.month);
+    final escalas =
+        ref.watch(agendaMonthProvider((teamId, month))).valueOrNull?.data ??
+            ref
+                .watch(eventsProvider((teamId, 'upcoming')))
+                .valueOrNull
+                ?.data ??
+            const <Event>[];
     // Todas as do dia: na equipe que escala por culto, o domingo tem várias.
     final existentes = escalas.where((event) {
       final local = eventLocalTime(

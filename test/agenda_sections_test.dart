@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,14 +11,16 @@ import 'package:louvor_app/core/storage/shared_preferences_provider.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
-import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/data/agenda_provider.dart';
+import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/agenda_event_tile.dart';
 import 'package:louvor_app/features/events/presentation/agenda_screen.dart';
 import 'package:louvor_app/features/team/data/team_repository.dart';
 import 'package:louvor_app/features/team/domain/service_template.dart';
 import 'package:louvor_app/features/team/domain/team_models.dart';
+import 'package:louvor_app/features/team_events/data/team_event_repository.dart';
+import 'package:louvor_app/features/team_events/domain/team_event.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
@@ -167,8 +170,10 @@ void main() {
     await _pumpAgenda(
       tester,
       const Size(400, 1400),
-      load: (scope) async => CachedValue(
-        data: scope == 'past'
+      loadUpcoming: () async =>
+          const CachedValue(data: <Event>[], fromCache: false),
+      loadMonth: (month) async => CachedValue(
+        data: month == DateTime(2026, 8)
             ? [
                 Event.fromJson(
                   _eventJson(
@@ -191,21 +196,28 @@ void main() {
 
   testWidgets('loading preserva calendário e erro oferece nova tentativa',
       (tester) async {
-    final pending = Completer<CachedValue<List<Event>>>();
+    final pendingUpcoming = Completer<CachedValue<List<Event>>>();
+    final pendingMonth = Completer<CachedValue<List<Event>>>();
     var failed = true;
     await _pumpAgenda(
       tester,
       const Size(400, 1400),
       settle: false,
-      load: (_) => failed
-          ? pending.future
+      loadUpcoming: () => failed
+          ? pendingUpcoming.future
+          : Future.value(
+              const CachedValue(data: <Event>[], fromCache: false),
+            ),
+      loadMonth: (_) => failed
+          ? pendingMonth.future
           : Future.value(
               const CachedValue(data: <Event>[], fromCache: false),
             ),
     );
     expect(find.text('Setembro 2026'), findsOneWidget);
     expect(find.text('Nada marcado para este dia.'), findsNothing);
-    pending.completeError(Exception('offline'));
+    pendingUpcoming.completeError(Exception('offline'));
+    pendingMonth.completeError(Exception('offline'));
     await tester.pumpAndSettle();
     expect(find.text('Tentar novamente'), findsWidgets);
     failed = false;
@@ -219,31 +231,122 @@ void main() {
     await _pumpAgenda(
       tester,
       const Size(400, 1400),
-      load: (scope) async => CachedValue(
-        data: scope == 'past'
-            ? List.generate(
-                20,
-                (i) => Event.fromJson(
-                  _eventJson(
-                    id: 'p$i',
-                    startsAt: '2026-09-08T22:30:00Z',
-                  ),
-                ),
-              )
-            : <Event>[],
+      loadUpcoming: () async => CachedValue(
+        data: const <Event>[],
+        fromCache: true,
+        cachedAt: DateTime.utc(2026, 9, 9, 12),
+      ),
+      loadMonth: (month) async {
+        if (month == DateTime(2026, 9)) {
+          return CachedValue(
+            data: const <Event>[],
+            fromCache: true,
+            cachedAt: DateTime.utc(2026, 9, 9, 12),
+          );
+        }
+        throw Exception('offline');
+      },
+    );
+    await tester.tap(find.byTooltip('Mês anterior'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nada marcado para este dia.'), findsNothing);
+    expect(find.text('Nenhuma escala neste mês.'), findsNothing);
+    // Trocar de mês sem cache não escolhe o dia 1 sozinho nem finge vazio.
+    expect(find.text('Não carregou tudo deste dia.'), findsNothing);
+    expect(find.textContaining('Sem conexão.'), findsOneWidget);
+    expect(find.text('Tentar novamente'), findsOneWidget);
+  });
+
+  testWidgets(
+      'mês passado sem escala em cache offline mantém selo Sem conexão',
+      (tester) async {
+    await _pumpAgenda(
+      tester,
+      const Size(400, 1400),
+      loadUpcoming: () async => CachedValue(
+        data: const <Event>[],
+        fromCache: true,
+        cachedAt: DateTime.utc(2026, 9, 9, 12),
+      ),
+      loadMonth: (_) async => CachedValue(
+        data: const <Event>[],
         fromCache: true,
         cachedAt: DateTime.utc(2026, 9, 9, 12),
       ),
     );
     await tester.tap(find.byTooltip('Mês anterior'));
     await tester.pumpAndSettle();
-    expect(find.text('Nada marcado para este dia.'), findsNothing);
-    expect(find.text('Nenhum compromisso neste mês.'), findsNothing);
-    // Trocar de mês não escolhe mais o dia 1 sozinho: sem compromisso
-    // conhecido no mês, nenhum dia fica escolhido — e nada é afirmado sobre
-    // um dia que ninguém pediu.
-    expect(find.text('Não carregou tudo deste dia.'), findsNothing);
+    expect(find.text('Agosto 2026'), findsOneWidget);
+    expect(find.text('Nenhuma escala neste mês.'), findsOneWidget);
     expect(find.textContaining('Sem conexão.'), findsOneWidget);
+  });
+
+  testWidgets(
+      'tela pede no máximo duas consultas de escalas (upcoming + mês) mesmo com página cheia',
+      (tester) async {
+    final spy = _SpyEventRepository(
+      upcoming: List.generate(
+        20,
+        (i) => Event.fromJson(
+          _eventJson(
+            id: 'u$i',
+            startsAt: DateTime.utc(2026, 9, 10)
+                .add(Duration(days: i * 3))
+                .toIso8601String(),
+          ),
+        ),
+      ),
+      byRange: {
+        '2026-09-01..2026-09-30': [
+          Event.fromJson(
+            _eventJson(id: 'u0', startsAt: '2026-09-10T22:30:00Z'),
+          ),
+        ],
+        '2026-08-01..2026-08-31': [
+          Event.fromJson(
+            _eventJson(id: 'aug1', startsAt: '2026-08-23T12:00:00Z'),
+          ),
+        ],
+      },
+    );
+
+    await _pumpAgendaWithRepository(
+      tester,
+      repository: spy,
+      now: DateTime.utc(2026, 9, 9, 16),
+    );
+
+    // No máximo 2 consultas: 1 upcoming (limit 20) + 1 mês exibido.
+    expect(spy.listCalls, hasLength(1));
+    expect(spy.listCalls.single, (scope: 'upcoming', limit: 20));
+    expect(spy.rangeCalls, [(from: '2026-09-01', to: '2026-09-30')]);
+    expect(spy.totalScheduleQueries, 2);
+
+    // Navegar para trás pede apenas o mês anterior, nunca scope=past.
+    await tester.tap(find.byTooltip('Mês anterior'));
+    await tester.pumpAndSettle();
+    expect(spy.listCalls, hasLength(1));
+    expect(spy.rangeCalls, [
+      (from: '2026-09-01', to: '2026-09-30'),
+      (from: '2026-08-01', to: '2026-08-31'),
+    ]);
+    expect(find.byKey(const ValueKey('selected-escala/aug1')), findsOneWidget);
+  });
+
+  testWidgets('virada de mês em São Paulo pede o mês local, não o de UTC',
+      (tester) async {
+    final spy = _SpyEventRepository(upcoming: const [], byRange: const {});
+    // 2026-10-01 01:30 UTC == 2026-09-30 22:30 em America/Sao_Paulo.
+    await _pumpAgendaWithRepository(
+      tester,
+      repository: spy,
+      now: DateTime.utc(2026, 10, 1, 1, 30),
+    );
+
+    expect(find.text('Setembro 2026'), findsOneWidget);
+    expect(spy.totalScheduleQueries, 2);
+    expect(spy.listCalls.single.scope, 'upcoming');
+    expect(spy.rangeCalls, [(from: '2026-09-01', to: '2026-09-30')]);
   });
 }
 
@@ -292,7 +395,8 @@ Future<void> _pumpAgenda(
   int take = 5,
   bool semEquipe = false,
   bool settle = true,
-  Future<CachedValue<List<Event>>> Function(String scope)? load,
+  Future<CachedValue<List<Event>>> Function()? loadUpcoming,
+  Future<CachedValue<List<Event>>> Function(DateTime month)? loadMonth,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -343,15 +447,31 @@ Future<void> _pumpAgenda(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        if (load != null)
-          agendaEventsProvider.overrideWith((ref, query) => load(query.$2)),
         sharedPreferencesProvider.overrideWithValue(prefs),
         agendaNowProvider.overrideWithValue(DateTime.utc(2026, 9, 9, 16)),
         eventsProvider.overrideWith(
-          (ref, query) async => CachedValue(
-            data: query.$2 == 'upcoming' ? events : <Event>[],
-            fromCache: false,
-          ),
+          (ref, query) => loadUpcoming != null
+              ? loadUpcoming()
+              : Future.value(
+                  CachedValue(
+                    data: query.$2 == 'upcoming' ? events : <Event>[],
+                    fromCache: false,
+                  ),
+                ),
+        ),
+        agendaMonthProvider.overrideWith(
+          (ref, query) => loadMonth != null
+              ? loadMonth(query.$2)
+              : Future.value(
+                  CachedValue(
+                    data: query.$2 == DateTime(2026, 9) ? events : <Event>[],
+                    fromCache: false,
+                  ),
+                ),
+        ),
+        teamEventsProvider.overrideWith(
+          (ref, query) async =>
+              const CachedValue(data: <TeamEvent>[], fromCache: false),
         ),
         // Grade vazia: estes testes são sobre a arrumação da lista, e as datas
         // em aberto mudam conforme o dia em que o teste roda.
@@ -400,6 +520,136 @@ Future<void> _pumpAgenda(
     await tester.pump();
     await tester.pump();
   }
+}
+
+Future<void> _pumpAgendaWithRepository(
+  WidgetTester tester, {
+  required _SpyEventRepository repository,
+  required DateTime now,
+}) async {
+  tester.view.physicalSize = const Size(400, 1400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
+  SharedPreferences.setMockInitialValues(<String, Object>{});
+  final prefs = await SharedPreferences.getInstance();
+
+  final router = GoRouter(
+    initialLocation: '/agenda',
+    routes: [
+      GoRoute(path: '/agenda', builder: (_, __) => const AgendaScreen()),
+    ],
+  );
+  addTearDown(router.dispose);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        agendaNowProvider.overrideWithValue(now),
+        eventRepositoryProvider.overrideWithValue(repository),
+        teamEventsProvider.overrideWith(
+          (ref, query) async =>
+              const CachedValue(data: <TeamEvent>[], fromCache: false),
+        ),
+        serviceTemplatesProvider.overrideWith(
+          (ref, teamId) async => const <ServiceTemplate>[],
+        ),
+        teamProvider.overrideWith(
+          (ref, teamId) async => const Team(
+            id: 't1',
+            name: 'Louvor SIBB',
+            timezone: 'America/Sao_Paulo',
+          ),
+        ),
+        authControllerProvider.overrideWith(
+          (ref) => _FakeAuthController(
+            ref,
+            AuthState.signedIn(
+              const AuthUser(
+                id: '1',
+                name: 'Simon',
+                email: 'simon@teste.com',
+                mustChangePassword: false,
+              ),
+              const [
+                TeamSummary(
+                  membershipId: 'm-Simon',
+                  teamId: 't1',
+                  name: 'Louvor SIBB',
+                  role: 'OWNER',
+                  displayName: 'Simon',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+      child: MaterialApp.router(
+        theme: AppTheme.light,
+        routerConfig: router,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+class _SpyEventRepository extends EventRepository {
+  _SpyEventRepository({
+    required this.upcoming,
+    required this.byRange,
+  }) : super(Dio(), _UnusedCache());
+
+  final List<Event> upcoming;
+  final Map<String, List<Event>> byRange;
+
+  final List<({String scope, int limit})> listCalls = [];
+  final List<({String from, String to})> rangeCalls = [];
+
+  int get totalScheduleQueries => listCalls.length + rangeCalls.length;
+
+  @override
+  Future<CachedValue<List<Event>>> list(
+    String teamId, {
+    String scope = 'upcoming',
+    int limit = 20,
+  }) async {
+    listCalls.add((scope: scope, limit: limit));
+    return CachedValue(
+      data: scope == 'upcoming' ? upcoming : const <Event>[],
+      fromCache: false,
+    );
+  }
+
+  @override
+  Future<CachedValue<List<Event>>> listRange(
+    String teamId, {
+    required String from,
+    required String to,
+    bool cache = true,
+  }) async {
+    rangeCalls.add((from: from, to: to));
+    return CachedValue(
+      data: byRange['$from..$to'] ?? const <Event>[],
+      fromCache: false,
+    );
+  }
+
+  @override
+  Future<CachedValue<Event>> find(String eventId) async {
+    final event = upcoming.firstWhere(
+      (e) => e.id == eventId,
+      orElse: () => Event.fromJson(
+        _eventJson(id: eventId, startsAt: '2026-09-10T22:30:00Z'),
+      ),
+    );
+    return CachedValue(data: event, fromCache: true);
+  }
+}
+
+class _UnusedCache implements ReadCache {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
 class _FakeAuthController extends AuthController {
