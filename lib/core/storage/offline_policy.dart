@@ -5,10 +5,21 @@ import '../../features/events/domain/event_models.dart';
 /// Horizonte de pré-carregamento para quem está escalado: próximos 30 dias.
 const kMemberPrefetchWindowDays = 30;
 
-/// Intervalo máximo de renovação quando o servidor não informa `updatedAt`
-/// (hoje o caso das músicas dentro da escala) e teto entre sincronizações
-/// automáticas de abertura/retorno do app.
+/// Intervalo mínimo entre sincronizações automáticas de abertura/retorno do app
+/// e teto padrão quando uma escala legada não traz `updatedAt`.
 const kOfflineRefreshInterval = Duration(hours: 6);
+
+/// Intervalo de renovação em segundo plano de uma música já guardada (abrir a
+/// música com rede e editar cifra/letra já renovam na hora).
+const kOfflineSongRefreshInterval = Duration(hours: 24);
+
+/// Intervalo mínimo entre limpezas completas do cache offline.
+const kOfflinePruneInterval = Duration(days: 1);
+
+/// Teto de requisições GET por passada de sincronização offline.
+/// A API limita 120 req/min por IP e vários aparelhos dividem o Wi-Fi da igreja;
+/// o que não couber fica para a próxima passada.
+const kMaxOfflineRequestsPerPass = 20;
 
 /// Tempo sem abrir uma música fora de qualquer escala guardada antes de
 /// removê-la do aparelho.
@@ -130,12 +141,24 @@ bool shouldRunScheduledSync({
   return now.toUtc().difference(lastSyncAt.toUtc()) >= minInterval;
 }
 
+/// Decide se a limpeza completa do cache offline já pode rodar de novo
+/// (no máximo uma vez por dia, evitando decodificar o cache a cada abertura).
+bool shouldRunOfflinePrune({
+  required DateTime? lastPruneAt,
+  required DateTime now,
+  Duration minInterval = kOfflinePruneInterval,
+}) {
+  if (lastPruneAt == null) return true;
+  return now.toUtc().difference(lastPruneAt.toUtc()) >= minInterval;
+}
+
 /// Metadados de uma escala guardada no aparelho, para a limpeza pura.
 class CachedEventMeta {
   const CachedEventMeta({
     required this.id,
     required this.startsAt,
     this.lastServiceAt,
+    this.timezone = 'America/Sao_Paulo',
     required this.cachedAt,
     required this.songIds,
     required this.sizeBytes,
@@ -144,6 +167,7 @@ class CachedEventMeta {
   final String id;
   final DateTime startsAt;
   final DateTime? lastServiceAt;
+  final String timezone;
   final DateTime cachedAt;
   final Set<String> songIds;
   final int sizeBytes;
@@ -188,22 +212,26 @@ class OfflineCacheCleanupPlan {
 ///
 /// Ordem:
 /// 1. Remove escalas passadas há mais de [pastEventRetention] (padrão: 7 dias).
-/// 2. Coleta todas as músicas referenciadas por alguma escala que ficou.
+/// 2. Coleta todas as músicas referenciadas por alguma escala que ficou e
+///    protege em definitivo as músicas de escalas dentro da janela de
+///    pré-carregamento (nunca são apagadas pela limpeza, evitando laço de
+///    baixar e apagar).
 /// 3. Remove músicas fora dessas escalas que nunca foram abertas pelo usuário
 ///    (`lastOpenedAt == null`) ou cuja última abertura passou de
 ///    [unusedSongRetention] (60 dias).
-/// 4. Se ainda passar do teto ([maxCachedSongs] ou [maxCacheBytes]), remove
-///    primeiro as músicas fora de escalas guardadas (mais antigas primeiro).
-///    Só se mesmo as músicas das escalas guardadas estourarem [maxCacheBytes]
-///    é que se sacrificam as mais distantes no futuro.
+/// 4. Quando há teto ativo (Web: [maxCachedSongs] / [maxCacheBytes]; no
+///    Android ambos são nulos), remove primeiro músicas fora de escalas
+///    guardadas (mais antigas primeiro) e, se ainda passar de [maxCacheBytes],
+///    só remove músicas de escalas fora da janela de pré-carregamento (ex.:
+///    passadas na folga de 7 dias ou futuras além da janela).
 OfflineCacheCleanupPlan planOfflineCacheCleanup({
   required List<CachedEventMeta> events,
   required List<CachedSongMeta> songs,
   required DateTime now,
   Duration pastEventRetention = kPastEventRetention,
   Duration unusedSongRetention = kUnusedSongRetention,
-  int maxCachedSongs = kMaxCachedSongs,
-  int maxCacheBytes = kMaxOfflineCacheBytes,
+  int? maxCachedSongs = kMaxCachedSongs,
+  int? maxCacheBytes = kMaxOfflineCacheBytes,
 }) {
   final nowUtc = now.toUtc();
   final eventCutoff = nowUtc.subtract(pastEventRetention);
@@ -219,12 +247,27 @@ OfflineCacheCleanupPlan planOfflineCacheCleanup({
   }
 
   final earliestEventBySong = <String, DateTime>{};
+  final protectedSongIds = <String>{};
   for (final event in keptEvents) {
     final startUtc = event.startsAt.toUtc();
+    final tzName =
+        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
+    final today = _civilDateInZone(nowUtc, tzName);
+    final eventDay = _civilDateInZone(startUtc, tzName);
+    final windowEnd = offlinePrefetchWindowEnd(
+      todayCivil: today,
+      canManage: true,
+    );
+    final inPrefetchWindow =
+        !eventDay.isBefore(today) && !eventDay.isAfter(windowEnd);
+
     for (final songId in event.songIds) {
       final current = earliestEventBySong[songId];
       if (current == null || startUtc.isBefore(current)) {
         earliestEventBySong[songId] = startUtc;
+      }
+      if (inPrefetchWindow) {
+        protectedSongIds.add(songId);
       }
     }
   }
@@ -244,8 +287,20 @@ OfflineCacheCleanupPlan planOfflineCacheCleanup({
     keptSongs.add(song);
   }
 
+  if (maxCachedSongs == null && maxCacheBytes == null) {
+    return OfflineCacheCleanupPlan(
+      eventIdsToRemove: eventIdsToRemove,
+      songIdsToRemove: songIdsToRemove,
+    );
+  }
+
   var totalBytes = keptEvents.fold<int>(0, (sum, e) => sum + e.sizeBytes) +
       keptSongs.fold<int>(0, (sum, s) => sum + s.sizeBytes);
+
+  bool overSongLimit(int count) =>
+      maxCachedSongs != null && count > maxCachedSongs;
+  bool overByteLimit(int bytes) =>
+      maxCacheBytes != null && bytes > maxCacheBytes;
 
   // Teto: primeiro descarta músicas fora de escalas guardadas (LRU).
   final unreferenced = keptSongs
@@ -255,7 +310,7 @@ OfflineCacheCleanupPlan planOfflineCacheCleanup({
 
   var remainingSongCount = keptSongs.length;
   for (final song in unreferenced) {
-    if (remainingSongCount <= maxCachedSongs && totalBytes <= maxCacheBytes) {
+    if (!overSongLimit(remainingSongCount) && !overByteLimit(totalBytes)) {
       break;
     }
     songIdsToRemove.add(song.id);
@@ -263,12 +318,16 @@ OfflineCacheCleanupPlan planOfflineCacheCleanup({
     totalBytes -= song.sizeBytes;
   }
 
-  // Guarda extrema de bytes (ex.: `localStorage` apertado): se mesmo só com
-  // músicas das escalas guardadas o tamanho passar de [maxCacheBytes], abre
-  // mão primeiro das que só entram em escalas mais distantes no futuro.
-  if (totalBytes > maxCacheBytes) {
-    final referenced = keptSongs
-        .where((s) => referencedSongIds.contains(s.id))
+  // Se ainda passar do teto de bytes, só sacrifica músicas de escalas FORA da
+  // janela de pré-carregamento (ex.: passadas recentes ou futuras além do
+  // horizonte). Músicas de escalas dentro da janela nunca são removidas.
+  if (overByteLimit(totalBytes)) {
+    final evictableReferenced = keptSongs
+        .where(
+          (s) =>
+              referencedSongIds.contains(s.id) &&
+              !protectedSongIds.contains(s.id),
+        )
         .toList()
       ..sort((a, b) {
         final byEvent = earliestEventBySong[b.id]!
@@ -277,8 +336,8 @@ OfflineCacheCleanupPlan planOfflineCacheCleanup({
         return a.recencyAnchor.compareTo(b.recencyAnchor);
       });
 
-    for (final song in referenced) {
-      if (totalBytes <= maxCacheBytes) break;
+    for (final song in evictableReferenced) {
+      if (!overByteLimit(totalBytes)) break;
       songIdsToRemove.add(song.id);
       totalBytes -= song.sizeBytes;
     }

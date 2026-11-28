@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -10,6 +11,7 @@ import 'package:louvor_app/core/storage/shared_preferences_provider.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/features/events/application/offline_sync_coordinator.dart';
+import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
@@ -183,17 +185,37 @@ void main() {
       );
     });
 
-    test('sem updatedAt remoto (músicas na escala) renova a cada 6 horas', () {
+    test('sem updatedAt remoto (músicas na escala) renova a cada 24 horas', () {
       expect(
         needsOfflineRefresh(
-          cachedAt: base.subtract(const Duration(hours: 5, minutes: 59)),
+          cachedAt: base.subtract(const Duration(hours: 23, minutes: 59)),
           now: base,
+          maxAge: kOfflineSongRefreshInterval,
         ),
         isFalse,
       );
       expect(
         needsOfflineRefresh(
-          cachedAt: base.subtract(const Duration(hours: 6)),
+          cachedAt: base.subtract(const Duration(hours: 24)),
+          now: base,
+          maxAge: kOfflineSongRefreshInterval,
+        ),
+        isTrue,
+      );
+    });
+
+    test('limpeza automática (prune) roda no máximo uma vez por dia', () {
+      expect(shouldRunOfflinePrune(lastPruneAt: null, now: base), isTrue);
+      expect(
+        shouldRunOfflinePrune(
+          lastPruneAt: base.subtract(const Duration(hours: 23, minutes: 59)),
+          now: base,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRunOfflinePrune(
+          lastPruneAt: base.subtract(const Duration(hours: 24)),
           now: base,
         ),
         isTrue,
@@ -326,12 +348,14 @@ void main() {
       expect(plan.songIdsToRemove, {'s-older'});
     });
 
-    test('teto de bytes protege localStorage mesmo quando só escalas sobram', () {
+    test('teto de bytes nunca apaga música de escala dentro da janela de pré-carregamento',
+        () {
       final plan = planOfflineCacheCleanup(
         now: now,
         maxCachedSongs: 100,
         maxCacheBytes: 1500,
         events: [
+          // Ambas dentro da janela de pré-carregamento (+2d e +25d).
           CachedEventMeta(
             id: 'e-near',
             startsAt: now.add(const Duration(days: 2)),
@@ -340,10 +364,18 @@ void main() {
             sizeBytes: 200,
           ),
           CachedEventMeta(
-            id: 'e-far',
+            id: 'e-far-in-window',
             startsAt: now.add(const Duration(days: 25)),
             cachedAt: now,
-            songIds: {'s-far'},
+            songIds: {'s-far-in-window'},
+            sizeBytes: 200,
+          ),
+          // Fora da janela (aberta manualmente para daqui a 90 dias).
+          CachedEventMeta(
+            id: 'e-beyond-window',
+            startsAt: now.add(const Duration(days: 90)),
+            cachedAt: now,
+            songIds: {'s-beyond-window'},
             sizeBytes: 200,
           ),
         ],
@@ -355,7 +387,13 @@ void main() {
             sizeBytes: 800,
           ),
           CachedSongMeta(
-            id: 's-far',
+            id: 's-far-in-window',
+            cachedAt: now,
+            lastOpenedAt: null,
+            sizeBytes: 800,
+          ),
+          CachedSongMeta(
+            id: 's-beyond-window',
             cachedAt: now,
             lastOpenedAt: null,
             sizeBytes: 800,
@@ -363,9 +401,54 @@ void main() {
         ],
       );
 
-      // Total inicial = 200 + 200 + 800 + 800 = 2000 > 1500 -> remove a da
-      // escala mais distante primeiro, preservando a escala mais próxima.
-      expect(plan.songIdsToRemove, {'s-far'});
+      // Total inicial = 3000 > 1500 -> remove só a música fora da janela;
+      // as de e-near e e-far-in-window ficam intactas (sem laço de GETs).
+      expect(plan.songIdsToRemove, {'s-beyond-window'});
+    });
+
+    test('no Android (sem teto de bytes) só valem 7 dias de escalas passadas e 60 dias de músicas ociosas',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      // Em VM/Android (`!kIsWeb`), `ReadCache(prefs)` não impõe teto de bytes.
+      final cache = ReadCache(prefs);
+      expect(cache.maxCacheBytes, isNull);
+      expect(cache.maxCachedSongs, isNull);
+
+      await cache.saveEvent(
+        'e-future',
+        _eventJson(
+          'e-future',
+          now.add(const Duration(days: 3)),
+          songs: [
+            {'songId': 's-big', 'serviceId': 'srv1', 'title': 'Grande'},
+          ],
+        ),
+        now: now,
+      );
+      // Música aberta recentemente com conteúdo grande (fora do teto da Web).
+      await cache.saveSong(
+        's-big',
+        {'id': 's-big', 'title': 'Grande', 'lyrics': 'A' * 5000},
+        markOpened: true,
+        now: now.subtract(const Duration(days: 5)),
+      );
+      await cache.saveSong(
+        's-recent-orphan',
+        {'id': 's-recent-orphan', 'title': 'Recente', 'lyrics': 'B' * 5000},
+        markOpened: true,
+        now: now.subtract(const Duration(days: 10)),
+      );
+      await cache.saveSong(
+        's-old-orphan',
+        {'id': 's-old-orphan', 'title': 'Antiga', 'lyrics': 'C' * 100},
+        markOpened: true,
+        now: now.subtract(const Duration(days: 61)),
+      );
+
+      final plan = await cache.prune(now: now);
+      expect(plan.songIdsToRemove, {'s-old-orphan'});
+      expect(cache.readSong('s-big'), isNotNull);
+      expect(cache.readSong('s-recent-orphan'), isNotNull);
     });
 
     test('ReadCache.prune aplica a limpeza, preserva lastOpenedAt e atualiza resumo',
@@ -469,7 +552,7 @@ void main() {
   });
 
   group('OfflineSyncCoordinator (sem rede real)', () {
-    test('pré-carrega escalas selecionadas, renova só quando updatedAt muda ou após 6 h',
+    test('pré-carrega escalas selecionadas, renova só quando updatedAt muda ou músicas após 24 h',
         () async {
       final prefs = await SharedPreferences.getInstance();
       var currentNow = DateTime.utc(2026, 11, 10, 12, 0);
@@ -645,14 +728,854 @@ void main() {
       expect(eventFetches, ['e1']);
       expect(songFetches, isEmpty); // músicas ainda têm < 6 h
 
-      // Passam-se 6 horas desde a última sync -> músicas (sem updatedAt remoto)
-      // são renovadas; escalas inalteradas não precisam ser refeitas.
+      // Passam-se 6 horas desde a última sync -> sincronização agendada roda,
+      // mas músicas ainda têm < 24 h e não são refeitas.
       eventFetches.clear();
       songFetches.clear();
       currentNow = currentNow.add(const Duration(hours: 6));
       await coordinator.syncIfDue();
       expect(eventFetches, isEmpty);
+      expect(songFetches, isEmpty);
+
+      // Passam-se 24 horas desde a gravação das músicas -> agora renovam;
+      // escalas inalteradas continuam sem refazer GET.
+      currentNow = currentNow.add(const Duration(hours: 18));
+      await coordinator.syncIfDue();
+      expect(eventFetches, isEmpty);
       expect(songFetches, ['s-e1', 's-e2']);
+    });
+
+    test('orçamento de bytes na Web vale antes de baixar (mais próxima primeiro) e não entra em laço',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.utc(2026, 11, 10, 12, 0);
+      final fetchedEvents = <String>[];
+      final fetchedSongs = <String>[];
+
+      final dio = Dio();
+      addTearDown(dio.close);
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final path = options.path;
+            if (path.startsWith('/events/')) {
+              final id = path.split('/').last;
+              fetchedEvents.add(id);
+              final days = id == 'e1' ? 2 : (id == 'e2' ? 9 : 16);
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    id,
+                    now.add(Duration(days: days)),
+                    assigned: ['m1'],
+                    updatedAt: now,
+                    songs: [
+                      {'songId': 's-$id', 'serviceId': 'srv1', 'title': 'M $id'},
+                    ],
+                  ),
+                ),
+              );
+            }
+            if (path.startsWith('/teams/t1/songs/')) {
+              final songId = path.split('/').last;
+              fetchedSongs.add(songId);
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {
+                    'id': songId,
+                    'title': 'Música $songId',
+                    'lyrics': 'L' * 700,
+                    'chords': 'C' * 700,
+                    'chordsKey': 'G',
+                  },
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+
+      // Teto apertado simulando o `localStorage` da Web: cabe e1 (~450 B) +
+      // s-e1 (~1500 B), mas já estoura antes de e2/s-e2 e e3/s-e3.
+      final webCache = ReadCache(prefs, maxCacheBytes: 1500, maxCachedSongs: 150);
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          readCacheProvider.overrideWithValue(webCache),
+          dioProvider.overrideWithValue(dio),
+          offlineClockProvider.overrideWithValue(() => now),
+          authControllerProvider.overrideWith(
+            (ref) => _StaticAuthController(ref, _signedInState('u1', 'm1', 't1')),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      const team = TeamSummary(
+        membershipId: 'm1',
+        teamId: 't1',
+        name: 'Louvor',
+        role: 'MEMBER',
+        displayName: 'Maria',
+      );
+      final upcoming = [
+        _event('e3', now.add(const Duration(days: 16)), assigned: ['m1'], updatedAt: now),
+        _event('e1', now.add(const Duration(days: 2)), assigned: ['m1'], updatedAt: now),
+        _event('e2', now.add(const Duration(days: 9)), assigned: ['m1'], updatedAt: now),
+      ];
+
+      final coordinator = container.read(offlineSyncCoordinatorProvider);
+      await coordinator.syncFromUpcoming(team: team, upcomingEvents: upcoming);
+
+      // Escala mais próxima (e1) e sua música entram primeiro; para quando o
+      // orçamento acaba, sem baixar e2 nem e3.
+      expect(fetchedEvents, ['e1']);
+      expect(fetchedSongs, ['s-e1']);
+      expect(webCache.readEvent('e1'), isNotNull);
+      expect(webCache.readSong('s-e1'), isNotNull);
+      expect(webCache.readEvent('e2'), isNull);
+      expect(webCache.readEvent('e3'), isNull);
+
+      // Rodar prune não apaga s-e1 (está dentro da janela de pré-carregamento).
+      final prunePlan = await webCache.prune(now: now);
+      expect(prunePlan.songIdsToRemove, isEmpty);
+      expect(webCache.readSong('s-e1'), isNotNull);
+
+      // Nova reconstrução do upcoming (ex.: abrir a Home de novo): ZERO GETs!
+      fetchedEvents.clear();
+      fetchedSongs.clear();
+      await coordinator.syncFromUpcoming(team: team, upcomingEvents: upcoming);
+      expect(fetchedEvents, isEmpty);
+      expect(fetchedSongs, isEmpty);
+      expect(webCache.readSong('s-e1'), isNotNull);
+    });
+
+    test('limita cada passada a no máximo 20 GETs e o restante fica para a próxima',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.utc(2026, 11, 10, 12, 0);
+      var totalGets = 0;
+
+      // 12 escalas, cada uma com 2 músicas exclusivas = 12 + 24 = 36 GETs ao todo.
+      final upcoming = [
+        for (var i = 1; i <= 12; i++)
+          _event(
+            'e$i',
+            now.add(Duration(days: i)),
+            assigned: ['m1'],
+            updatedAt: now,
+          ),
+      ];
+
+      final dio = Dio();
+      addTearDown(dio.close);
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            totalGets++;
+            final path = options.path;
+            if (path.startsWith('/events/')) {
+              final id = path.split('/').last;
+              final index = int.parse(id.substring(1));
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    id,
+                    now.add(Duration(days: index)),
+                    assigned: ['m1'],
+                    updatedAt: now,
+                    songs: [
+                      {'songId': 's-$id-a', 'serviceId': 'srv1', 'title': 'A'},
+                      {'songId': 's-$id-b', 'serviceId': 'srv1', 'title': 'B'},
+                    ],
+                  ),
+                ),
+              );
+            }
+            if (path.startsWith('/teams/t1/songs/')) {
+              final songId = path.split('/').last;
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {'id': songId, 'title': songId, 'lyrics': 'Letra'},
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          dioProvider.overrideWithValue(dio),
+          offlineClockProvider.overrideWithValue(() => now),
+          authControllerProvider.overrideWith(
+            (ref) => _StaticAuthController(ref, _signedInState('u1', 'm1', 't1')),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      const team = TeamSummary(
+        membershipId: 'm1',
+        teamId: 't1',
+        name: 'Louvor',
+        role: 'MEMBER',
+        displayName: 'Maria',
+      );
+      final coordinator = container.read(offlineSyncCoordinatorProvider);
+
+      // Passada 1: teto exato de 20 GETs.
+      await coordinator.syncFromUpcoming(team: team, upcomingEvents: upcoming);
+      expect(totalGets, kMaxOfflineRequestsPerPass);
+      final cache = container.read(readCacheProvider);
+      expect(cache.readEvent('e1'), isNotNull);
+      expect(cache.readEvent('e12'), isNull);
+
+      // Passada 2: busca os 16 GETs restantes, completando todas as 12 escalas
+      // e 24 músicas sem repetir o que já está guardado.
+      totalGets = 0;
+      await coordinator.syncFromUpcoming(team: team, upcomingEvents: upcoming);
+      expect(totalGets, 16);
+      expect(cache.summary(), const OfflineCacheSummary(scheduleCount: 12, songCount: 24));
+
+      // Passada 3: tudo já em cache -> 0 GETs.
+      totalGets = 0;
+      await coordinator.syncFromUpcoming(team: team, upcomingEvents: upcoming);
+      expect(totalGets, 0);
+    });
+
+    test('logout durante sincronização em andamento impede escrita tardia, não grava lastSyncAt e libera a próxima conta',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.utc(2026, 11, 10, 12, 0);
+      final accountAGetCompleter = Completer<void>();
+      final accountAGetStarted = Completer<void>();
+      final requests = <String>[];
+
+      final dio = Dio();
+      addTearDown(dio.close);
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) async {
+            final path = options.path;
+            requests.add(path);
+            if (path == '/teams/t1/events') {
+              return handler.resolve(
+                Response<List<dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    _eventJson(
+                      'e-account-a',
+                      now.add(const Duration(days: 2)),
+                      assigned: ['m1'],
+                      updatedAt: now,
+                    ),
+                    _eventJson(
+                      'e-account-a-2',
+                      now.add(const Duration(days: 5)),
+                      assigned: ['m1'],
+                      updatedAt: now,
+                    ),
+                  ],
+                ),
+              );
+            }
+            if (path == '/events/e-account-a') {
+              if (!accountAGetStarted.isCompleted) {
+                accountAGetStarted.complete();
+              }
+              await accountAGetCompleter.future;
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    'e-account-a',
+                    now.add(const Duration(days: 2)),
+                    assigned: ['m1'],
+                    updatedAt: now,
+                    songs: [
+                      {'songId': 's-account-a', 'serviceId': 'srv1', 'title': 'Secreta'},
+                    ],
+                  ),
+                ),
+              );
+            }
+            if (path == '/teams/t2/events') {
+              return handler.resolve(
+                Response<List<dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    _eventJson(
+                      'e-account-b',
+                      now.add(const Duration(days: 3)),
+                      assigned: ['m2'],
+                      updatedAt: now,
+                    ),
+                  ],
+                ),
+              );
+            }
+            if (path == '/events/e-account-b') {
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    'e-account-b',
+                    now.add(const Duration(days: 3)),
+                    assigned: ['m2'],
+                    updatedAt: now,
+                  ),
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+
+      late _MutableAuthController auth;
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          dioProvider.overrideWithValue(dio),
+          offlineClockProvider.overrideWithValue(() => now),
+          authControllerProvider.overrideWith((ref) {
+            auth = _MutableAuthController(
+              ref,
+              _signedInState('uA', 'm1', 't1'),
+            );
+            return auth;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final coordinator = container.read(offlineSyncCoordinatorProvider);
+      final cache = container.read(readCacheProvider);
+
+      // Inicia sincronização da conta A e aguarda pausar no meio do GET /events/e-account-a.
+      final syncA = coordinator.syncIfDue(force: true);
+      await accountAGetStarted.future;
+
+      // Logout real: clearAll (em nova instância, como AuthController faz) + signedOut.
+      await ReadCache(prefs).clearAll();
+      auth.setAuthState(const AuthState.signedOut());
+
+      // Conta B entra ANTES mesmo de o GET antigo da conta A terminar:
+      // _syncAllInFlight/_inFlightTeams foram zerados e lastSyncAt está vazio.
+      auth.setAuthState(_signedInState('uB', 'm2', 't2'));
+      await coordinator.syncIfDue();
+
+      expect(cache.readEvent('e-account-b'), isNotNull);
+      expect(cache.readEvent('e-account-a'), isNull);
+
+      // Agora o GET atrasado da conta A termina: não pode gravar JSON da conta A
+      // nem disparar músicas ou e-account-a-2.
+      accountAGetCompleter.complete();
+      await syncA;
+
+      expect(cache.readEvent('e-account-a'), isNull);
+      expect(cache.readSong('s-account-a'), isNull);
+      expect(requests, isNot(contains('/events/e-account-a-2')));
+      expect(requests, isNot(contains('/teams/t1/songs/s-account-a')));
+      expect(cache.readEvent('e-account-b'), isNotNull);
+    });
+
+    test('logout antes da próxima conta não deixa lastSyncAt pular a sincronização seguinte',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.utc(2026, 11, 10, 12, 0);
+      final getCompleter = Completer<void>();
+      final getStarted = Completer<void>();
+
+      final dio = Dio();
+      addTearDown(dio.close);
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) async {
+            if (options.path == '/teams/t1/events') {
+              return handler.resolve(
+                Response<List<dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    _eventJson(
+                      'e-a',
+                      now.add(const Duration(days: 2)),
+                      assigned: ['m1'],
+                      updatedAt: now,
+                    ),
+                  ],
+                ),
+              );
+            }
+            if (options.path == '/events/e-a') {
+              if (!getStarted.isCompleted) getStarted.complete();
+              await getCompleter.future;
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    'e-a',
+                    now.add(const Duration(days: 2)),
+                    assigned: ['m1'],
+                    updatedAt: now,
+                  ),
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+
+      late _MutableAuthController auth;
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          dioProvider.overrideWithValue(dio),
+          offlineClockProvider.overrideWithValue(() => now),
+          authControllerProvider.overrideWith((ref) {
+            auth = _MutableAuthController(
+              ref,
+              _signedInState('uA', 'm1', 't1'),
+            );
+            return auth;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final coordinator = container.read(offlineSyncCoordinatorProvider);
+      final cache = container.read(readCacheProvider);
+      final syncA = coordinator.syncIfDue(force: true);
+      await getStarted.future;
+
+      await ReadCache(prefs).clearAll();
+      auth.setAuthState(const AuthState.signedOut());
+
+      getCompleter.complete();
+      await syncA;
+
+      // Nem a escala nem o lastSyncAt foram gravados após o logout.
+      expect(cache.readEvent('e-a'), isNull);
+      expect(cache.readLastSyncAt(), isNull);
+    });
+
+    test('404/403 pula apenas aquela escala e segue; 429 interrompe a passada inteira',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.utc(2026, 11, 10, 12, 0);
+      final requestedEvents = <String>[];
+      final requestedSongs = <String>[];
+
+      final dio = Dio();
+      addTearDown(dio.close);
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final path = options.path;
+            if (path.startsWith('/events/')) {
+              final id = path.split('/').last;
+              requestedEvents.add(id);
+              if (id == 'e-deleted') {
+                return handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    type: DioExceptionType.badResponse,
+                    response: Response(requestOptions: options, statusCode: 404),
+                  ),
+                );
+              }
+              if (id == 'e-unpublished') {
+                return handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    type: DioExceptionType.badResponse,
+                    response: Response(requestOptions: options, statusCode: 403),
+                  ),
+                );
+              }
+              if (id == 'e-rate-limit') {
+                return handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    type: DioExceptionType.badResponse,
+                    response: Response(requestOptions: options, statusCode: 429),
+                  ),
+                );
+              }
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    id,
+                    now.add(const Duration(days: 4)),
+                    assigned: ['m1'],
+                    updatedAt: now,
+                    songs: [
+                      {'songId': 's-missing', 'serviceId': 'srv1', 'title': 'Sumiu'},
+                      {'songId': 's-ok-$id', 'serviceId': 'srv1', 'title': 'Ok'},
+                    ],
+                  ),
+                ),
+              );
+            }
+            if (path.startsWith('/teams/t1/songs/')) {
+              final songId = path.split('/').last;
+              requestedSongs.add(songId);
+              if (songId == 's-missing') {
+                return handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    type: DioExceptionType.badResponse,
+                    response: Response(requestOptions: options, statusCode: 404),
+                  ),
+                );
+              }
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {'id': songId, 'title': songId, 'lyrics': 'Letra'},
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          dioProvider.overrideWithValue(dio),
+          offlineClockProvider.overrideWithValue(() => now),
+          authControllerProvider.overrideWith(
+            (ref) => _StaticAuthController(ref, _signedInState('u1', 'm1', 't1')),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      const team = TeamSummary(
+        membershipId: 'm1',
+        teamId: 't1',
+        name: 'Louvor',
+        role: 'MEMBER',
+        displayName: 'Maria',
+      );
+      final coordinator = container.read(offlineSyncCoordinatorProvider);
+      final cache = container.read(readCacheProvider);
+
+      await coordinator.syncFromUpcoming(
+        team: team,
+        upcomingEvents: [
+          _event('e-deleted', now.add(const Duration(days: 1)), assigned: ['m1']),
+          _event('e-unpublished', now.add(const Duration(days: 2)), assigned: ['m1']),
+          _event('e-ok', now.add(const Duration(days: 3)), assigned: ['m1']),
+          _event('e-rate-limit', now.add(const Duration(days: 4)), assigned: ['m1']),
+          _event('e-after-429', now.add(const Duration(days: 5)), assigned: ['m1']),
+        ],
+      );
+
+      // 404 e 403 foram puladas, e-ok foi baixada (pulando s-missing 404 e
+      // salvando s-ok-e-ok), e o 429 interrompeu antes de e-after-429.
+      expect(
+        requestedEvents,
+        ['e-deleted', 'e-unpublished', 'e-ok', 'e-rate-limit'],
+      );
+      expect(requestedSongs, ['s-missing', 's-ok-e-ok']);
+      expect(cache.readEvent('e-ok'), isNotNull);
+      expect(cache.readSong('s-ok-e-ok'), isNotNull);
+      expect(cache.readEvent('e-after-429'), isNull);
+    });
+
+    test('429 ao baixar música interrompe a passada inteira sem seguir para a próxima escala',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.utc(2026, 11, 10, 12, 0);
+      final requestedEvents = <String>[];
+      final requestedSongs = <String>[];
+
+      final dio = Dio();
+      addTearDown(dio.close);
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final path = options.path;
+            if (path.startsWith('/events/')) {
+              final id = path.split('/').last;
+              requestedEvents.add(id);
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    id,
+                    now.add(const Duration(days: 2)),
+                    assigned: ['m1'],
+                    updatedAt: now,
+                    songs: [
+                      {'songId': 's-429', 'serviceId': 'srv1', 'title': 'M1'},
+                      {'songId': 's-never', 'serviceId': 'srv1', 'title': 'M2'},
+                    ],
+                  ),
+                ),
+              );
+            }
+            if (path.startsWith('/teams/t1/songs/')) {
+              final songId = path.split('/').last;
+              requestedSongs.add(songId);
+              return handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.badResponse,
+                  response: Response(requestOptions: options, statusCode: 429),
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          dioProvider.overrideWithValue(dio),
+          offlineClockProvider.overrideWithValue(() => now),
+          authControllerProvider.overrideWith(
+            (ref) => _StaticAuthController(ref, _signedInState('u1', 'm1', 't1')),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      const team = TeamSummary(
+        membershipId: 'm1',
+        teamId: 't1',
+        name: 'Louvor',
+        role: 'MEMBER',
+        displayName: 'Maria',
+      );
+      await container.read(offlineSyncCoordinatorProvider).syncFromUpcoming(
+        team: team,
+        upcomingEvents: [
+          _event('e1', now.add(const Duration(days: 2)), assigned: ['m1']),
+          _event('e2', now.add(const Duration(days: 5)), assigned: ['m1']),
+        ],
+      );
+
+      expect(requestedEvents, ['e1']);
+      expect(requestedSongs, ['s-429']);
+    });
+
+    test('syncFromUpcoming usa listRange com cache: false e não roda prune a cada abertura; prune roda no máximo 1x/dia na sync agendada',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      var currentNow = DateTime.utc(2026, 11, 10, 12, 0);
+      var rangeCalled = false;
+
+      // Escala passada (> 7d) pré-existente no cache + lastSyncAt recente para
+      // isolar `syncFromUpcoming` da sync agendada automática de abertura.
+      final cache = ReadCache(prefs);
+      await cache.saveLastSyncAt(currentNow);
+      await cache.saveEvent(
+        'e-expired',
+        _eventJson('e-expired', currentNow.subtract(const Duration(days: 15))),
+        now: currentNow.subtract(const Duration(days: 15)),
+      );
+
+      final dio = Dio();
+      addTearDown(dio.close);
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final path = options.path;
+            if (path == '/teams/t1/events' &&
+                options.queryParameters.containsKey('from')) {
+              rangeCalled = true;
+              return handler.resolve(
+                Response<List<dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    _eventJson(
+                      'e-from-range',
+                      currentNow.add(const Duration(days: 25)),
+                      assigned: ['m1'],
+                      updatedAt: currentNow,
+                    ),
+                  ],
+                ),
+              );
+            }
+            if (path == '/teams/t1/events') {
+              return handler.resolve(
+                Response<List<dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: const <dynamic>[],
+                ),
+              );
+            }
+            if (path.startsWith('/events/')) {
+              final id = path.split('/').last;
+              return handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: _eventJson(
+                    id,
+                    currentNow.add(const Duration(days: 25)),
+                    assigned: ['m1'],
+                    updatedAt: currentNow,
+                  ),
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          readCacheProvider.overrideWithValue(cache),
+          dioProvider.overrideWithValue(dio),
+          offlineClockProvider.overrideWithValue(() => currentNow),
+          authControllerProvider.overrideWith(
+            (ref) => _StaticAuthController(ref, _signedInState('u1', 'm1', 't1')),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // 20 escalas nos primeiros 5 dias -> não cobrem a janela de 30 dias.
+      final twentyShort = [
+        for (var i = 0; i < 20; i++)
+          _event(
+            'short-$i',
+            currentNow.add(Duration(hours: 6 * (i + 1))),
+            assigned: ['m2'],
+          ),
+      ];
+      const team = TeamSummary(
+        membershipId: 'm1',
+        teamId: 't1',
+        name: 'Louvor',
+        role: 'MEMBER',
+        displayName: 'Maria',
+      );
+      final coordinator = container.read(offlineSyncCoordinatorProvider);
+      await coordinator.syncFromUpcoming(
+        team: team,
+        upcomingEvents: twentyShort,
+      );
+
+      expect(rangeCalled, isTrue);
+      expect(cache.readEvent('e-from-range'), isNotNull);
+      // Nenhum recorte `cache.agenda.t1.range.*` gravado pelo pré-carregamento.
+      expect(
+        prefs.getKeys().where((k) => k.startsWith('cache.agenda.t1.range.')),
+        isEmpty,
+      );
+      // `syncFromUpcoming` não executou prune.
+      expect(cache.readEvent('e-expired'), isNotNull);
+      expect(cache.readLastPruneAt(), isNull);
+
+      // Na sincronização agendada (6 h depois), o prune roda 1 vez e grava lastPruneAt.
+      currentNow = currentNow.add(const Duration(hours: 6));
+      await coordinator.syncIfDue();
+      expect(cache.readEvent('e-expired'), isNull);
+      expect(cache.readLastPruneAt(), currentNow);
+
+      // 6 h depois (ainda < 24 h desde o último prune), nova sync agendada NÃO
+      // roda prune de novo.
+      await cache.saveEvent(
+        'e-expired-2',
+        _eventJson('e-expired-2', currentNow.subtract(const Duration(days: 15))),
+        now: currentNow.subtract(const Duration(days: 15)),
+      );
+      currentNow = currentNow.add(const Duration(hours: 6));
+      await coordinator.syncIfDue();
+      expect(cache.readEvent('e-expired-2'), isNotNull);
+
+      // Passadas 24 h desde o último prune, a sync agendada limpa de novo.
+      currentNow = currentNow.add(const Duration(hours: 18));
+      await coordinator.syncIfDue();
+      expect(cache.readEvent('e-expired-2'), isNull);
+
+      // Se listRange vier do cache (fromCache: true), deve ser ignorado.
+      final now = DateTime.utc(2026, 11, 10, 12, 0);
+      await cache.saveLastSyncAt(now);
+      await cache.saveAgenda(
+        't1',
+        'range.2026-11-10.2026-12-10',
+        [
+          _eventJson(
+            'e-stale-range',
+            now.add(const Duration(days: 20)),
+            assigned: ['m1'],
+            updatedAt: now,
+          ),
+        ],
+        now: now,
+      );
+      final offlineDio = Dio();
+      addTearDown(offlineDio.close);
+      offlineDio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.path == '/teams/t1/events' &&
+                options.queryParameters.containsKey('from')) {
+              return handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.connectionError,
+                ),
+              );
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+      final container2 = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          readCacheProvider.overrideWithValue(cache),
+          dioProvider.overrideWithValue(offlineDio),
+          offlineClockProvider.overrideWithValue(() => now),
+          authControllerProvider.overrideWith(
+            (ref) => _StaticAuthController(ref, _signedInState('u1', 'm1', 't1')),
+          ),
+        ],
+      );
+      addTearDown(container2.dispose);
+      await container2.read(offlineSyncCoordinatorProvider).syncFromUpcoming(
+        team: team,
+        upcomingEvents: twentyShort,
+      );
+      expect(cache.readEvent('e-stale-range'), isNull);
     });
   });
 }
@@ -723,6 +1646,26 @@ Map<String, dynamic> _eventJson(
   };
 }
 
+AuthState _signedInState(String userId, String membershipId, String teamId) {
+  return AuthState.signedIn(
+    AuthUser(
+      id: userId,
+      name: 'Maria',
+      email: '$userId@teste.com',
+      mustChangePassword: false,
+    ),
+    [
+      TeamSummary(
+        membershipId: membershipId,
+        teamId: teamId,
+        name: 'Louvor',
+        role: 'MEMBER',
+        displayName: 'Maria',
+      ),
+    ],
+  );
+}
+
 class _StaticAuthController extends AuthController {
   _StaticAuthController(super.ref, this._initial);
 
@@ -732,4 +1675,17 @@ class _StaticAuthController extends AuthController {
   Future<void> bootstrap() async {
     state = _initial;
   }
+}
+
+class _MutableAuthController extends AuthController {
+  _MutableAuthController(super.ref, AuthState initial) {
+    state = initial;
+  }
+
+  void setAuthState(AuthState next) {
+    state = next;
+  }
+
+  @override
+  Future<void> bootstrap() async {}
 }

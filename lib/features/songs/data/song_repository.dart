@@ -8,8 +8,8 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/offline_policy.dart';
 import '../../../core/storage/read_cache.dart';
-import '../../../core/storage/shared_preferences_provider.dart';
 import '../../events/application/offline_sync_coordinator.dart';
+import '../../events/data/event_repository.dart';
 import '../domain/chord_import.dart';
 import '../domain/moment_suggestion.dart';
 import '../domain/repertoire_health.dart';
@@ -83,6 +83,7 @@ class SongRepository {
     String songId, {
     bool markOpened = true,
   }) async {
+    final session = _cache?.sessionEpoch;
     try {
       final response =
           await _dio.get<Map<String, dynamic>>('/teams/$teamId/songs/$songId');
@@ -93,6 +94,7 @@ class SongRepository {
           map,
           markOpened: markOpened,
           now: _clock(),
+          expectedSession: session,
         );
       } catch (_) {
         // Armazenamento cheio (o `localStorage` da Web tem teto) não pode
@@ -105,7 +107,13 @@ class SongRepository {
           status == null || status >= 500 ? _cache?.readSong(songId) : null;
       if (cached != null) {
         if (markOpened) {
-          unawaited(_cache?.touchSongOpened(songId, now: _clock()));
+          unawaited(
+            _cache?.touchSongOpened(
+              songId,
+              now: _clock(),
+              expectedSession: session,
+            ),
+          );
         }
         return CachedValue(
           data: Song.fromJson(cached.data),
@@ -119,18 +127,38 @@ class SongRepository {
 
   /// Guarda no aparelho as músicas de uma escala, uma de cada vez, para a
   /// cifra e a letra já estarem lá quando a rede cair. Pula a que ainda está
-  /// fresca (mesmo `updatedAt`, ou menos de [maxAge] — padrão 6 h): a equipe
+  /// fresca (mesmo `updatedAt`, ou menos de [maxAge] — padrão 24 h): a equipe
   /// inteira abre a mesma escala no mesmo Wi-Fi, e o limite de requisições da
-  /// API conta por IP. Falha é silenciosa.
-  Future<void> prefetch(
+  /// API conta por IP.
+  ///
+  /// Em 4xx diferente de 429 (ex.: música apagada), pula só aquela música e
+  /// segue; em 429 (limite de requisições) ou falta de rede, interrompe.
+  Future<SongPrefetchResult> prefetch(
     String teamId,
     Iterable<String> songIds, {
-    Duration maxAge = kOfflineRefreshInterval,
+    Duration maxAge = kOfflineSongRefreshInterval,
     DateTime? now,
     Map<String, DateTime?> remoteUpdatedAtBySongId = const {},
+    int? maxRequests,
+    bool Function()? shouldContinue,
+    int? expectedSession,
+    void Function(int deltaBytes)? onSongSaved,
   }) async {
     final clock = (now ?? _clock()).toUtc();
+    final session = expectedSession ?? _cache?.sessionEpoch;
+    var requestsMade = 0;
+    var savedCount = 0;
+    var rateLimited = false;
+    var networkFailed = false;
+    var stopped = false;
+
     for (final songId in songIds.toSet()) {
+      if (session != null &&
+          _cache != null &&
+          !_cache.isSessionCurrent(session)) {
+        stopped = true;
+        break;
+      }
       final entry = _cache?.readSongEntry(songId);
       if (!needsOfflineRefresh(
         cachedAt: entry?.cachedAt,
@@ -141,12 +169,70 @@ class SongRepository {
       )) {
         continue;
       }
+      if (shouldContinue != null) {
+        if (!shouldContinue()) {
+          stopped = true;
+          break;
+        }
+      } else if (_cache != null && _cache.isByteBudgetExceeded()) {
+        stopped = true;
+        break;
+      }
+      if (maxRequests != null && requestsMade >= maxRequests) {
+        stopped = true;
+        break;
+      }
+
+      requestsMade++;
+      final beforeBytes =
+          onSongSaved != null && _cache != null ? _cache.songByteSize(songId) : 0;
       try {
-        await find(teamId, songId, markOpened: false);
+        final fetched = await find(teamId, songId, markOpened: false);
+        if (session != null &&
+            _cache != null &&
+            !_cache.isSessionCurrent(session)) {
+          stopped = true;
+          break;
+        }
+        if (fetched.fromCache) {
+          networkFailed = true;
+          break;
+        }
+        savedCount++;
+        if (onSongSaved != null && _cache != null) {
+          final afterBytes = _cache.songByteSize(songId);
+          onSongSaved(afterBytes - beforeBytes);
+        }
+      } on ApiException catch (e) {
+        if (session != null &&
+            _cache != null &&
+            !_cache.isSessionCurrent(session)) {
+          stopped = true;
+          break;
+        }
+        final status = e.statusCode;
+        if (status == 429) {
+          rateLimited = true;
+          break;
+        }
+        if (status != null && status >= 400 && status < 500) {
+          continue;
+        }
+        networkFailed = true;
+        break;
       } catch (_) {
-        // Sem rede ou sem a música: fica para a próxima vez que a escala abrir.
+        networkFailed = true;
+        break;
       }
     }
+
+    return SongPrefetchResult(
+      requestsMade: requestsMade,
+      savedCount: savedCount,
+      rateLimited: rateLimited,
+      networkFailed: networkFailed,
+      stopped: stopped,
+    );
   }
 
   Future<Song> create(String teamId, Map<String, dynamic> body) async {
@@ -164,13 +250,14 @@ class SongRepository {
     String songId,
     Map<String, dynamic> body,
   ) async {
+    final session = _cache?.sessionEpoch;
     return _guard(() async {
       final response = await _dio.patch<Map<String, dynamic>>(
         '/teams/$teamId/songs/$songId',
         data: body,
       );
       final map = response.data!;
-      await _cacheUpdatedSong(songId, map);
+      await _cacheUpdatedSong(songId, map, expectedSession: session);
       return Song.fromJson(map);
     });
   }
@@ -183,6 +270,7 @@ class SongRepository {
     String? versionId,
     Map<String, dynamic> body,
   ) async {
+    final session = _cache?.sessionEpoch;
     return _guard(() async {
       final path = '/teams/$teamId/songs/$songId/chord-versions';
       final response = versionId == null
@@ -192,7 +280,7 @@ class SongRepository {
               data: body,
             );
       final map = response.data!;
-      await _cacheUpdatedSong(songId, map);
+      await _cacheUpdatedSong(songId, map, expectedSession: session);
       return Song.fromJson(map);
     });
   }
@@ -202,22 +290,30 @@ class SongRepository {
     String songId,
     String versionId,
   ) async {
+    final session = _cache?.sessionEpoch;
     return _guard(() async {
       final response = await _dio.delete<Map<String, dynamic>>(
         '/teams/$teamId/songs/$songId/chord-versions/$versionId',
       );
       final map = response.data!;
-      await _cacheUpdatedSong(songId, map);
+      await _cacheUpdatedSong(songId, map, expectedSession: session);
       return Song.fromJson(map);
     });
   }
 
   Future<void> _cacheUpdatedSong(
     String songId,
-    Map<String, dynamic> map,
-  ) async {
+    Map<String, dynamic> map, {
+    int? expectedSession,
+  }) async {
     try {
-      await _cache?.saveSong(songId, map, markOpened: true, now: _clock());
+      await _cache?.saveSong(
+        songId,
+        map,
+        markOpened: true,
+        now: _clock(),
+        expectedSession: expectedSession,
+      );
     } catch (_) {}
   }
 
@@ -416,10 +512,26 @@ class SongRepository {
   }
 }
 
+class SongPrefetchResult {
+  const SongPrefetchResult({
+    required this.requestsMade,
+    required this.savedCount,
+    required this.rateLimited,
+    required this.networkFailed,
+    required this.stopped,
+  });
+
+  final int requestsMade;
+  final int savedCount;
+  final bool rateLimited;
+  final bool networkFailed;
+  final bool stopped;
+}
+
 final songRepositoryProvider = Provider<SongRepository>((ref) {
   ReadCache? cache;
   try {
-    cache = ReadCache(ref.watch(sharedPreferencesProvider));
+    cache = ref.watch(readCacheProvider);
   } catch (_) {
     cache = null;
   }

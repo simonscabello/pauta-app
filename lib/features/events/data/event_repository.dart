@@ -35,6 +35,7 @@ class EventRepository {
     String scope = 'upcoming',
     int limit = 20,
   }) async {
+    final session = _cache.sessionEpoch;
     // Consultas maiores da Agenda não substituem o cache de 20 itens da Home.
     final cacheScope = limit == 20 ? scope : '$scope.$limit';
     try {
@@ -45,13 +46,22 @@ class EventRepository {
       final maps = response.data!
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-      await _cache.saveAgenda(teamId, cacheScope, maps, now: _clock());
+      await _cache.saveAgenda(
+        teamId,
+        cacheScope,
+        maps,
+        now: _clock(),
+        expectedSession: session,
+      );
       return CachedValue(
         data: maps.map(Event.fromJson).toList(),
         fromCache: false,
       );
     } on DioException catch (e) {
-      final cached = _cache.readAgenda(teamId, cacheScope);
+      final status = e.response?.statusCode;
+      final cached = status == null || status >= 500
+          ? _cache.readAgenda(teamId, cacheScope)
+          : null;
       if (cached != null) {
         return CachedValue(
           data: cached.data.map(Event.fromJson).toList(),
@@ -75,6 +85,7 @@ class EventRepository {
     // recorte encheria o armazenamento sem ninguém voltar a ele.
     bool cache = true,
   }) async {
+    final session = _cache.sessionEpoch;
     final cacheScope = 'range.$from.$to';
     try {
       final response = await _dio.get<List<dynamic>>(
@@ -87,7 +98,13 @@ class EventRepository {
       if (cache) {
         // Falha ao gravar (cota da Web) não derruba o mês que veio da rede.
         try {
-          await _cache.saveAgenda(teamId, cacheScope, maps);
+          await _cache.saveAgenda(
+            teamId,
+            cacheScope,
+            maps,
+            now: _clock(),
+            expectedSession: session,
+          );
         } catch (_) {}
       }
       return CachedValue(
@@ -95,7 +112,10 @@ class EventRepository {
         fromCache: false,
       );
     } on DioException catch (e) {
-      final cached = _cache.readAgenda(teamId, cacheScope);
+      final status = e.response?.statusCode;
+      final cached = status == null || status >= 500
+          ? _cache.readAgenda(teamId, cacheScope)
+          : null;
       if (cached != null) {
         return CachedValue(
           data: cached.data.map(Event.fromJson).toList(),
@@ -108,13 +128,21 @@ class EventRepository {
   }
 
   Future<CachedValue<Event>> find(String eventId) async {
+    final session = _cache.sessionEpoch;
     try {
       final response = await _dio.get<Map<String, dynamic>>('/events/$eventId');
       final map = Map<String, dynamic>.from(response.data!);
-      await _cache.saveEvent(eventId, map, now: _clock());
+      await _cache.saveEvent(
+        eventId,
+        map,
+        now: _clock(),
+        expectedSession: session,
+      );
       return CachedValue(data: Event.fromJson(map), fromCache: false);
     } on DioException catch (e) {
-      final cached = _cache.readEvent(eventId);
+      final status = e.response?.statusCode;
+      final cached =
+          status == null || status >= 500 ? _cache.readEvent(eventId) : null;
       if (cached != null) {
         return CachedValue(
           data: Event.fromJson(cached.data),
@@ -552,7 +580,9 @@ final eventProvider =
                 result.data.teamId,
                 result.data.songs.map((song) => song.songId),
               )
-              .then((_) => coordinator.notifyCacheChanged())
+              .then((res) {
+                if (res.savedCount > 0) coordinator.notifyCacheChanged();
+              })
               .catchError((_) {}),
         );
       }
