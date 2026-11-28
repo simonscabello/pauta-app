@@ -15,7 +15,7 @@ import '../data/team_repository.dart';
 
 /// Dados da equipe.
 ///
-/// Só o nome. O fuso horário é sempre o de Brasília e nem aparece: era uma
+/// O nome e a liberação dos assistentes de IA. O fuso horário é sempre o de Brasília e nem aparece: era uma
 /// escolha que ninguém precisava fazer e que, errada, deslocaria o horário de
 /// todas as escalas sem deixar pista do motivo.
 class TeamSettingsScreen extends ConsumerStatefulWidget {
@@ -32,6 +32,7 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen>
   final _name = TextEditingController();
   bool _populated = false;
   bool _saving = false;
+  bool _savingAi = false;
   String? _error;
 
   @override
@@ -77,6 +78,32 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen>
     }
   }
 
+  /// Grava na hora, fora do "Salvar": é uma permissão, não um campo do nome.
+  Future<void> _toggleAi(bool enabled) async {
+    setState(() => _savingAi = true);
+    try {
+      await ref
+          .read(teamRepositoryProvider)
+          .update(widget.teamId, aiAssistantsEnabled: enabled);
+      ref.invalidate(teamProvider(widget.teamId));
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          enabled
+              ? 'Assistentes de IA liberados para a equipe.'
+              : 'Assistentes de IA desativados para a equipe.',
+          tone: AppTone.success,
+        );
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    } finally {
+      if (mounted) setState(() => _savingAi = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final team = ref.watch(teamProvider(widget.teamId));
@@ -119,6 +146,24 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen>
           loading: _saving,
           onPressed: _save,
         ),
+        if (value != null) ...[
+          const SizedBox(height: AppSpacing.xxl),
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.smart_toy_outlined),
+              title: const Text('Assistentes de IA'),
+              subtitle: const Text(
+                'Cada integrante pode consultar a equipe pelo Claude, ChatGPT '
+                'e outros assistentes, vendo só o que já vê no app. '
+                'Desligado, a equipe some deles para todos.',
+              ),
+              value: value.aiAssistantsEnabled,
+              onChanged: _savingAi ? null : _toggleAi,
+            ),
+          ),
+        ],
       ],
     );
   }

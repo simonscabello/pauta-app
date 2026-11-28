@@ -101,13 +101,16 @@ class AiAssistantsScreen extends ConsumerWidget {
         onAction: () => context.push(newKeyRoute),
       ),
       Text(
-        'O Claude no navegador e no celular e o ChatGPT ainda não aceitam '
-        'chave. Por enquanto, só assistentes que rodam no computador.',
+        'O Claude no navegador e no celular e o ChatGPT não usam chave: '
+        'adicione o endereço ${AppConfig.mcpUrl} como conector e entre com a '
+        'sua conta do Pauta.',
         textAlign: TextAlign.center,
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
+      const SizedBox(height: AppSpacing.xl),
+      const _GrantsGroup(),
     ];
   }
 
@@ -167,6 +170,7 @@ class AiAssistantsScreen extends ConsumerWidget {
             style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
         ),
+      const _GrantsGroup(),
       const SizedBox(height: AppSpacing.xl),
       AppGroup(
         title: 'Como conectar',
@@ -185,7 +189,7 @@ class AiAssistantsScreen extends ConsumerWidget {
           AppGroupRow(
             icon: Icons.help_outline_rounded,
             title: 'Passo a passo',
-            subtitle: 'Claude Code, Cursor e VS Code, na Ajuda',
+            subtitle: 'Claude, ChatGPT, Cursor e VS Code, na Ajuda',
             onTap: () => context.push('/perfil/ajuda'),
           ),
         ],
@@ -194,7 +198,7 @@ class AiAssistantsScreen extends ConsumerWidget {
       Padding(
         padding: const EdgeInsets.only(left: AppSpacing.xs),
         child: Text(
-          'Trocar a senha revoga todas as chaves de uma vez.',
+          'Trocar a senha revoga todas as chaves e conexões de uma vez.',
           style: theme.textTheme.bodySmall?.copyWith(color: muted),
         ),
       ),
@@ -488,6 +492,75 @@ class _KeyRowState extends State<_KeyRow> {
       if (!mounted) return;
       setState(() => _busy = false);
       showAppSnackBar(context, e.message, tone: AppTone.danger);
+    }
+  }
+}
+
+/// Os assistentes conectados pelo navegador (OAuth). Some quando não há
+/// nenhum, e uma falha aqui não esconde as chaves.
+class _GrantsGroup extends ConsumerWidget {
+  const _GrantsGroup();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final grants = ref.watch(mcpGrantsProvider).valueOrNull ?? const [];
+    if (grants.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xl),
+      child: AppGroup(
+        title: 'Conectados pelo navegador',
+        children: [
+          for (final grant in grants)
+            AppGroupRow(
+              key: ValueKey(grant.id),
+              icon: Icons.link_rounded,
+              title: grant.clientName,
+              subtitle: grant.subtitle,
+              showChevron: false,
+              trailing: PopupMenuButton<String>(
+                tooltip: 'Mais opções de ${grant.clientName}',
+                icon: const Icon(Icons.more_vert_rounded),
+                onSelected: (_) => _disconnect(context, ref, grant),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'revoke', child: Text('Desconectar')),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _disconnect(
+    BuildContext context,
+    WidgetRef ref,
+    McpGrant grant,
+  ) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Desconectar “${grant.clientName}”?',
+      message: 'O assistente perde o acesso ao Pauta na hora. Para usar de '
+          'novo, conecte outra vez por ele.',
+      confirmLabel: 'Desconectar',
+      cancelLabel: 'Voltar',
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+    try {
+      await ref.read(mcpTokenRepositoryProvider).revokeGrant(grant.id);
+      ref.invalidate(mcpGrantsProvider);
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          'Assistente desconectado.',
+          tone: AppTone.success,
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        showAppSnackBar(context, e.message, tone: AppTone.danger);
+      }
     }
   }
 }
