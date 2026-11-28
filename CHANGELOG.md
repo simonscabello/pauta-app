@@ -7,6 +7,24 @@ com o push em `master`. A mais recente vem primeiro.
 As mudanças de servidor que acompanham cada versão estão no `CHANGELOG.md`
 do `pauta-api`.
 
+## 0.50.0 — 28/11/2026
+
+### Novidades
+- **Claude e ChatGPT pela sua conta.** O Claude no navegador e no celular e o
+  ChatGPT conectam ao Pauta pelo endereço do servidor e o seu login, sem
+  chave. As conexões aparecem em Perfil › Segurança › Assistentes de IA, com
+  **Desconectar**.
+- **Assistentes de IA por equipe.** Quem lidera liga ou desliga em Equipe ›
+  Dados da equipe.
+- **Sugeridos na escalação.** Ao abrir uma função, o Pauta sugere até três
+  pessoas, com o motivo ("Há 5 semanas sem servir").
+- **Culto sem internet em qualquer escala.** As suas escalas dos próximos 30
+  dias (para quem lidera, as da equipe até o fim do mês seguinte) ficam no
+  aparelho com letra e cifra, sem precisar abrir. O Perfil mostra quantas.
+
+### Melhorias
+- A Agenda carrega mais rápido: no máximo duas consultas por tela.
+
 ## 0.49.0 — 23/11/2026
 
 ### Novidades
