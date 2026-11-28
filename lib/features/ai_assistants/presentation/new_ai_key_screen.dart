@@ -449,8 +449,8 @@ class _NewAiKeyScreenState extends ConsumerState<NewAiKeyScreen> {
         ],
         const SizedBox(height: AppSpacing.xl),
         Text(
-          'O Claude no navegador e no celular e o ChatGPT ainda não aceitam '
-          'chave.',
+          'O Claude no navegador e no celular e o ChatGPT não usam chave: '
+          'conectam pelo endereço do servidor e a sua conta do Pauta.',
           style: theme.textTheme.bodySmall?.copyWith(color: muted),
         ),
         const SizedBox(height: AppSpacing.xl),
