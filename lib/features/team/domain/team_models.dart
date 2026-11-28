@@ -167,6 +167,7 @@ class Team {
     required this.timezone,
     this.scheduleMode = 'DAY',
     this.memberCount = 0,
+    this.aiAssistantsEnabled = true,
   });
 
   final String id;
@@ -177,6 +178,9 @@ class Team {
   final String scheduleMode;
   final int memberCount;
 
+  /// Desligado pela liderança, a equipe some do MCP para todo mundo.
+  final bool aiAssistantsEnabled;
+
   factory Team.fromJson(Map<String, dynamic> json) {
     return Team(
       id: json['id'] as String,
@@ -184,6 +188,7 @@ class Team {
       timezone: json['timezone'] as String? ?? 'America/Sao_Paulo',
       scheduleMode: json['scheduleMode'] as String? ?? 'DAY',
       memberCount: json['memberCount'] as int? ?? 0,
+      aiAssistantsEnabled: json['aiAssistantsEnabled'] as bool? ?? true,
     );
   }
 }

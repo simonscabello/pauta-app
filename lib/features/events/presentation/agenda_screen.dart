@@ -126,6 +126,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       _month = mes;
       _selected = dia;
       _monthWithoutDay = dia == null;
+      _pendingAutoSelectMonth = dia == null ? mes : null;
       _upcomingCount = 6;
     });
   }
@@ -133,9 +134,14 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   /// O mês foi trocado e não havia dia com compromisso: nada escolhido.
   bool _monthWithoutDay = false;
 
+  /// Mês recém-aberto esperando o carregamento do recorte mensal para escolher
+  /// o primeiro dia com compromisso (ou ficar vazio se o mês não tiver nada).
+  DateTime? _pendingAutoSelectMonth;
+
   void _select(DateTime day) => setState(() {
         _selected = day;
         _monthWithoutDay = false;
+        _pendingAutoSelectMonth = null;
         _month = DateTime(day.year, day.month);
         _upcomingCount = 6;
       });
@@ -148,21 +154,22 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         _upcomingCount = 6;
       });
 
-  Future<void> _refresh(String teamId) async {
+  Future<void> _refresh(String teamId, DateTime month) async {
     ref.invalidate(agendaNowProvider);
+    invalidateAgendaSchedules(ref, teamId);
     for (final scope in ['upcoming', 'past']) {
-      ref.invalidate(eventsProvider((teamId, scope)));
-      ref.invalidate(agendaEventsProvider((teamId, scope)));
       ref.invalidate(teamEventsProvider((teamId, scope)));
     }
-    ref.invalidate(agendaMonthProvider);
     // Os erros são exibidos pela tela, inclusive durante atualização manual.
     await Future.wait([
-      for (final scope in ['upcoming', 'past'])
-        ref.read(agendaEventsProvider((teamId, scope)).future).then<void>(
-              (_) {},
-              onError: (Object _, StackTrace stack) {},
-            ),
+      ref.read(eventsProvider((teamId, 'upcoming')).future).then<void>(
+            (_) {},
+            onError: (Object _, StackTrace stack) {},
+          ),
+      ref.read(agendaMonthProvider((teamId, month)).future).then<void>(
+            (_) {},
+            onError: (Object _, StackTrace stack) {},
+          ),
     ]);
   }
 
@@ -173,29 +180,42 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     if (auth.teams.isEmpty || teamId == null) return const TeamOnboarding();
     final team = auth.teams.where((t) => t.teamId == teamId).firstOrNull ??
         auth.teams.first;
-    final upcoming = ref.watch(agendaEventsProvider((teamId, 'upcoming')));
-    final past = ref.watch(agendaEventsProvider((teamId, 'past')));
-    // O mês que o calendário mostra, quando as duas listas não o cobrem
-    // inteiro: pedido pelo recorte de dias da API, e só ele.
-    final shownMonth = _month;
-    final monthUncovered = shownMonth != null &&
-        (_outsideCoverage(past.valueOrNull, shownMonth, past: true) ||
-            _outsideCoverage(
-              upcoming.valueOrNull,
-              DateTime(shownMonth.year, shownMonth.month + 1, 0),
-              past: false,
-            ));
-    final monthFill = monthUncovered
-        ? ref.watch(agendaMonthProvider((teamId, shownMonth))).valueOrNull
-        : null;
-    final listed = [
-      ...upcoming.valueOrNull?.data ?? <Event>[],
-      ...past.valueOrNull?.data ?? <Event>[],
-    ];
-    final listedIds = {for (final event in listed) event.id};
-    final events = [
-      ...listed,
-      ...?monthFill?.where((event) => !listedIds.contains(event.id)),
+    // No máximo duas consultas de escalas: `upcoming` (compartilhada com a
+    // Home, para "Próximos compromissos" e datas em aberto) e o recorte do mês
+    // exibido no calendário (que cobre inclusive meses passados e futuros).
+    final upcoming = ref.watch(eventsProvider((teamId, 'upcoming')));
+    final upcomingEvents = upcoming.valueOrNull?.data ?? const <Event>[];
+    final teamTimezone = ref.watch(teamProvider(teamId)).valueOrNull?.timezone;
+    final timezone = teamTimezone ??
+        upcomingEvents
+            .where((e) => e.timezone.isNotEmpty)
+            .firstOrNull
+            ?.timezone ??
+        'America/Sao_Paulo';
+    final now = ref.watch(agendaNowProvider);
+    final localNow = eventLocalTime(now, timezone);
+    final today = DateTime(localNow.year, localNow.month, localNow.day);
+    if (_teamKey != '$teamId/$timezone') {
+      _teamKey = '$teamId/$timezone';
+      _selected = today;
+      _monthWithoutDay = false;
+      _pendingAutoSelectMonth = null;
+      _month = agendaMonthInTimezone(now, timezone);
+      _upcomingCount = 6;
+    }
+    // Sem dia escolhido (mês trocado sem compromisso), as contas usam hoje,
+    // mas a lista do dia não aparece.
+    final hasDay = !_monthWithoutDay;
+    final selected = _selected ?? today;
+    final month = _month!;
+    final monthAsync = ref.watch(agendaMonthProvider((teamId, month)));
+    final monthEvents = monthAsync.valueOrNull?.data ?? const <Event>[];
+    final seenIds = <String>{};
+    final events = <Event>[
+      for (final event in monthEvents)
+        if (seenIds.add(event.id)) event,
+      for (final event in upcomingEvents)
+        if (seenIds.add(event.id)) event,
     ];
     // Os eventos da equipe entram na mesma agenda, e não numa aba própria:
     // quem abre esta tela quer o mês inteiro, e "reunião de quinta" some se
@@ -210,24 +230,6 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       ...ref.watch(teamEventsProvider((teamId, 'past'))).valueOrNull?.data ??
           <TeamEvent>[],
     ];
-    final teamTimezone = ref.watch(teamProvider(teamId)).valueOrNull?.timezone;
-    final timezone = teamTimezone ??
-        events.where((e) => e.timezone.isNotEmpty).firstOrNull?.timezone ??
-        'America/Sao_Paulo';
-    final localNow = eventLocalTime(ref.watch(agendaNowProvider), timezone);
-    final today = DateTime(localNow.year, localNow.month, localNow.day);
-    if (_teamKey != '$teamId/$timezone') {
-      _teamKey = '$teamId/$timezone';
-      _selected = today;
-      _monthWithoutDay = false;
-      _month = DateTime(today.year, today.month);
-      _upcomingCount = 6;
-    }
-    // Sem dia escolhido (mês trocado sem compromisso), as contas usam hoje,
-    // mas a lista do dia não aparece.
-    final hasDay = !_monthWithoutDay;
-    final selected = _selected ?? today;
-    final month = _month!;
 
     // A agenda inteira **e** o recorte escolhido. As duas listas existem por
     // causa do dia vazio: ele precisa saber a diferença entre "a equipe não
@@ -248,6 +250,19 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final markedDays = {
       for (final entry in groups.entries) entry.key: entry.value.length,
     };
+    if (_pendingAutoSelectMonth == month && monthAsync.hasValue) {
+      final firstDay = _firstMarkedDayInMonth(month, markedDays);
+      _pendingAutoSelectMonth = null;
+      if (firstDay != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _month != month || !_monthWithoutDay) return;
+          setState(() {
+            _selected = firstDay;
+            _monthWithoutDay = false;
+          });
+        });
+      }
+    }
     final selectedRows = hasDay
         ? groups[dateKey(selected)] ?? const <AgendaEntry>[]
         : const <AgendaEntry>[];
@@ -269,21 +284,19 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       }
     }
 
-    final daySource = selected.isBefore(today) ? past : upcoming;
-    final monthFilled = monthFill != null &&
-        selected.year == month.year &&
-        selected.month == month.month;
-    final dayIncomplete = !monthFilled &&
-        _outsideCoverage(
-          daySource.valueOrNull,
-          selected,
-          past: selected.isBefore(today),
-        );
-    final monthEnd = DateTime(month.year, month.month + 1, 0);
-    final monthIncomplete = monthFill == null &&
-        (_outsideCoverage(past.valueOrNull, month, past: true) ||
-            _outsideCoverage(upcoming.valueOrNull, monthEnd, past: false));
-    final allLoaded = upcoming.hasValue && past.hasValue;
+    // O dia selecionado pertence ao mês exibido; para dias de hoje em diante,
+    // se o recorte do mês falhar offline mas `upcoming` estiver em cache, ainda
+    // dá para exibir o que `upcoming` conhece.
+    final daySource = monthAsync.hasValue || selected.isBefore(today)
+        ? monthAsync
+        : (upcoming.hasValue ? upcoming : monthAsync);
+    final dayIncomplete = monthAsync.hasValue
+        ? _outsideRangeCoverage(monthAsync.valueOrNull, selected)
+        : (!selected.isBefore(today) &&
+            _outsideUpcomingCoverage(upcoming.valueOrNull, selected));
+    final monthIncomplete = !monthAsync.hasValue ||
+        (monthAsync.valueOrNull!.data.length >= agendaQueryLimit);
+    final monthLoaded = monthAsync.hasValue;
     final monthHasEntries = entries.any(
       (entry) => entry.day.year == month.year && entry.day.month == month.month,
     );
@@ -304,7 +317,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           )
         : const <OpenDate>[];
     final cacheDates = [
-      for (final source in [upcoming, past])
+      for (final source in [upcoming, monthAsync])
         if (source.valueOrNull case final value?)
           if (value.fromCache && value.cachedAt != null) value.cachedAt!,
     ]..sort();
@@ -390,7 +403,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         // Mês que a consulta não cobre inteiro fica calado: dizer "pode ter
         // escalas fora do período disponível" era expor o limite da API a
         // quem só queria ver o mês. O vazio só é afirmado quando é verdade.
-        if (!monthIncomplete && allLoaded && !monthHasEntries)
+        if (!monthIncomplete && monthLoaded && !monthHasEntries)
           Padding(
             padding: const EdgeInsets.all(AppSpacing.sm),
             child: Text(
@@ -411,7 +424,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       if (daySource.hasError && !daySource.hasValue) {
         return _AgendaError(
           error: daySource.error!,
-          onRetry: () => _refresh(teamId),
+          onRetry: () => _refresh(teamId, month),
         );
       }
       return AppGroup(
@@ -500,21 +513,23 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         ];
 
     List<Widget> upcomingBlock({required bool wide}) => [
-        if (past.hasError &&
-            !past.hasValue &&
-            !selected.isBefore(today))
+        if (monthAsync.hasError &&
+            !monthAsync.hasValue &&
+            (!hasDay || daySource != monthAsync)) ...[
           _AgendaError(
-            error: past.error!,
+            error: monthAsync.error!,
             message:
-                'Não foi possível carregar as escalas passadas.',
-            onRetry: () => _refresh(teamId),
+                'Não foi possível carregar as escalas deste mês.',
+            onRetry: () => _refresh(teamId, month),
           ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         if (upcoming.isLoading && !upcoming.hasValue)
           const _AgendaLoading()
         else if (upcoming.hasError && !upcoming.hasValue)
           _AgendaError(
             error: upcoming.error!,
-            onRetry: () => _refresh(teamId),
+            onRetry: () => _refresh(teamId, month),
           )
         else
           // O mesmo bloco da Home, com a mesma linha de escala. O
@@ -593,7 +608,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   if (janelaLarga)
                     IconButton(
                       tooltip: 'Atualizar agenda',
-                      onPressed: () => _refresh(teamId),
+                      onPressed: () => _refresh(teamId, month),
                       icon: const Icon(Icons.refresh_rounded),
                     ),
                   if (team.canManage && janelaLarga)
@@ -609,7 +624,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               ),
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: () => _refresh(teamId),
+                  onRefresh: () => _refresh(teamId, month),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       // A largura de que a **lista** dispõe, e não a da janela: é o
@@ -982,18 +997,41 @@ Widget _emptyDayRow({
   );
 }
 
-/// A API limita a consulta, sem paginação nem filtro por mês. Nunca apresentar
-/// um dia além da borda como vazio conhecido; a própria borda pode estar partida.
-bool _outsideCoverage(
-  CachedValue<List<Event>>? value,
-  DateTime day, {
-  required bool past,
-}) {
-  if (value == null ||
-      value.data.length < (value.fromCache ? 20 : agendaQueryLimit)) {
-    return false;
+/// Primeiro dia civil do [month] com compromisso em [markedDays], ou nulo.
+DateTime? _firstMarkedDayInMonth(DateTime month, Map<String, int> markedDays) {
+  final ultimo = DateTime(month.year, month.month + 1, 0).day;
+  for (var d = 1; d <= ultimo; d++) {
+    final candidato = DateTime(month.year, month.month, d);
+    if ((markedDays[dateKey(candidato)] ?? 0) > 0) return candidato;
   }
-  final dates = value.data.map((event) {
+  return null;
+}
+
+/// A API limita o recorte do mês em [agendaQueryLimit] itens. Se a página veio
+/// cheia, dias a partir da última data devolvida podem estar incompletos.
+bool _outsideRangeCoverage(
+  CachedValue<List<Event>>? value,
+  DateTime day,
+) {
+  if (value == null || value.data.length < agendaQueryLimit) return false;
+  final dates = _sortedEventDays(value.data);
+  return !day.isBefore(dates.last);
+}
+
+/// Quando o recorte do mês falhou mas `upcoming` está em cache, `upcoming`
+/// cobre até 20 escalas — além da última data devolvida não dá para afirmar
+/// que o dia está vazio.
+bool _outsideUpcomingCoverage(
+  CachedValue<List<Event>>? value,
+  DateTime day,
+) {
+  if (value == null || value.data.length < 20) return false;
+  final dates = _sortedEventDays(value.data);
+  return !day.isBefore(dates.last);
+}
+
+List<DateTime> _sortedEventDays(List<Event> events) {
+  return events.map((event) {
     final local = eventLocalTime(
       event.startsAt,
       event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone,
@@ -1001,7 +1039,6 @@ bool _outsideCoverage(
     return DateTime(local.year, local.month, local.day);
   }).toList()
     ..sort();
-  return past ? !day.isAfter(dates.first) : !day.isBefore(dates.last);
 }
 
 String _dayLabel(DateTime day, DateTime today) => capitalizeWeekday(

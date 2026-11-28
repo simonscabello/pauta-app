@@ -9,6 +9,7 @@ import 'package:louvor_app/core/storage/shared_preferences_provider.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
+import 'package:louvor_app/features/events/data/agenda_provider.dart';
 import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/agenda_screen.dart';
@@ -294,6 +295,9 @@ Future<_Harness> _pump(
         sharedPreferencesProvider.overrideWithValue(prefs),
         eventRepositoryProvider.overrideWithValue(harness.repository),
         eventsProvider.overrideWith(
+          (ref, query) async => CachedValue(data: events, fromCache: false),
+        ),
+        agendaMonthProvider.overrideWith(
           (ref, query) async => CachedValue(data: events, fromCache: false),
         ),
         serviceTemplatesProvider.overrideWith((ref, teamId) async => templates),

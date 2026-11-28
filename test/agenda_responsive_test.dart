@@ -8,6 +8,7 @@ import 'package:louvor_app/core/storage/shared_preferences_provider.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
+import 'package:louvor_app/features/events/data/agenda_provider.dart';
 import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/agenda_screen.dart';
@@ -192,6 +193,9 @@ Future<void> _pumpAgenda(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         eventsProvider.overrideWith(
+          (ref, query) async => CachedValue(data: events, fromCache: false),
+        ),
+        agendaMonthProvider.overrideWith(
           (ref, query) async => CachedValue(data: events, fromCache: false),
         ),
         // A agenda também consulta a grade de cultos, para propor as datas que

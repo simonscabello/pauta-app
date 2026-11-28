@@ -19,6 +19,7 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/app_options_sheet.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../events/data/agenda_provider.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
 import '../../events/domain/event_models.dart';
@@ -335,7 +336,7 @@ class _SuggestionDetailScreenState
           ),
         ]);
         ref.invalidate(eventProvider(atual.id));
-        ref.invalidate(eventsProvider((widget.teamId, 'upcoming')));
+        invalidateAgendaSchedules(ref, widget.teamId);
       },
       jaEsta
           ? 'Sugestão aceita. A música já estava no culto.'

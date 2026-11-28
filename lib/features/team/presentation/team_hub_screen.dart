@@ -217,7 +217,7 @@ class TeamHubScreen extends ConsumerWidget {
                             AppGroupRow(
                               icon: Icons.tune_rounded,
                               title: 'Dados da equipe',
-                              subtitle: 'O nome que aparece para os integrantes',
+                              subtitle: 'Nome e assistentes de IA',
                               onTap: () => context.push('/equipe/dados'),
                             ),
                             if (whatsApp != null && whatsApp.available)

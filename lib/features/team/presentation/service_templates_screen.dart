@@ -19,6 +19,7 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../../../shared/widgets/app_primary_action.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../events/data/agenda_provider.dart';
 import '../../events/data/event_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/service_template.dart';
@@ -126,7 +127,7 @@ class ServiceTemplatesScreen extends ConsumerWidget {
     );
     if (result == null || !context.mounted) return;
 
-    ref.invalidate(eventsProvider((teamId, 'upcoming')));
+    invalidateAgendaSchedules(ref, teamId);
     final message = result.createdCount == 0
         ? 'As próximas datas já tinham escala.'
         : '${result.createdCount} '

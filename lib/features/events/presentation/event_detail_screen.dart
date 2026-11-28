@@ -31,6 +31,7 @@ import '../../auth/application/auth_controller.dart';
 import '../../songs/domain/chord_sheet.dart';
 import '../../songs/presentation/lyrics_reader.dart';
 import '../application/played_songs.dart';
+import '../data/agenda_provider.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -216,8 +217,7 @@ class EventDetailScreen extends ConsumerWidget {
 
     try {
       await ref.read(eventRepositoryProvider).remove(event.id);
-      ref.invalidate(eventsProvider((event.teamId, 'upcoming')));
-      ref.invalidate(eventsProvider((event.teamId, 'past')));
+      invalidateAgendaSchedules(ref, event.teamId);
       ref.invalidate(eventProvider(event.id));
       if (context.mounted) {
         context.pop();
@@ -345,8 +345,7 @@ class EventDetailScreen extends ConsumerWidget {
     try {
       await ref.read(eventRepositoryProvider).unpublish(event.id);
       ref.invalidate(eventProvider(event.id));
-      ref.invalidate(eventsProvider((event.teamId, 'upcoming')));
-      ref.invalidate(eventsProvider((event.teamId, 'past')));
+      invalidateAgendaSchedules(ref, event.teamId);
       if (context.mounted) {
         showAppSnackBar(
           context,
@@ -388,8 +387,7 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
     try {
       await ref.read(eventRepositoryProvider).publish(widget.event.id);
       ref.invalidate(eventProvider(widget.event.id));
-      ref.invalidate(eventsProvider((widget.event.teamId, 'upcoming')));
-      ref.invalidate(eventsProvider((widget.event.teamId, 'past')));
+      invalidateAgendaSchedules(ref, widget.event.teamId);
       if (mounted) {
         showAppSnackBar(
           context,
@@ -887,7 +885,7 @@ class _PresenceBandState extends ConsumerState<_PresenceBand> {
           .read(eventRepositoryProvider)
           .respond(widget.event.id, confirmed: confirmed);
       ref.invalidate(eventProvider(widget.event.id));
-      ref.invalidate(eventsProvider((widget.event.teamId, 'upcoming')));
+      invalidateAgendaSchedules(ref, widget.event.teamId);
     } on ApiException catch (error) {
       if (mounted) showAppSnackBar(context, error.message, tone: AppTone.danger);
     } finally {
@@ -1073,7 +1071,7 @@ class _DeclinedBandState extends ConsumerState<_DeclinedBand> {
     } finally {
       // Também no erro: "alguém já se ofereceu" muda o que a faixa mostra.
       ref.invalidate(eventProvider(widget.event.id));
-      ref.invalidate(eventsProvider((widget.event.teamId, 'upcoming')));
+      invalidateAgendaSchedules(ref, widget.event.teamId);
       if (mounted) setState(() => _sending = false);
     }
   }

@@ -64,22 +64,45 @@ class EventRepository {
   }
 
   /// As escalas de um recorte de dias (`AAAA-MM-DD`, inclusivos, no fuso da
-  /// equipe), em ordem cronológica. É como a agenda completa um mês que as
-  /// listas de próximas e passadas não cobrem inteiro.
-  Future<List<Event>> listRange(
+  /// equipe), em ordem cronológica. É como a agenda carrega o mês exibido no
+  /// calendário (inclusive meses passados e meses sem escala), com cache
+  /// offline próprio por recorte.
+  Future<CachedValue<List<Event>>> listRange(
     String teamId, {
     required String from,
     required String to,
+    // Falso para o pré-carregamento: a janela muda todo dia, e gravar cada
+    // recorte encheria o armazenamento sem ninguém voltar a ele.
+    bool cache = true,
   }) async {
+    final cacheScope = 'range.$from.$to';
     try {
       final response = await _dio.get<List<dynamic>>(
         '/teams/$teamId/events',
         queryParameters: {'from': from, 'to': to, 'limit': 100},
       );
-      return response.data!
-          .map((e) => Event.fromJson(Map<String, dynamic>.from(e as Map)))
+      final maps = response.data!
+          .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+      if (cache) {
+        // Falha ao gravar (cota da Web) não derruba o mês que veio da rede.
+        try {
+          await _cache.saveAgenda(teamId, cacheScope, maps);
+        } catch (_) {}
+      }
+      return CachedValue(
+        data: maps.map(Event.fromJson).toList(),
+        fromCache: false,
+      );
     } on DioException catch (e) {
+      final cached = _cache.readAgenda(teamId, cacheScope);
+      if (cached != null) {
+        return CachedValue(
+          data: cached.data.map(Event.fromJson).toList(),
+          fromCache: true,
+          cachedAt: cached.cachedAt,
+        );
+      }
       throw ApiException.fromDio(e);
     }
   }

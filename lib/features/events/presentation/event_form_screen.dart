@@ -21,6 +21,7 @@ import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/domain/service_template.dart';
+import '../data/agenda_provider.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -606,8 +607,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
           repertoireMode: _repertoireMode,
           expectedUpdatedAt: force ? null : _expectedUpdatedAt,
         );
-        ref.invalidate(eventsProvider((event.teamId, 'upcoming')));
-        ref.invalidate(eventsProvider((event.teamId, 'past')));
+        invalidateAgendaSchedules(ref, event.teamId);
         ref.invalidate(eventProvider(event.id));
       } else {
         final createdEvent = await repository.create(
@@ -621,8 +621,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen>
           colorPalette: _colorPalette.text.trim(),
           repertoireMode: _repertoireMode,
         );
-        ref.invalidate(eventsProvider((createdEvent.teamId, 'upcoming')));
-        ref.invalidate(eventsProvider((createdEvent.teamId, 'past')));
+        invalidateAgendaSchedules(ref, createdEvent.teamId);
         ref.invalidate(eventProvider(createdEvent.id));
 
         if (!mounted) return;
