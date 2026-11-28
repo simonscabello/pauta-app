@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
+import 'package:louvor_app/core/storage/read_cache.dart';
 import 'package:louvor_app/core/storage/shared_preferences_provider.dart';
 import 'package:louvor_app/core/theme/theme_mode_controller.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
@@ -55,6 +56,44 @@ void main() {
       find.text('Conhecer o Pauta e perguntas frequentes'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('mostra quantas escalas e músicas estão disponíveis sem internet',
+      (tester) async {
+    await _pumpPerfil(
+      tester,
+      seedCache: (cache) async {
+        await cache.saveEvent('e1', {
+          'id': 'e1',
+          'teamId': 't1',
+          'startsAt': '2026-12-06T12:00:00Z',
+          'status': 'PUBLISHED',
+          'timezone': 'America/Sao_Paulo',
+          'assignments': [],
+          'songs': [],
+        });
+        await cache.saveEvent('e2', {
+          'id': 'e2',
+          'teamId': 't1',
+          'startsAt': '2026-12-13T12:00:00Z',
+          'status': 'PUBLISHED',
+          'timezone': 'America/Sao_Paulo',
+          'assignments': [],
+          'songs': [],
+        });
+        await cache.saveSong('s1', {'id': 's1', 'title': 'M1'});
+        await cache.saveSong('s2', {'id': 's2', 'title': 'M2'});
+        await cache.saveSong('s3', {'id': 's3', 'title': 'M3'});
+      },
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Disponível sem internet'),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(find.text('Disponível sem internet'), findsOneWidget);
+    expect(find.text('2 escalas, 3 músicas'), findsOneWidget);
   });
 
   testWidgets('ligar a biometria com o celular bloqueado por tentativas diz isso',
@@ -133,6 +172,7 @@ Future<void> _pumpPerfil(
   Size size = const Size(800, 1200),
   double textScale = 1.0,
   BiometricConfirmation? biometricResult,
+  Future<void> Function(ReadCache cache)? seedCache,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -141,6 +181,9 @@ Future<void> _pumpPerfil(
   // O seletor de tema do perfil le a preferencia do aparelho.
   SharedPreferences.setMockInitialValues(<String, Object>{});
   final prefs = await SharedPreferences.getInstance();
+  if (seedCache != null) {
+    await seedCache(ReadCache(prefs));
+  }
 
   await tester.pumpWidget(
     ProviderScope(

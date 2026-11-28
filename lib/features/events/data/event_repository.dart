@@ -8,7 +8,9 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/read_cache.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../songs/data/song_repository.dart';
+import '../application/offline_sync_coordinator.dart';
 import '../domain/event_change.dart';
 import '../domain/event_models.dart';
 import '../domain/service_moments.dart';
@@ -18,10 +20,15 @@ final readCacheProvider = Provider<ReadCache>((ref) {
 });
 
 class EventRepository {
-  const EventRepository(this._dio, this._cache);
+  const EventRepository(
+    this._dio,
+    this._cache, {
+    DateTime Function() clock = DateTime.now,
+  }) : _clock = clock;
 
   final Dio _dio;
   final ReadCache _cache;
+  final DateTime Function() _clock;
 
   Future<CachedValue<List<Event>>> list(
     String teamId, {
@@ -38,7 +45,7 @@ class EventRepository {
       final maps = response.data!
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-      await _cache.saveAgenda(teamId, cacheScope, maps);
+      await _cache.saveAgenda(teamId, cacheScope, maps, now: _clock());
       return CachedValue(
         data: maps.map(Event.fromJson).toList(),
         fromCache: false,
@@ -81,7 +88,7 @@ class EventRepository {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/events/$eventId');
       final map = Map<String, dynamic>.from(response.data!);
-      await _cache.saveEvent(eventId, map);
+      await _cache.saveEvent(eventId, map, now: _clock());
       return CachedValue(data: Event.fromJson(map), fromCache: false);
     } on DioException catch (e) {
       final cached = _cache.readEvent(eventId);
@@ -194,6 +201,7 @@ class EventRepository {
   Future<void> remove(String eventId) async {
     return _guard(() async {
       await _dio.delete<void>('/events/$eventId');
+      await _cache.removeEvent(eventId);
     });
   }
 
@@ -461,6 +469,7 @@ final eventRepositoryProvider = Provider<EventRepository>((ref) {
   return EventRepository(
     ref.watch(dioProvider),
     ref.watch(readCacheProvider),
+    clock: ref.watch(offlineClockProvider),
   );
 });
 
@@ -472,30 +481,28 @@ final eventsProvider = FutureProvider.autoDispose
   final repo = ref.watch(eventRepositoryProvider);
   final result = repo.list(teamId, scope: scope);
   if (scope == 'upcoming') {
-    // Modo culto sem rede: as escalas mais próximas (até uma semana) vão para o
-    // aparelho com a letra e a cifra, mesmo que ninguém a tenha aberto.
-    unawaited(
-      result.then((list) async {
-        if (list.fromCache) return;
-        // As três mais próximas: cobre o domingo com manhã e noite e o culto
-        // do meio da semana sem multiplicar as chamadas.
-        final next = list.data
-            .where(
-              (e) =>
-                  !e.isDraft &&
-                  e.startsAt.difference(DateTime.now()).inDays <= 7,
-            )
-            .take(3);
-        for (final item in next) {
-          final event = await repo.find(item.id);
-          if (event.fromCache) return;
-          await ref.read(songRepositoryProvider).prefetch(
-                teamId,
-                event.data.songs.map((song) => song.songId),
-              );
-        }
-      }).catchError((_) {}),
-    );
+    // Capturado de forma síncrona antes do `.then`: o provider é `autoDispose`
+    // e ler `ref` depois de sair da tela lançaria erro de descarte.
+    final coordinator = ref.read(offlineSyncCoordinatorProvider);
+    final team = ref
+        .read(authControllerProvider)
+        .teams
+        .where((t) => t.teamId == teamId)
+        .firstOrNull;
+    // Modo culto sem rede: pré-carrega as escalas publicadas em que a pessoa
+    // está escalada nos próximos 30 dias (e até o fim do mês seguinte para
+    // quem lidera), renovando só o que mudou.
+    if (team != null) {
+      unawaited(
+        result.then((list) async {
+          if (list.fromCache) return;
+          await coordinator.syncFromUpcoming(
+            team: team,
+            upcomingEvents: list.data,
+          );
+        }).catchError((_) {}),
+      );
+    }
   }
   return result;
 });
@@ -508,16 +515,24 @@ final eventHistoryProvider =
 final eventProvider =
     FutureProvider.autoDispose.family<CachedValue<Event>, String>(
   (ref, eventId) async {
+    final songRepo = ref.read(songRepositoryProvider);
+    final coordinator = ref.read(offlineSyncCoordinatorProvider);
     final result = await ref.watch(eventRepositoryProvider).find(eventId);
     // Com a escala aberta e a rede de pé, a cifra e a letra das músicas dela
     // vão para o aparelho em segundo plano: é no ensaio que a rede cai.
-    if (!result.fromCache && result.data.songs.isNotEmpty) {
-      unawaited(
-        ref.read(songRepositoryProvider).prefetch(
-              result.data.teamId,
-              result.data.songs.map((song) => song.songId),
-            ),
-      );
+    if (!result.fromCache) {
+      coordinator.notifyCacheChanged();
+      if (result.data.songs.isNotEmpty) {
+        unawaited(
+          songRepo
+              .prefetch(
+                result.data.teamId,
+                result.data.songs.map((song) => song.songId),
+              )
+              .then((_) => coordinator.notifyCacheChanged())
+              .catchError((_) {}),
+        );
+      }
     }
     return result;
   },

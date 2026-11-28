@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/push/push_coordinator.dart';
 import '../../../core/push/push_service.dart';
+import '../../../core/storage/offline_policy.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/theme_mode_controller.dart';
@@ -20,6 +21,7 @@ import '../../auth/application/auth_controller.dart';
 import '../../auth/application/biometric_service.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../auth/domain/biometric_texts.dart';
+import '../../events/application/offline_sync_coordinator.dart';
 import '../../team/data/team_repository.dart';
 import '../../onboarding/domain/member_tour.dart';
 import '../../onboarding/presentation/tour_target.dart';
@@ -186,6 +188,7 @@ class ProfileScreen extends ConsumerWidget {
                           subtitle: 'Conhecer o Pauta e perguntas frequentes',
                           onTap: () => context.push('/perfil/ajuda'),
                         ),
+                        const _OfflineAvailabilityRow(),
                         AppGroupRow(
                           icon: Icons.wifi_tethering_rounded,
                           title: 'Diagnóstico de conexão',
@@ -524,3 +527,24 @@ String roleLabel(String role) => switch (role) {
       'LEADER' => 'Líder',
       _ => 'Membro',
     };
+
+/// Quantas escalas e músicas estão guardadas neste aparelho para abrir sem
+/// rede (modo culto offline).
+class _OfflineAvailabilityRow extends ConsumerWidget {
+  const _OfflineAvailabilityRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(offlineCacheSummaryProvider);
+    final label = formatOfflineAvailability(summary);
+    return Semantics(
+      label: label,
+      child: AppGroupRow(
+        icon: Icons.offline_pin_outlined,
+        title: 'Disponível sem internet',
+        subtitle: formatOfflineCounts(summary.scheduleCount, summary.songCount),
+        showChevron: false,
+      ),
+    );
+  }
+}

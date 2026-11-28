@@ -13,6 +13,7 @@ import 'core/router/app_router.dart';
 import 'core/storage/shared_preferences_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_controller.dart';
+import 'features/events/application/offline_sync_coordinator.dart';
 import 'features/onboarding/presentation/tour_overlay.dart';
 
 Future<void> main() async {
@@ -49,6 +50,9 @@ class LouvorApp extends ConsumerWidget {
     // do app. Ele mesmo escuta o estado de autenticacao -- registra o aparelho
     // ao entrar na conta e leva o toque no aviso ate a tela.
     ref.watch(pushCoordinatorProvider);
+    // Mesmo papel para o modo culto sem rede: pré-carrega escalas e cifras ao
+    // abrir ou retomar o app (no máximo uma vez a cada 6 h) e limpa sobras.
+    ref.watch(offlineSyncCoordinatorProvider);
 
     return MaterialApp.router(
       title: 'Pauta',

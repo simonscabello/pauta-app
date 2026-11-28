@@ -52,9 +52,10 @@ const helpFaq = <FaqEntry>[
         'tom (quem lidera faz isso no próprio leitor, em **Usar … para '
         'todos**). O botão de tocar, embaixo, rola a letra sozinho, e o botão '
         'da paleta, no alto, muda o tamanho da letra, o fundo e a cor dos '
-        'acordes. A escala '
-        'que você abriu com internet leva as letras e cifras para o celular, e '
-        'elas abrem mesmo sem conexão.\n\n'
+        'acordes. As suas escalas publicadas dos próximos 30 dias (e as do '
+        'mês seguinte, para quem lidera) ficam guardadas no aparelho com '
+        'letras e cifras, e abrem mesmo sem conexão — assim como qualquer '
+        'outra escala que você abrir com internet.\n\n'
         'Se aparecer "Sem link", a equipe ainda não cadastrou aquele material.',
   ),
   FaqEntry(

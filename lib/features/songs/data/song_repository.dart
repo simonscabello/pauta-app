@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/date/report_period.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/storage/offline_policy.dart';
 import '../../../core/storage/read_cache.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
+import '../../events/application/offline_sync_coordinator.dart';
 import '../domain/chord_import.dart';
 import '../domain/moment_suggestion.dart';
 import '../domain/repertoire_health.dart';
@@ -16,12 +18,18 @@ import '../domain/song_models.dart';
 import '../domain/song_usage.dart';
 
 class SongRepository {
-  const SongRepository(this._dio, {ReadCache? cache}) : _cache = cache;
+  const SongRepository(
+    this._dio, {
+    ReadCache? cache,
+    DateTime Function() clock = DateTime.now,
+  })  : _cache = cache,
+        _clock = clock;
 
   final Dio _dio;
 
   /// Nulo sem armazenamento (testes): aí a música só vem da rede.
   final ReadCache? _cache;
+  final DateTime Function() _clock;
 
   Future<List<Song>> list(
     String teamId, {
@@ -70,13 +78,22 @@ class SongRepository {
   /// cópia — a cifra precisa abrir quando o Wi-Fi da igreja cai no ensaio.
   /// Resposta do servidor com 4xx não é falta de rede: a música apagada ou a
   /// equipe que a pessoa deixou não reaparecem pelo cache.
-  Future<CachedValue<Song>> find(String teamId, String songId) async {
+  Future<CachedValue<Song>> find(
+    String teamId,
+    String songId, {
+    bool markOpened = true,
+  }) async {
     try {
       final response =
           await _dio.get<Map<String, dynamic>>('/teams/$teamId/songs/$songId');
       final map = response.data!;
       try {
-        await _cache?.saveSong(songId, map);
+        await _cache?.saveSong(
+          songId,
+          map,
+          markOpened: markOpened,
+          now: _clock(),
+        );
       } catch (_) {
         // Armazenamento cheio (o `localStorage` da Web tem teto) não pode
         // derrubar a leitura que deu certo.
@@ -87,6 +104,9 @@ class SongRepository {
       final cached =
           status == null || status >= 500 ? _cache?.readSong(songId) : null;
       if (cached != null) {
+        if (markOpened) {
+          unawaited(_cache?.touchSongOpened(songId, now: _clock()));
+        }
         return CachedValue(
           data: Song.fromJson(cached.data),
           fromCache: true,
@@ -98,19 +118,31 @@ class SongRepository {
   }
 
   /// Guarda no aparelho as músicas de uma escala, uma de cada vez, para a
-  /// cifra e a letra já estarem lá quando a rede cair. Pula a que foi guardada
-  /// há pouco: a equipe inteira abre a mesma escala no mesmo Wi-Fi, e o limite
-  /// de requisições da API conta por IP. Falha é silenciosa.
-  Future<void> prefetch(String teamId, Iterable<String> songIds) async {
+  /// cifra e a letra já estarem lá quando a rede cair. Pula a que ainda está
+  /// fresca (mesmo `updatedAt`, ou menos de [maxAge] — padrão 6 h): a equipe
+  /// inteira abre a mesma escala no mesmo Wi-Fi, e o limite de requisições da
+  /// API conta por IP. Falha é silenciosa.
+  Future<void> prefetch(
+    String teamId,
+    Iterable<String> songIds, {
+    Duration maxAge = kOfflineRefreshInterval,
+    DateTime? now,
+    Map<String, DateTime?> remoteUpdatedAtBySongId = const {},
+  }) async {
+    final clock = (now ?? _clock()).toUtc();
     for (final songId in songIds.toSet()) {
-      final cached = _cache?.readSong(songId);
-      if (cached != null &&
-          DateTime.now().toUtc().difference(cached.cachedAt) <
-              const Duration(hours: 1)) {
+      final entry = _cache?.readSongEntry(songId);
+      if (!needsOfflineRefresh(
+        cachedAt: entry?.cachedAt,
+        cachedUpdatedAt: entry?.updatedAt,
+        remoteUpdatedAt: remoteUpdatedAtBySongId[songId],
+        now: clock,
+        maxAge: maxAge,
+      )) {
         continue;
       }
       try {
-        await find(teamId, songId);
+        await find(teamId, songId, markOpened: false);
       } catch (_) {
         // Sem rede ou sem a música: fica para a próxima vez que a escala abrir.
       }
@@ -137,7 +169,9 @@ class SongRepository {
         '/teams/$teamId/songs/$songId',
         data: body,
       );
-      return Song.fromJson(response.data!);
+      final map = response.data!;
+      await _cacheUpdatedSong(songId, map);
+      return Song.fromJson(map);
     });
   }
 
@@ -157,7 +191,9 @@ class SongRepository {
               '$path/$versionId',
               data: body,
             );
-      return Song.fromJson(response.data!);
+      final map = response.data!;
+      await _cacheUpdatedSong(songId, map);
+      return Song.fromJson(map);
     });
   }
 
@@ -170,8 +206,19 @@ class SongRepository {
       final response = await _dio.delete<Map<String, dynamic>>(
         '/teams/$teamId/songs/$songId/chord-versions/$versionId',
       );
-      return Song.fromJson(response.data!);
+      final map = response.data!;
+      await _cacheUpdatedSong(songId, map);
+      return Song.fromJson(map);
     });
+  }
+
+  Future<void> _cacheUpdatedSong(
+    String songId,
+    Map<String, dynamic> map,
+  ) async {
+    try {
+      await _cache?.saveSong(songId, map, markOpened: true, now: _clock());
+    } catch (_) {}
   }
 
   /// Os sites de onde o importador sabe ler cifra, e se cada um está liberado.
@@ -376,7 +423,11 @@ final songRepositoryProvider = Provider<SongRepository>((ref) {
   } catch (_) {
     cache = null;
   }
-  return SongRepository(ref.watch(dioProvider), cache: cache);
+  return SongRepository(
+    ref.watch(dioProvider),
+    cache: cache,
+    clock: ref.watch(offlineClockProvider),
+  );
 });
 
 /// Filtro da lista. **São dois acervos, não um.**
@@ -545,9 +596,18 @@ final chordSourcesProvider = FutureProvider.autoDispose
 });
 
 final songProvider = FutureProvider.autoDispose
-    .family<CachedValue<Song>, ({String teamId, String songId})>((ref, args) {
-  return ref.watch(songRepositoryProvider).find(args.teamId, args.songId);
-});
+    .family<CachedValue<Song>, ({String teamId, String songId})>(
+  (ref, args) async {
+    final result =
+        await ref.watch(songRepositoryProvider).find(args.teamId, args.songId);
+    if (!result.fromCache) {
+      try {
+        ref.read(offlineCacheRevisionProvider.notifier).state++;
+      } catch (_) {}
+    }
+    return result;
+  },
+);
 
 typedef SongUsageQuery = ({String teamId, ReportPeriod period, int? weekday});
 
