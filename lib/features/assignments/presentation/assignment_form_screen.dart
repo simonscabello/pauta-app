@@ -334,8 +334,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
             ?.displayName;
     if (nome == null) return null;
 
-    final aindaEsta =
-        _assignedIds.contains(id) || _ministerId == id;
+    final aindaEsta = _assignedIds.contains(id) || _ministerId == id;
     // O que ela fazia, lido da escala como estava ao abrir: depois de tirar,
     // é justamente essa lista que diz o que falta preencher.
     final fazia = event.rolesPhraseFor(id);
@@ -560,6 +559,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
         position: position,
         members: members,
         rotation: rotation,
+        // Só ajuda: se não vier, a folha segue como sempre.
+        suggestions: ref
+            .read(teamRepositoryProvider)
+            .assignmentSuggestions(teamId, widget.eventId, position.id)
+            .catchError((Object _) => const <AssignmentSuggestion>[]),
         unavailableIds: unavailableIds,
         blockedReason: (member) => _blockedReason(member, position, positions),
         onAddGuest: (name) => _addGuest(teamId, name),
@@ -1463,6 +1467,7 @@ class _MemberPickerSheet extends StatefulWidget {
     required this.position,
     required this.members,
     required this.rotation,
+    this.suggestions,
     required this.unavailableIds,
     required this.blockedReason,
     required this.onAddGuest,
@@ -1481,6 +1486,10 @@ class _MemberPickerSheet extends StatefulWidget {
 
   /// Nulo enquanto o relatório de rodízio não chegou.
   final Map<String, RotationMember>? rotation;
+
+  /// Quem o Pauta sugere para esta função, calculado no servidor sobre a
+  /// escala gravada.
+  final Future<List<AssignmentSuggestion>>? suggestions;
   final Set<String> unavailableIds;
 
   /// Nulo = pode escalar. Texto = motivo do bloqueio, exibido na linha.
@@ -1671,6 +1680,38 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                             ? 'Nenhum integrante cadastrado na equipe.'
                             : 'Ninguém com esse nome na equipe.',
                       ),
+                    ),
+                  if (termo.isEmpty && widget.suggestions != null)
+                    FutureBuilder<List<AssignmentSuggestion>>(
+                      future: widget.suggestions,
+                      builder: (context, snapshot) {
+                        final byId = {for (final m in everyone) m.id: m};
+                        // Quem já foi marcado nesta folha (e ainda não salvo)
+                        // ou está bloqueado aqui sai da sugestão.
+                        final shown = [
+                          for (final s in snapshot.data ??
+                              const <AssignmentSuggestion>[])
+                            if (byId[s.membershipId] case final member?)
+                              if (!_working.contains(member.id) &&
+                                  widget.blockedReason(member) == null &&
+                                  !widget.unavailableIds.contains(member.id))
+                                (member, s),
+                        ];
+                        if (shown.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _SheetLabel('Sugeridos', count: shown.length),
+                            for (final (member, suggestion) in shown)
+                              _PickerTile(
+                                member: member,
+                                checked: false,
+                                rotation: suggestion.reasons.join(' · '),
+                                onTap: () => _toggle(member.id),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   if (registered.isNotEmpty) ...[
                     _SheetLabel('Com esta função', count: registered.length),
@@ -1914,7 +1955,8 @@ class _PickerTile extends StatelessWidget {
                     note == null
                         ? Icons.edit_note_rounded
                         : Icons.sticky_note_2_rounded,
-                    color: note == null ? scheme.onSurfaceVariant : scheme.primary,
+                    color:
+                        note == null ? scheme.onSurfaceVariant : scheme.primary,
                   ),
                 ),
               Checkbox(

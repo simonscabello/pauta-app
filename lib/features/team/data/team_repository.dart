@@ -55,6 +55,7 @@ class TeamRepository {
     String teamId, {
     String? name,
     String? scheduleMode,
+    bool? aiAssistantsEnabled,
   }) async {
     return _guard(() async {
       final response = await _dio.patch<Map<String, dynamic>>(
@@ -62,6 +63,8 @@ class TeamRepository {
         data: {
           if (name != null) 'name': name,
           if (scheduleMode != null) 'scheduleMode': scheduleMode,
+          if (aiAssistantsEnabled != null)
+            'aiAssistantsEnabled': aiAssistantsEnabled,
         },
       );
       return Team.fromJson(response.data!);
@@ -405,6 +408,21 @@ class TeamRepository {
         queryParameters: {'weeks': weeks},
       );
       return RotationReport.fromJson(response.data!);
+    });
+  }
+
+  /// Quem escalar numa função desta escala, segundo o rodízio.
+  Future<List<AssignmentSuggestion>> assignmentSuggestions(
+    String teamId,
+    String eventId,
+    String positionId,
+  ) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/teams/$teamId/events/$eventId/assignment-suggestions',
+        queryParameters: {'positionId': positionId},
+      );
+      return AssignmentSuggestion.forPosition(response.data!, positionId);
     });
   }
 

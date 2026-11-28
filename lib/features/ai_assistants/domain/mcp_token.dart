@@ -148,8 +148,7 @@ List<McpToken> sortMcpTokens(Iterable<McpToken> tokens, DateTime now) {
 /// "25 de dezembro", com o ano só quando não é o deste ano.
 String mcpDayLabel(DateTime date, DateTime now) {
   final local = date.toLocal();
-  final pattern =
-      local.year == now.year ? "d 'de' MMMM" : "d 'de' MMMM 'de' y";
+  final pattern = local.year == now.year ? "d 'de' MMMM" : "d 'de' MMMM 'de' y";
   return DateFormat(pattern, 'pt_BR').format(local);
 }
 
@@ -228,4 +227,50 @@ int _calendarDays({required DateTime from, required DateTime to}) {
   final a = DateTime.utc(from.year, from.month, from.day);
   final b = DateTime.utc(to.year, to.month, to.day);
   return b.difference(a).inDays;
+}
+
+/// Um assistente conectado pelo navegador (OAuth), como
+/// `GET /users/me/mcp-grants` devolve: o Claude no navegador e no celular, o
+/// ChatGPT. Não há chave para mostrar: a pessoa entrou com a conta do Pauta.
+class McpGrant {
+  const McpGrant({
+    required this.id,
+    required this.clientName,
+    required this.canWrite,
+    required this.createdAt,
+    this.clientHost,
+  });
+
+  final String id;
+  final String clientName;
+
+  /// O domínio do cliente quando o `clientId` é um endereço (CIMD).
+  final String? clientHost;
+  final bool canWrite;
+  final DateTime createdAt;
+
+  factory McpGrant.fromJson(Map<String, dynamic> json) {
+    final clientId = json['clientId'] as String? ?? '';
+    final host = Uri.tryParse(clientId)?.host;
+    return McpGrant(
+      id: json['id'] as String,
+      clientName: (json['clientName'] as String?)?.trim().isNotEmpty == true
+          ? (json['clientName'] as String).trim()
+          : 'Assistente',
+      clientHost: host == null || host.isEmpty ? null : host,
+      canWrite: (json['scopes'] as List<dynamic>? ?? const [])
+          .contains(mcpWriteScope),
+      createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
+    );
+  }
+
+  /// "Conectado em 27/11/2026 · Também cria escalas".
+  String get subtitle {
+    final parts = [
+      if (clientHost != null) clientHost!,
+      'Conectado em ${DateFormat('dd/MM/yyyy').format(createdAt)}',
+      if (canWrite) 'Também cria escalas',
+    ];
+    return parts.join(' · ');
+  }
 }

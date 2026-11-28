@@ -62,6 +62,23 @@ class McpTokenRepository {
     });
   }
 
+  /// Os assistentes conectados pelo navegador (OAuth), ainda valendo.
+  Future<List<McpGrant>> grants() {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>('/users/me/mcp-grants');
+      return response.data!
+          .map((e) => McpGrant.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  /// Desconecta na hora: os tokens daquela conexão deixam de valer.
+  Future<void> revokeGrant(String id) {
+    return _guard(() async {
+      await _dio.delete<void>('/users/me/mcp-grants/$id');
+    });
+  }
+
   Future<T> _guard<T>(Future<T> Function() request) async {
     try {
       return await request();
@@ -79,6 +96,11 @@ final mcpTokenRepositoryProvider = Provider<McpTokenRepository>((ref) {
 /// a cada pergunta feita ao assistente, e uma lista guardada diria o contrário.
 final mcpTokensProvider = FutureProvider.autoDispose<List<McpToken>>((ref) {
   return ref.watch(mcpTokenRepositoryProvider).list();
+});
+
+/// As conexões pelo navegador. Falhar aqui não derruba a tela das chaves.
+final mcpGrantsProvider = FutureProvider.autoDispose<List<McpGrant>>((ref) {
+  return ref.watch(mcpTokenRepositoryProvider).grants();
 });
 
 /// O relógio das duas telas, fixável nos testes (como o da Home).

@@ -347,3 +347,42 @@ class RotationReport {
   /// enquanto desenha a lista.
   final Map<String, RotationMember> members;
 }
+
+/// Quem o Pauta sugere para uma vaga, com o porquê
+/// (`GET /teams/:id/events/:id/assignment-suggestions`).
+class AssignmentSuggestion {
+  const AssignmentSuggestion({
+    required this.membershipId,
+    required this.name,
+    required this.reasons,
+  });
+
+  final String membershipId;
+  final String name;
+  final List<String> reasons;
+
+  factory AssignmentSuggestion.fromJson(Map<String, dynamic> json) {
+    return AssignmentSuggestion(
+      membershipId: json['membershipId'] as String,
+      name: json['name'] as String? ?? '',
+      reasons: (json['reasons'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(),
+    );
+  }
+
+  /// Os candidatos de uma função na resposta; vazio quando ela não tem vaga.
+  static List<AssignmentSuggestion> forPosition(
+    Map<String, dynamic> json,
+    String positionId,
+  ) {
+    for (final vacancy in json['vacancies'] as List<dynamic>? ?? const []) {
+      final row = vacancy as Map<String, dynamic>;
+      if (row['positionId'] != positionId) continue;
+      return (row['candidates'] as List<dynamic>? ?? const [])
+          .map((e) => AssignmentSuggestion.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    return const [];
+  }
+}
